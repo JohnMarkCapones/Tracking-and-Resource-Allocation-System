@@ -23,7 +23,8 @@ We use a modified **Git Flow** strategy optimized for continuous deployment.
 | Branch | Purpose | Created From | Merges Into |
 |--------|---------|--------------|-------------|
 | `main` | Production-ready code | — | — |
-| `develop` | Integration branch for features | `main` | `main` |
+| `staging` | Testing Phase | `staging` |
+| `develop` | Integration branch for features | `staging` | `staging` |
 | `feature/*` | New features | `develop` | `develop` |
 | `fix/*` | Bug fixes | `develop` | `develop` |
 | `hotfix/*` | Urgent production fixes | `main` | `main` + `develop` |
