@@ -19,7 +19,7 @@ Tracking-and-Resource-Allocation-System/
 - **Frontend**: React 19 with TypeScript, Tailwind CSS 4, Vite 7
 - **Routing**: Laravel Wayfinder for type-safe route generation
 - **Testing**: Pest 4 (PHP testing framework)
-- **Database**: MySQL
+- **Database**: MySQL (`tracking_resource_system`)
 
 ## Development Commands
 

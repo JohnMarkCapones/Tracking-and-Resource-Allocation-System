@@ -1,0 +1,528 @@
+name: Tools
+description: |-
+
+  APIs for managing tools
+endpoints:
+  -
+    custom: []
+    httpMethods:
+      - GET
+    uri: api/tools
+    metadata:
+      custom: []
+      groupName: Tools
+      groupDescription: |-
+
+        APIs for managing tools
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'List all tools'
+      description: 'Get a list of all tools with optional filters.'
+      authenticated: false
+      deprecated: false
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters: []
+    cleanUrlParameters: []
+    queryParameters:
+      status:
+        custom: []
+        name: status
+        description: 'Filter by status.'
+        required: false
+        example: AVAILABLE
+        type: string
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      category_id:
+        custom: []
+        name: category_id
+        description: 'Filter by category ID.'
+        required: false
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      search:
+        custom: []
+        name: search
+        description: 'Search by tool name.'
+        required: false
+        example: Laptop
+        type: string
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+    cleanQueryParameters:
+      status: AVAILABLE
+      category_id: 1
+      search: Laptop
+    bodyParameters: []
+    cleanBodyParameters: []
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 200
+        content: |-
+          {
+            "data": [
+              {
+                "id": 1,
+                "name": "Laptop",
+                "description": "Portable laptop for academic use",
+                "image_path": "images/tools/laptop.png",
+                "category_id": 1,
+                "status": "AVAILABLE",
+                "quantity": 5,
+                "created_at": "2026-01-29T00:00:00.000000Z",
+                "updated_at": "2026-01-29T00:00:00.000000Z",
+                "category": {
+                  "id": 1,
+                  "name": "IT Equipment"
+                }
+              }
+            ]
+          }
+        headers: []
+        description: ''
+    responseFields: []
+    auth: []
+    controller: null
+    method: null
+    route: null
+  -
+    custom: []
+    httpMethods:
+      - POST
+    uri: api/tools
+    metadata:
+      custom: []
+      groupName: Tools
+      groupDescription: |-
+
+        APIs for managing tools
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Create a tool'
+      description: 'Create a new tool.'
+      authenticated: false
+      deprecated: false
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters: []
+    cleanUrlParameters: []
+    queryParameters: []
+    cleanQueryParameters: []
+    bodyParameters:
+      name:
+        custom: []
+        name: name
+        description: 'The name of the tool.'
+        required: true
+        example: Laptop
+        type: string
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      description:
+        custom: []
+        name: description
+        description: 'The description of the tool.'
+        required: false
+        example: 'Portable laptop for academic use'
+        type: string
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: true
+        deprecated: false
+      image_path:
+        custom: []
+        name: image_path
+        description: 'The image path of the tool.'
+        required: false
+        example: images/tools/laptop.png
+        type: string
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: true
+        deprecated: false
+      category_id:
+        custom: []
+        name: category_id
+        description: 'The category ID.'
+        required: true
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      status:
+        custom: []
+        name: status
+        description: 'The status of the tool.'
+        required: false
+        example: AVAILABLE
+        type: string
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      quantity:
+        custom: []
+        name: quantity
+        description: 'The quantity available.'
+        required: false
+        example: 5
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+    cleanBodyParameters:
+      name: Laptop
+      description: 'Portable laptop for academic use'
+      image_path: images/tools/laptop.png
+      category_id: 1
+      status: AVAILABLE
+      quantity: 5
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 201
+        content: |-
+          {
+            "message": "Tool created successfully.",
+            "data": {
+              "id": 1,
+              "name": "Laptop",
+              "description": "Portable laptop for academic use",
+              "image_path": "images/tools/laptop.png",
+              "category_id": 1,
+              "status": "AVAILABLE",
+              "quantity": 5,
+              "created_at": "2026-01-29T00:00:00.000000Z",
+              "updated_at": "2026-01-29T00:00:00.000000Z",
+              "category": {
+                "id": 1,
+                "name": "IT Equipment"
+              }
+            }
+          }
+        headers: []
+        description: ''
+    responseFields: []
+    auth: []
+    controller: null
+    method: null
+    route: null
+  -
+    custom: []
+    httpMethods:
+      - GET
+    uri: 'api/tools/{id}'
+    metadata:
+      custom: []
+      groupName: Tools
+      groupDescription: |-
+
+        APIs for managing tools
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Get a tool'
+      description: 'Get details of a specific tool.'
+      authenticated: false
+      deprecated: false
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters:
+      id:
+        custom: []
+        name: id
+        description: 'The ID of the tool.'
+        required: true
+        example: 16
+        type: integer
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+      tool:
+        custom: []
+        name: tool
+        description: 'The ID of the tool.'
+        required: true
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+    cleanUrlParameters:
+      id: 16
+      tool: 1
+    queryParameters: []
+    cleanQueryParameters: []
+    bodyParameters: []
+    cleanBodyParameters: []
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 200
+        content: |-
+          {
+            "data": {
+              "id": 1,
+              "name": "Laptop",
+              "description": "Portable laptop for academic use",
+              "image_path": "images/tools/laptop.png",
+              "category_id": 1,
+              "status": "AVAILABLE",
+              "quantity": 5,
+              "created_at": "2026-01-29T00:00:00.000000Z",
+              "updated_at": "2026-01-29T00:00:00.000000Z",
+              "category": {
+                "id": 1,
+                "name": "IT Equipment"
+              }
+            }
+          }
+        headers: []
+        description: ''
+    responseFields: []
+    auth: []
+    controller: null
+    method: null
+    route: null
+  -
+    custom: []
+    httpMethods:
+      - PUT
+      - PATCH
+    uri: 'api/tools/{id}'
+    metadata:
+      custom: []
+      groupName: Tools
+      groupDescription: |-
+
+        APIs for managing tools
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Update a tool'
+      description: 'Update an existing tool.'
+      authenticated: false
+      deprecated: false
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters:
+      id:
+        custom: []
+        name: id
+        description: 'The ID of the tool.'
+        required: true
+        example: 16
+        type: integer
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+      tool:
+        custom: []
+        name: tool
+        description: 'The ID of the tool.'
+        required: true
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+    cleanUrlParameters:
+      id: 16
+      tool: 1
+    queryParameters: []
+    cleanQueryParameters: []
+    bodyParameters:
+      name:
+        custom: []
+        name: name
+        description: 'The name of the tool.'
+        required: false
+        example: 'Laptop Pro'
+        type: string
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      description:
+        custom: []
+        name: description
+        description: 'The description of the tool.'
+        required: false
+        example: 'High-performance laptop'
+        type: string
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: true
+        deprecated: false
+      image_path:
+        custom: []
+        name: image_path
+        description: 'The image path of the tool.'
+        required: false
+        example: images/tools/laptop-pro.png
+        type: string
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: true
+        deprecated: false
+      category_id:
+        custom: []
+        name: category_id
+        description: 'The category ID.'
+        required: false
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      status:
+        custom: []
+        name: status
+        description: 'The status of the tool.'
+        required: false
+        example: MAINTENANCE
+        type: string
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      quantity:
+        custom: []
+        name: quantity
+        description: 'The quantity available.'
+        required: false
+        example: 3
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+    cleanBodyParameters:
+      name: 'Laptop Pro'
+      description: 'High-performance laptop'
+      image_path: images/tools/laptop-pro.png
+      category_id: 1
+      status: MAINTENANCE
+      quantity: 3
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 200
+        content: |-
+          {
+            "message": "Tool updated successfully.",
+            "data": {
+              "id": 1,
+              "name": "Laptop Pro",
+              "description": "High-performance laptop",
+              "image_path": "images/tools/laptop-pro.png",
+              "category_id": 1,
+              "status": "MAINTENANCE",
+              "quantity": 3,
+              "created_at": "2026-01-29T00:00:00.000000Z",
+              "updated_at": "2026-01-29T00:00:00.000000Z",
+              "category": {
+                "id": 1,
+                "name": "IT Equipment"
+              }
+            }
+          }
+        headers: []
+        description: ''
+    responseFields: []
+    auth: []
+    controller: null
+    method: null
+    route: null
+  -
+    custom: []
+    httpMethods:
+      - DELETE
+    uri: 'api/tools/{id}'
+    metadata:
+      custom: []
+      groupName: Tools
+      groupDescription: |-
+
+        APIs for managing tools
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Delete a tool'
+      description: 'Delete a tool from the system.'
+      authenticated: false
+      deprecated: false
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters:
+      id:
+        custom: []
+        name: id
+        description: 'The ID of the tool.'
+        required: true
+        example: 16
+        type: integer
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+      tool:
+        custom: []
+        name: tool
+        description: 'The ID of the tool.'
+        required: true
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+    cleanUrlParameters:
+      id: 16
+      tool: 1
+    queryParameters: []
+    cleanQueryParameters: []
+    bodyParameters: []
+    cleanBodyParameters: []
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 200
+        content: |-
+          {
+            "message": "Tool deleted successfully."
+          }
+        headers: []
+        description: ''
+    responseFields: []
+    auth: []
+    controller: null
+    method: null
+    route: null

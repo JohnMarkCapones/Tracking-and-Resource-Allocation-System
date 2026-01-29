@@ -38,13 +38,8 @@ A Tracking and Resource Allocation System built with Laravel and React.
    - Install Node dependencies
    - Build frontend assets
 
-3. Configure your database in `.env`:
+3. Configure your database password in `.env`:
    ```env
-   DB_CONNECTION=mysql
-   DB_HOST=127.0.0.1
-   DB_PORT=3306
-   DB_DATABASE=toolsync
-   DB_USERNAME=your_username
    DB_PASSWORD=your_password
    ```
 
