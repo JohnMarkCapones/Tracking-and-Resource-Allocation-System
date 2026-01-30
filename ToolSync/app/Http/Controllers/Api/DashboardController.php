@@ -10,8 +10,56 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * @group Dashboard
+ *
+ * APIs for dashboard statistics and overview data
+ */
 class DashboardController extends Controller
 {
+    /**
+     * Get dashboard overview
+     *
+     * Get dashboard statistics including tool counts, recent activity, and summary.
+     *
+     * @queryParam user_id int Filter data by user ID. Example: 1
+     * @queryParam recent_limit int Number of recent allocations to return (1-50). Example: 5
+     * @queryParam summary_days int Number of days for summary calculation (1-365). Example: 30
+     *
+     * @response 200 {
+     *   "data": {
+     *     "scope": {
+     *       "user_id": null
+     *     },
+     *     "counts": {
+     *       "tools_available_quantity": 25,
+     *       "tools_maintenance_quantity": 3,
+     *       "borrowed_active_count": 10,
+     *       "overdue_count": 2
+     *     },
+     *     "recent_activity": [
+     *       {
+     *         "id": 1,
+     *         "tool_id": 1,
+     *         "tool_name": "Laptop",
+     *         "user_id": 1,
+     *         "user_name": "John Doe",
+     *         "expected_return_date": "2026-02-05",
+     *         "status": "BORROWED",
+     *         "status_display": "BORROWED",
+     *         "is_overdue": false
+     *       }
+     *     ],
+     *     "summary": {
+     *       "returned_count": 15,
+     *       "not_returned_count": 10,
+     *       "returned_percent": 60,
+     *       "not_returned_percent": 40,
+     *       "range_days": 30
+     *     }
+     *   }
+     * }
+     */
     public function show(Request $request): JsonResponse
     {
         /** @var User|null $actor */
@@ -64,7 +112,6 @@ class DashboardController extends Controller
                 ];
             });
 
-        // Summary donut: returned vs not-yet-returned (borrowed), in last 30 days by default.
         $days = (int) ($request->input('summary_days', 30));
         $days = max(1, min($days, 365));
         $from = now()->subDays($days);

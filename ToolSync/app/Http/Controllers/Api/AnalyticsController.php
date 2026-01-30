@@ -9,8 +9,52 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * @group Analytics
+ *
+ * APIs for analytics and reporting data
+ */
 class AnalyticsController extends Controller
 {
+    /**
+     * Get analytics overview
+     *
+     * Get comprehensive analytics including timeseries data, top tools, and status breakdown.
+     *
+     * @queryParam user_id int Filter data by user ID. Example: 1
+     * @queryParam from date Start date for the analytics period. Example: 2026-01-01
+     * @queryParam to date End date for the analytics period. Example: 2026-01-31
+     *
+     * @response 200 {
+     *   "data": {
+     *     "scope": {
+     *       "user_id": null
+     *     },
+     *     "range": {
+     *       "from": "2026-01-01 00:00:00",
+     *       "to": "2026-01-31 23:59:59"
+     *     },
+     *     "timeseries": {
+     *       "borrowed": [
+     *         {"date": "2026-01-15", "count": 5},
+     *         {"date": "2026-01-16", "count": 3}
+     *       ],
+     *       "returned": [
+     *         {"date": "2026-01-20", "count": 4}
+     *       ]
+     *     },
+     *     "top_tools": [
+     *       {"tool_id": 1, "tool_name": "Laptop", "borrow_count": 15},
+     *       {"tool_id": 2, "tool_name": "Projector", "borrow_count": 10}
+     *     ],
+     *     "status_breakdown": {
+     *       "borrowed": 10,
+     *       "returned": 25,
+     *       "overdue": 2
+     *     }
+     *   }
+     * }
+     */
     public function overview(Request $request): JsonResponse
     {
         $userId = $request->filled('user_id') ? (int) $request->input('user_id') : null;
