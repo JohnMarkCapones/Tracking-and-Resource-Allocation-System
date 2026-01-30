@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Tool extends Model
 {
@@ -22,5 +23,15 @@ class Tool extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(ToolCategory::class, 'category_id');
+    }
+
+    public function allocations(): HasMany
+    {
+        return $this->hasMany(ToolAllocation::class);
+    }
+
+    public function statusLogs(): HasMany
+    {
+        return $this->hasMany(ToolStatusLog::class);
     }
 }
