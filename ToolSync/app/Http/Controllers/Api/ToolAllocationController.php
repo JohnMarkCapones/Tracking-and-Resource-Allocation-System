@@ -114,6 +114,13 @@ class ToolAllocationController extends Controller
      */
     public function update(UpdateToolAllocationRequest $request, ToolAllocation $tool_allocation): JsonResponse
     {
+        $actor = $request->user();
+        if (! $actor || ! $actor->isAdmin()) {
+            return response()->json([
+                'message' => 'Only admins can update tool allocations.',
+            ], 403);
+        }
+
         $validated = $request->validated();
 
         DB::transaction(function () use ($validated, $request, $tool_allocation): void {

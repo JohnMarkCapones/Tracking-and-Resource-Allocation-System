@@ -21,6 +21,7 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
+        'role',
         'password',
     ];
 
@@ -53,5 +54,10 @@ class User extends Authenticatable
     public function toolAllocations(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(\App\Models\ToolAllocation::class);
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->role === 'ADMIN';
     }
 }

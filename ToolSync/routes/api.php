@@ -21,5 +21,6 @@ Route::get('tool-allocations/history', [ToolAllocationHistoryController::class, 
 Route::get('analytics/overview', [AnalyticsController::class, 'overview']);
 
 // Keep "history" route above apiResource so it's not captured by {tool_allocation}.
-Route::apiResource('tool-allocations', ToolAllocationController::class);
+Route::apiResource('tool-allocations', ToolAllocationController::class)->except(['update']);
+Route::put('tool-allocations/{tool_allocation}', [ToolAllocationController::class, 'update'])->middleware('auth:sanctum');
 Route::apiResource('tool-status-logs', ToolStatusLogController::class);
