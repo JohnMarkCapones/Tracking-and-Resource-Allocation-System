@@ -21,7 +21,7 @@ A Tracking and Resource Allocation System built with Laravel and React.
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-username/Tracking-and-Resource-Allocation-System.git
+   git clone https://github.com/JohnMarkCapones/Tracking-and-Resource-Allocation-System.git
    cd Tracking-and-Resource-Allocation-System/ToolSync
    ```
 
