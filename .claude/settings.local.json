@@ -4,7 +4,13 @@
       "Bash(php artisan:*)",
       "Bash(composer lint:*)",
       "Bash(tasklist:*)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(composer require:*)",
+      "Bash(where php:*)",
+      "Bash(composer.bat require:*)",
+      "Bash(npm run build:*)",
+      "Bash(php.bat artisan test:*)",
+      "Bash(php.bat artisan:*)"
     ]
   }
 }

@@ -41,4 +41,17 @@ class UserFactory extends Factory
             'email_verified_at' => null,
         ]);
     }
+
+    /**
+     * Indicate that the user authenticated via an OAuth provider.
+     */
+    public function oauth(string $provider = 'google'): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'provider' => $provider,
+            'provider_id' => (string) fake()->unique()->randomNumber(8),
+            'avatar' => fake()->imageUrl(),
+            'password' => null,
+        ]);
+    }
 }
