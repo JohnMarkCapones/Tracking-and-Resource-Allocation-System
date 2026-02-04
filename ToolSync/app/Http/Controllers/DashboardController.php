@@ -12,11 +12,17 @@ class DashboardController extends Controller
         // Static mock data for the initial dashboard implementation.
         // This keeps the UI development unblocked while we design
         // the real data contracts and Eloquent queries.
+        $totalTools = 80;
+        $toolsUnderMaintenance = 3;
+        $borrowedItemsCount = 12;
+        $availableTools = $totalTools - $toolsUnderMaintenance - $borrowedItemsCount;
+
         return Inertia::render('Dashboard/UserDashboardPage', [
             'userName' => 'User',
-            'totalTools' => 45,
-            'toolsUnderMaintenance' => 3,
-            'borrowedItemsCount' => 5,
+            'totalTools' => $totalTools,
+            'toolsUnderMaintenance' => $toolsUnderMaintenance,
+            'borrowedItemsCount' => $borrowedItemsCount,
+            'availableTools' => $availableTools,
             'borrowingHistory' => [
                 [
                     'equipment' => 'LAPTOP',
@@ -38,8 +44,11 @@ class DashboardController extends Controller
                 ],
             ],
             'summary' => [
-                'returnedPercent' => 55,
-                'notReturnedPercent' => 45,
+                'returned' => 45,
+                'borrowed' => $borrowedItemsCount,
+                'underMaintenance' => $toolsUnderMaintenance,
+                'available' => $availableTools,
+                'overdue' => 2,
             ],
         ]);
     }
