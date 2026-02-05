@@ -1,21 +1,35 @@
 import { Head, Link } from '@inertiajs/react';
 
-import equipitLogo from '../pages/Auth/assets/brand/equipit-logo.png';
+import equipitLogo from './Auth/assets/brand/equipit-logo.png';
+import deleteIcon from './Auth/assets/icons/delete.svg';
+import editIcon from './Auth/assets/icons/edit.svg';
 
 export default function AllocationHistory() {
     const userName = 'User';
     const userEmail = 'admin@organisation.com';
 
+    const handleAddTool = () => {
+        // TODO: replace with real add-tool flow (modal or separate page)
+        console.log('Add Tool clicked');
+    };
+
+    const handleEditTool = (toolId: string) => {
+        // TODO: replace with real edit flow
+        console.log('Edit tool clicked:', toolId);
+    };
+
+    const handleDeleteTool = (toolId: string) => {
+        // TODO: replace with real delete flow (likely a confirmation + server call)
+        // Simple confirmation for now to avoid accidental clicks.
+        const confirmed = window.confirm('Are you sure you want to delete this tool?');
+        if (!confirmed) return;
+
+        console.log('Delete tool confirmed:', toolId);
+    };
+
     return (
         <>
-            <Head title="Tool Management">
-                <link rel="preconnect" href="https://fonts.googleapis.com" />
-                <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-                <link
-                    href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Inter:wght@400;500;600;700&display=swap"
-                    rel="stylesheet"
-                />
-            </Head>
+            <Head title="Tool Management" />
 
             <div className="flex min-h-screen bg-[#F5F5F7] text-[#111827]">
                 {/* Sidebar */}
@@ -102,6 +116,7 @@ export default function AllocationHistory() {
 
                         <button
                             type="button"
+                            onClick={handleAddTool}
                             className="inline-flex items-center gap-2 rounded-md bg-[#FBBF24] px-4 py-2 text-xs font-['Inter'] font-semibold text-[#111827] shadow-sm hover:bg-[#F59E0B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FBBF24]/60"
                         >
                             <span className="text-lg leading-none">+</span>
@@ -209,12 +224,36 @@ export default function AllocationHistory() {
                                                 </span>
                                             </td>
                                             <td className="whitespace-nowrap px-6 py-4 text-right text-xs">
-                                                <button
-                                                    type="button"
-                                                    className="rounded-md border border-gray-200 px-3 py-1 text-[11px] font-medium text-[#4B5563] hover:bg-gray-50"
-                                                >
-                                                    Edit
-                                                </button>
+                                                <div className="inline-flex items-center gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleEditTool(tool.id)}
+                                                        aria-label={`Edit ${tool.name}`}
+                                                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-200 text-[#4B5563] hover:bg-gray-50"
+                                                    >
+                                                        <img
+                                                            src={editIcon}
+                                                            alt=""
+                                                            className="h-4 w-4"
+                                                            draggable={false}
+                                                        />
+                                                        <span className="sr-only">Edit</span>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleDeleteTool(tool.id)}
+                                                        aria-label={`Delete ${tool.name}`}
+                                                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-200 text-red-600 hover:bg-red-50"
+                                                    >
+                                                        <img
+                                                            src={deleteIcon}
+                                                            alt=""
+                                                            className="h-4 w-4"
+                                                            draggable={false}
+                                                        />
+                                                        <span className="sr-only">Delete</span>
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}
