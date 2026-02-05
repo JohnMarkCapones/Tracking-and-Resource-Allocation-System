@@ -1,7 +1,8 @@
 import { Head, Link } from '@inertiajs/react';
 
 import equipitLogo from '../assets/figma/logo.png';
-import signupGroup44 from '../assets/figma/signup/Group 44.png';
+import signupGroup72 from '../assets/figma/signup/Group 72.png';
+import signupGroup77 from '../assets/figma/signup/Group 77.png';
 
 export default function Welcome() {
     return (
@@ -16,9 +17,19 @@ export default function Welcome() {
             </Head>
 
             <div className="relative min-h-screen overflow-hidden bg-[#F9F7F4]">
-                {/* Background artwork */}
-                <div className="pointer-events-none absolute inset-y-0 left-0 z-0 w-[62vw] max-w-[790px] select-none">
-                    <img alt="" src={signupGroup44} className="h-full w-full object-contain object-left" draggable={false} />
+                {/* Bottom-left waves illustration - Group 77 (back layer) - hidden on mobile, visible on larger screens */}
+                <div className="pointer-events-none absolute bottom-0 left-0 z-0 hidden w-[55vw] max-w-[650px] select-none md:block">
+                    <img
+                        src={signupGroup77}
+                        alt=""
+                        className="h-auto w-full object-contain object-bottom"
+                        draggable={false}
+                    />
+                </div>
+
+                {/* Background artwork - Group 72 (front layer) - hidden on mobile, visible on larger screens */}
+                <div className="pointer-events-none absolute inset-y-0 left-0 z-[1] hidden w-[40vw] max-w-[550px] select-none md:block">
+                    <img alt="" src={signupGroup72} className="h-auto w-full object-contain object-left" draggable={false} />
                 </div>
 
                 {/* Standard website header */}
@@ -35,7 +46,7 @@ export default function Welcome() {
                 </header>
 
                 {/* Content */}
-                <main className="relative z-10 mx-auto grid w-full max-w-screen-2xl grid-cols-1 items-center gap-12 pb-14 pl-4 pr-0 pt-6 sm:pl-6 sm:pr-0 lg:grid-cols-2 lg:gap-16 lg:pb-20 lg:pl-8 lg:pr-0">
+                <main className="relative z-10 mx-auto grid w-full max-w-screen-2xl grid-cols-1 items-center gap-8 pb-14 pl-4 pr-4 pt-6 sm:pl-6 sm:pr-6 sm:gap-12 lg:grid-cols-2 lg:gap-16 lg:pb-20 lg:pl-8 lg:pr-8">
                     <section className="text-center lg:text-left">
                         <div className="mb-6 flex items-center justify-center gap-3 lg:justify-start">
                             <img alt="EquipIT" src={equipitLogo} className="h-7 w-auto" draggable={false} />
@@ -44,21 +55,21 @@ export default function Welcome() {
                             </div>
                         </div>
 
-                        <h1 className="font-['Poppins'] text-4xl font-black leading-tight tracking-[-0.02em] text-[#060644] drop-shadow-[0px_4px_4px_rgba(0,0,0,0.18)] sm:text-5xl lg:text-6xl">
+                        <h1 className="font-['Poppins'] text-3xl font-black leading-tight tracking-[-0.02em] text-[#060644] drop-shadow-[0px_4px_4px_rgba(0,0,0,0.18)] sm:text-4xl sm:text-5xl lg:text-6xl">
                             Borrow Smarter.
                             <br/>
                             Work Faster.
                         </h1>
 
-                        <p className="mx-auto mt-6 max-w-md font-['Poppins'] text-base font-medium leading-6 tracking-[-0.02em] text-[#5D5D5D] sm:text-lg lg:mx-0">
-                            Easily request, track, and return equipment in<br/> one simple system.
+                        <p className="mx-auto mt-4 max-w-md font-['Poppins'] text-sm font-medium leading-6 tracking-[-0.02em] text-[#5D5D5D] sm:mt-6 sm:text-base sm:text-lg lg:mx-0">
+                            Easily request, track, and return equipment in<br className="hidden sm:inline"/> <span className="block text-center lg:text-center">one simple system.</span>
                         </p>
                     </section>
 
                     {/* Right column group (aligned with Login on the right) */}
-                    <section className="w-full max-w-lg justify-self-end">
-                        <div className="rounded-[28px] bg-white p-6 shadow-[0px_18px_45px_rgba(0,0,0,0.18)] ring-1 ring-black/5 sm:p-8">
-                            <h2 className="text-center font-['Poppins'] text-2xl font-black tracking-[-0.02em] text-[#060644]">
+                    <section className="w-full max-w-lg justify-self-center lg:justify-self-end">
+                        <div className="rounded-[20px] bg-white p-5 shadow-[0px_18px_45px_rgba(0,0,0,0.18)] ring-1 ring-black/5 sm:rounded-[28px] sm:p-6 lg:p-8">
+                            <h2 className="text-center font-['Poppins'] text-xl font-black tracking-[-0.02em] text-[#060644] sm:text-2xl">
                                 Create Your Account Now!
                             </h2>
 
