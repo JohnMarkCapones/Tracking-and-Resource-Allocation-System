@@ -7,10 +7,12 @@
         "strict": true,
         "isolatedModules": true,
         "target": "ESNext",
+        "lib": ["DOM", "DOM.Iterable", "ESNext"],
         "esModuleInterop": true,
         "forceConsistentCasingInFileNames": true,
         "skipLibCheck": true,
         "noEmit": true,
+        "types": ["react", "react-dom"],
         "paths": {
             "@/*": ["./resources/js/*"],
             "ziggy-js": ["./vendor/tightenco/ziggy"]

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactElement } from 'react';
 
 export type BorrowingHistoryStatus = 'Returned' | 'Borrowed' | 'Overdue';
 
@@ -25,7 +25,7 @@ function statusClasses(status: BorrowingHistoryStatus): string {
     return 'bg-rose-50 text-rose-700';
 }
 
-function statusIcon(status: BorrowingHistoryStatus): JSX.Element {
+function statusIcon(status: BorrowingHistoryStatus): ReactElement {
     if (status === 'Returned') {
         return (
             <svg

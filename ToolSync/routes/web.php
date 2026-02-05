@@ -10,6 +10,10 @@ Route::get('/', function () {
     return Inertia::render('welcome');
 })->name('home');
 
+Route::get('/profile/login', function () {
+    return Inertia::render('Profile/login');
+})->name('profile.login');
+
 Route::get('/dashboard', [DashboardController::class, 'index'])
     ->name('dashboard');
 
