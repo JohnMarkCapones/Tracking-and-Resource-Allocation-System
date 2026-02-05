@@ -1,0 +1,17 @@
+<svg width="78" height="60" viewBox="0 0 78 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- EquipIT mark (icon only) -->
+
+  <!-- Speed lines -->
+  <rect x="0" y="18" width="38" height="6" rx="3" fill="#060644" />
+  <rect x="0" y="28" width="38" height="6" rx="3" fill="#060644" />
+  <rect x="0" y="38" width="38" height="6" rx="3" fill="#060644" />
+
+  <!-- Main ring -->
+  <circle cx="52" cy="30" r="20" stroke="#060644" stroke-width="6" />
+
+  <!-- Accent arc -->
+  <path d="M52 50c11.0457 0 20-8.9543 20-20" stroke="#547792" stroke-width="6" stroke-linecap="round" />
+
+  <!-- Tail (Q) -->
+  <path d="M58 44l12 12" stroke="#060644" stroke-width="6" stroke-linecap="round" />
+</svg>
