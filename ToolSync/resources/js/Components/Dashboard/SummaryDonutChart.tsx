@@ -11,12 +11,7 @@ type SummaryDonutChartProps = {
 };
 
 export function SummaryDonutChart({ data }: SummaryDonutChartProps) {
-    const total =
-        data.returned +
-        data.borrowed +
-        data.underMaintenance +
-        data.available +
-        data.overdue || 1;
+    const total = data.returned + data.borrowed + data.underMaintenance + data.available + data.overdue || 1;
 
     const segments = [
         {
@@ -60,27 +55,14 @@ export function SummaryDonutChart({ data }: SummaryDonutChartProps) {
     return (
         <section className="rounded-3xl bg-white p-6 shadow-sm">
             <header className="mb-4">
-                <h3 className="text-sm font-semibold text-gray-900">
-                    Summary
-                </h3>
+                <h3 className="text-sm font-semibold text-gray-900">Summary</h3>
             </header>
 
             <div className="flex items-center gap-6">
-                <svg
-                    viewBox="0 0 100 100"
-                    className="h-32 w-32 -rotate-90"
-                    aria-hidden="true"
-                >
-                    <circle
-                        cx="50"
-                        cy="50"
-                        r={radius}
-                        className="fill-none stroke-slate-100"
-                        strokeWidth="16"
-                    />
+                <svg viewBox="0 0 100 100" className="h-32 w-32 -rotate-90" aria-hidden="true">
+                    <circle cx="50" cy="50" r={radius} className="fill-none stroke-slate-100" strokeWidth="16" />
                     {segments.map((segment) => {
-                        const segmentLength =
-                            (segment.value / total) * circumference;
+                        const segmentLength = (segment.value / total) * circumference;
                         const dashArray = `${segmentLength} ${circumference}`;
                         const dashOffset = circumference - accumulated;
                         accumulated += segmentLength;
@@ -100,46 +82,21 @@ export function SummaryDonutChart({ data }: SummaryDonutChartProps) {
                         );
                     })}
 
-                    <circle
-                        cx="50"
-                        cy="50"
-                        r={24}
-                        className="fill-white"
-                    />
-                    <text
-                        x="50"
-                        y="48"
-                        textAnchor="middle"
-                        className="rotate-90 text-[10px] font-medium fill-slate-500"
-                    >
+                    <circle cx="50" cy="50" r={24} className="fill-white" />
+                    <text x="50" y="48" textAnchor="middle" className="rotate-90 fill-slate-500 text-[10px] font-medium">
                         Total
                     </text>
-                    <text
-                        x="50"
-                        y="60"
-                        textAnchor="middle"
-                        className="rotate-90 text-[15px] font-semibold fill-slate-900"
-                    >
+                    <text x="50" y="60" textAnchor="middle" className="rotate-90 fill-slate-900 text-[15px] font-semibold">
                         {total}
                     </text>
                 </svg>
 
                 <div className="space-y-3 text-xs text-gray-700">
                     {segments.map((segment) => (
-                        <div
-                            key={segment.label}
-                            className="flex items-center gap-2"
-                        >
-                            <span
-                                className={`h-3 w-3 rounded-full ${segment.legendClass}`}
-                            />
+                        <div key={segment.label} className="flex items-center gap-2">
+                            <span className={`h-3 w-3 rounded-full ${segment.legendClass}`} />
                             <span className="flex-1">{segment.label}</span>
-                            <span className="font-semibold">
-                                {Math.round(
-                                    (segment.value / total) * 100,
-                                )}
-                                %
-                            </span>
+                            <span className="font-semibold">{Math.round((segment.value / total) * 100)}%</span>
                         </div>
                     ))}
                 </div>
@@ -147,4 +104,3 @@ export function SummaryDonutChart({ data }: SummaryDonutChartProps) {
         </section>
     );
 }
-

@@ -28,75 +28,26 @@ function statusClasses(status: BorrowingHistoryStatus): string {
 function statusIcon(status: BorrowingHistoryStatus): ReactElement {
     if (status === 'Returned') {
         return (
-            <svg
-                className="mr-1.5 h-3 w-3"
-                viewBox="0 0 16 16"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-            >
-                <path
-                    d="M4 8.5L6.5 11L12 5"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                />
+            <svg className="mr-1.5 h-3 w-3" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4 8.5L6.5 11L12 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
         );
     }
 
     if (status === 'Borrowed') {
         return (
-            <svg
-                className="mr-1.5 h-3 w-3"
-                viewBox="0 0 16 16"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-            >
-                <path
-                    d="M8 3.5V8L11 9.5"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                />
-                <circle
-                    cx="8"
-                    cy="8"
-                    r="4.5"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                />
+            <svg className="mr-1.5 h-3 w-3" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M8 3.5V8L11 9.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="8" cy="8" r="4.5" stroke="currentColor" strokeWidth="1.4" />
             </svg>
         );
     }
 
     return (
-        <svg
-            className="mr-1.5 h-3 w-3"
-            viewBox="0 0 16 16"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-        >
-            <path
-                d="M8 4.5V8"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-            />
-            <circle
-                cx="8"
-                cy="10.5"
-                r="0.8"
-                fill="currentColor"
-            />
-            <circle
-                cx="8"
-                cy="8"
-                r="4.5"
-                stroke="currentColor"
-                strokeWidth="1.4"
-            />
+        <svg className="mr-1.5 h-3 w-3" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 4.5V8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            <circle cx="8" cy="10.5" r="0.8" fill="currentColor" />
+            <circle cx="8" cy="8" r="4.5" stroke="currentColor" strokeWidth="1.4" />
         </svg>
     );
 }
@@ -105,27 +56,18 @@ export function BorrowingHistoryTable({ items }: BorrowingHistoryTableProps) {
     // For now this component manages client-side filtering and sorting only.
     // Once real data is wired in, this state will map to query params.
     const [query, setQuery] = useState('');
-    const [sortBy, setSortBy] = useState<'equipment' | 'expectedReturnDate'>(
-        'expectedReturnDate',
-    );
+    const [sortBy, setSortBy] = useState<'equipment' | 'expectedReturnDate'>('expectedReturnDate');
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
     if (!items.length && !query) {
         return (
             <section className="rounded-3xl bg-white p-6 shadow-sm">
                 <header className="mb-2">
-                    <h3 className="text-sm font-semibold text-gray-900">
-                        Overview of Borrowing History
-                    </h3>
+                    <h3 className="text-sm font-semibold text-gray-900">Overview of Borrowing History</h3>
                 </header>
                 <div className="flex h-32 flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-gray-50 text-center">
-                    <p className="text-xs font-medium text-gray-600">
-                        You haven&apos;t borrowed any tools yet
-                    </p>
-                    <p className="mt-1 text-[11px] text-gray-500">
-                        Once you start borrowing, your recent history will
-                        appear here.
-                    </p>
+                    <p className="text-xs font-medium text-gray-600">You haven&apos;t borrowed any tools yet</p>
+                    <p className="mt-1 text-[11px] text-gray-500">Once you start borrowing, your recent history will appear here.</p>
                 </div>
             </section>
         );
@@ -152,7 +94,6 @@ export function BorrowingHistoryTable({ items }: BorrowingHistoryTableProps) {
 
     const total = sorted.length;
     const pageSize = 5;
-    const currentPage = 1;
     const paged = sorted.slice(0, pageSize);
 
     const toggleSort = (field: 'equipment' | 'expectedReturnDate'): void => {
@@ -169,34 +110,14 @@ export function BorrowingHistoryTable({ items }: BorrowingHistoryTableProps) {
         <section className="rounded-3xl bg-white p-6 shadow-sm">
             <header className="mb-4 flex items-center justify-between gap-3">
                 <div>
-                    <h3 className="text-sm font-semibold text-gray-900">
-                        Overview of Borrowing History
-                    </h3>
-                    <p className="text-[11px] text-gray-500">
-                        Track active and past borrowings at a glance.
-                    </p>
+                    <h3 className="text-sm font-semibold text-gray-900">Overview of Borrowing History</h3>
+                    <p className="text-[11px] text-gray-500">Track active and past borrowings at a glance.</p>
                 </div>
                 <div className="flex items-center gap-2">
                     <div className="hidden items-center rounded-full border border-gray-200 bg-gray-50 px-2 text-xs text-gray-500 sm:flex">
-                        <svg
-                            className="mr-1.5 h-3 w-3 text-gray-400"
-                            viewBox="0 0 16 16"
-                            fill="none"
-                            xmlns="http://www.w3.org/2000/svg"
-                        >
-                            <circle
-                                cx="7"
-                                cy="7"
-                                r="3.5"
-                                stroke="currentColor"
-                                strokeWidth="1.4"
-                            />
-                            <path
-                                d="M9.5 9.5L12 12"
-                                stroke="currentColor"
-                                strokeWidth="1.4"
-                                strokeLinecap="round"
-                            />
+                        <svg className="mr-1.5 h-3 w-3 text-gray-400" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="7" cy="7" r="3.5" stroke="currentColor" strokeWidth="1.4" />
+                            <path d="M9.5 9.5L12 12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
                         </svg>
                         <input
                             type="search"
@@ -217,19 +138,13 @@ export function BorrowingHistoryTable({ items }: BorrowingHistoryTableProps) {
 
             <div className="overflow-x-auto">
                 <table className="min-w-full text-left text-sm">
-                    <thead className="border-b text-xs font-medium uppercase tracking-wide text-gray-500">
+                    <thead className="border-b text-xs font-medium tracking-wide text-gray-500 uppercase">
                         <tr>
-                            <th
-                                className="cursor-pointer py-3 pr-4 hover:text-gray-700"
-                                onClick={() => toggleSort('equipment')}
-                            >
+                            <th className="cursor-pointer py-3 pr-4 hover:text-gray-700" onClick={() => toggleSort('equipment')}>
                                 Equipment
                             </th>
                             <th className="py-3 pr-4">Tool ID</th>
-                            <th
-                                className="cursor-pointer py-3 pr-4 hover:text-gray-700"
-                                onClick={() => toggleSort('expectedReturnDate')}
-                            >
+                            <th className="cursor-pointer py-3 pr-4 hover:text-gray-700" onClick={() => toggleSort('expectedReturnDate')}>
                                 Expected Return Date
                             </th>
                             <th className="py-3 pr-4">Status</th>
@@ -238,17 +153,10 @@ export function BorrowingHistoryTable({ items }: BorrowingHistoryTableProps) {
                     </thead>
                     <tbody className="align-middle text-xs text-gray-700">
                         {paged.map((item) => (
-                            <tr
-                                key={item.toolId}
-                                className="border-b last:border-0 hover:bg-gray-50"
-                            >
-                                <td className="py-3 pr-4 font-medium">
-                                    {item.equipment}
-                                </td>
+                            <tr key={item.toolId} className="border-b last:border-0 hover:bg-gray-50">
+                                <td className="py-3 pr-4 font-medium">{item.equipment}</td>
                                 <td className="py-3 pr-4">{item.toolId}</td>
-                                <td className="py-3 pr-4">
-                                    {item.expectedReturnDate}
-                                </td>
+                                <td className="py-3 pr-4">{item.expectedReturnDate}</td>
                                 <td className="py-3">
                                     <span
                                         className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold ${statusClasses(
@@ -283,8 +191,7 @@ export function BorrowingHistoryTable({ items }: BorrowingHistoryTableProps) {
 
             <footer className="mt-4 flex items-center justify-between text-[11px] text-gray-500">
                 <p>
-                    Showing <span className="font-semibold">{paged.length}</span>{' '}
-                    of <span className="font-semibold">{total}</span> records
+                    Showing <span className="font-semibold">{paged.length}</span> of <span className="font-semibold">{total}</span> records
                 </p>
                 <div className="flex items-center gap-1">
                     <button
@@ -306,4 +213,3 @@ export function BorrowingHistoryTable({ items }: BorrowingHistoryTableProps) {
         </section>
     );
 }
-
