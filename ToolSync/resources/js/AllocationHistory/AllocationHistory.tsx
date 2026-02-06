@@ -21,36 +21,24 @@ export default function AllocationHistory() {
                 {/* Sidebar */}
                 <aside className="flex w-64 flex-col bg-[#0B1020] text-white shadow-xl">
                     {/* Logo and brand */}
-                    <div className="flex items-center gap-3 border-b border-white/5 px-6 pb-5 pt-6">
+                    <div className="flex items-center gap-3 border-b border-white/5 px-6 pt-6 pb-5">
                         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/5">
-                            <img
-                                src={equipitLogo}
-                                alt="EquipIT"
-                                className="h-6 w-auto object-contain"
-                                draggable={false}
-                            />
+                            <img src={equipitLogo} alt="EquipIT" className="h-6 w-auto object-contain" draggable={false} />
                         </div>
-                        <span className="font-['Poppins'] text-lg font-semibold tracking-[-0.04em]">
-                            EquipIT
-                        </span>
+                        <span className="font-['Poppins'] text-lg font-semibold tracking-[-0.04em]">EquipIT</span>
                     </div>
 
                     {/* Navigation */}
-                    <nav className="mt-4 flex-1 space-y-1 px-3 text-sm font-['Inter']">
+                    <nav className="mt-4 flex-1 space-y-1 px-3 font-['Inter'] text-sm">
                         <Link
                             href="#"
                             className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
                         >
-                            <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-white/5 text-xs">
-                                DB
-                            </span>
+                            <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-white/5 text-xs">DB</span>
                             <span>Dashboard</span>
                         </Link>
 
-                        <Link
-                            href="#"
-                            className="flex items-center gap-3 rounded-lg bg-white px-3 py-2.5 text-[#111827] shadow-sm"
-                        >
+                        <Link href="#" className="flex items-center gap-3 rounded-lg bg-white px-3 py-2.5 text-[#111827] shadow-sm">
                             <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-[#FACC15]/10 text-[11px] font-semibold text-[#92400E]">
                                 TM
                             </span>
@@ -61,19 +49,15 @@ export default function AllocationHistory() {
                             href="#"
                             className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
                         >
-                            <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-white/5 text-xs">
-                                AH
-                            </span>
+                            <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-white/5 text-xs">AH</span>
                             <span>Allocation History</span>
                         </Link>
                     </nav>
 
                     {/* User info + logout */}
-                    <div className="mt-auto border-t border-white/5 px-4 py-4 text-xs font-['Inter'] text-gray-300">
+                    <div className="mt-auto border-t border-white/5 px-4 py-4 font-['Inter'] text-xs text-gray-300">
                         <div className="mb-3">
-                            <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400">
-                                Logged in as
-                            </p>
+                            <p className="text-[11px] tracking-[0.16em] text-gray-400 uppercase">Logged in as</p>
                             <p className="mt-1 text-sm font-medium text-white">{userName}</p>
                             <p className="text-[11px] text-gray-400">{userEmail}</p>
                         </div>
@@ -92,17 +76,13 @@ export default function AllocationHistory() {
                     {/* Header */}
                     <div className="mb-6 flex items-center justify-between">
                         <div>
-                            <h1 className="font-['Poppins'] text-2xl font-semibold tracking-[-0.03em] text-[#111827]">
-                                Tool Management
-                            </h1>
-                            <p className="mt-1 text-xs font-['Inter'] text-[#6B7280]">
-                                Add, edit, or remove tools from inventory
-                            </p>
+                            <h1 className="font-['Poppins'] text-2xl font-semibold tracking-[-0.03em] text-[#111827]">Tool Management</h1>
+                            <p className="mt-1 font-['Inter'] text-xs text-[#6B7280]">Add, edit, or remove tools from inventory</p>
                         </div>
 
                         <button
                             type="button"
-                            className="inline-flex items-center gap-2 rounded-md bg-[#FBBF24] px-4 py-2 text-xs font-['Inter'] font-semibold text-[#111827] shadow-sm hover:bg-[#F59E0B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FBBF24]/60"
+                            className="inline-flex items-center gap-2 rounded-md bg-[#FBBF24] px-4 py-2 font-['Inter'] text-xs font-semibold text-[#111827] shadow-sm hover:bg-[#F59E0B] focus-visible:ring-2 focus-visible:ring-[#FBBF24]/60 focus-visible:outline-none"
                         >
                             <span className="text-lg leading-none">+</span>
                             <span>Add Tool</span>
@@ -113,7 +93,7 @@ export default function AllocationHistory() {
                     <section className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-black/5">
                         <div className="overflow-x-auto">
                             <table className="min-w-full divide-y divide-gray-100 text-left">
-                                <thead className="bg-[#F9FAFB] text-[11px] font-['Inter'] uppercase tracking-[0.16em] text-[#6B7280]">
+                                <thead className="bg-[#F9FAFB] font-['Inter'] text-[11px] tracking-[0.16em] text-[#6B7280] uppercase">
                                     <tr>
                                         <th scope="col" className="px-6 py-3">
                                             Tool Name
@@ -132,7 +112,7 @@ export default function AllocationHistory() {
                                         </th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-100 text-sm font-['Inter']">
+                                <tbody className="divide-y divide-gray-100 font-['Inter'] text-sm">
                                     {[
                                         {
                                             name: 'HP LaserJet Pro M404dn',
@@ -192,23 +172,17 @@ export default function AllocationHistory() {
                                         },
                                     ].map((tool) => (
                                         <tr key={tool.id} className="hover:bg-[#F9FAFB]">
-                                            <td className="whitespace-nowrap px-6 py-4 text-[#111827]">
-                                                {tool.name}
-                                            </td>
-                                            <td className="whitespace-nowrap px-6 py-4 text-sm text-[#4B5563]">
-                                                {tool.id}
-                                            </td>
-                                            <td className="whitespace-nowrap px-6 py-4 text-sm text-[#4B5563]">
-                                                {tool.category}
-                                            </td>
-                                            <td className="whitespace-nowrap px-6 py-4">
+                                            <td className="px-6 py-4 whitespace-nowrap text-[#111827]">{tool.name}</td>
+                                            <td className="px-6 py-4 text-sm whitespace-nowrap text-[#4B5563]">{tool.id}</td>
+                                            <td className="px-6 py-4 text-sm whitespace-nowrap text-[#4B5563]">{tool.category}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
                                                 <span
                                                     className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${tool.statusColor}`}
                                                 >
                                                     {tool.status}
                                                 </span>
                                             </td>
-                                            <td className="whitespace-nowrap px-6 py-4 text-right text-xs">
+                                            <td className="px-6 py-4 text-right text-xs whitespace-nowrap">
                                                 <button
                                                     type="button"
                                                     className="rounded-md border border-gray-200 px-3 py-1 text-[11px] font-medium text-[#4B5563] hover:bg-gray-50"
@@ -227,4 +201,3 @@ export default function AllocationHistory() {
         </>
     );
 }
-

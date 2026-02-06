@@ -4,5 +4,145 @@
 @source '../views/**/*.blade.php';
 
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-sans:
+        'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+}
+
+/* Dark mode base styles */
+:root {
+    --color-bg-primary: #ffffff;
+    --color-bg-secondary: #f9fafb;
+    --color-bg-tertiary: #f3f4f6;
+    --color-text-primary: #111827;
+    --color-text-secondary: #6b7280;
+    --color-border: #e5e7eb;
+    --color-shadow: rgba(0, 0, 0, 0.1);
+}
+
+.dark {
+    --color-bg-primary: #111827;
+    --color-bg-secondary: #1f2937;
+    --color-bg-tertiary: #374151;
+    --color-text-primary: #f9fafb;
+    --color-text-secondary: #9ca3af;
+    --color-border: #374151;
+    --color-shadow: rgba(0, 0, 0, 0.3);
+    color-scheme: dark;
+}
+
+/* Dark mode transitions */
+html {
+    transition:
+        background-color 0.2s ease,
+        color 0.2s ease;
+}
+
+/* Dark mode specific overrides */
+.dark body {
+    background-color: var(--color-bg-primary);
+    color: var(--color-text-primary);
+}
+
+/* Focus visible styles for accessibility */
+*:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+
+/* Remove default focus outline, rely on focus-visible */
+*:focus:not(:focus-visible) {
+    outline: none;
+}
+
+/* Skip link styles */
+.skip-link:focus {
+    clip: auto;
+    height: auto;
+    width: auto;
+    overflow: visible;
+}
+
+/* Safe area inset for mobile bottom navigation */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+    .pb-safe {
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+}
+
+/* React Day Picker custom styles */
+.rdp {
+    --rdp-cell-size: 32px;
+}
+
+/* Smooth scrolling for the entire app */
+html {
+    scroll-behavior: smooth;
+}
+
+/* High contrast mode */
+.high-contrast {
+    --color-text-primary: #000000;
+    --color-text-secondary: #333333;
+    --color-border: #000000;
+}
+
+.high-contrast .dark {
+    --color-text-primary: #ffffff;
+    --color-text-secondary: #cccccc;
+    --color-border: #ffffff;
+}
+
+.high-contrast *:focus-visible {
+    outline: 3px solid #000000;
+    outline-offset: 3px;
+}
+
+.high-contrast.dark *:focus-visible {
+    outline-color: #ffffff;
+}
+
+/* Manual reduced motion toggle */
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+}
+
+/* Reduced motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* Swipe action styles */
+.swipe-action-container {
+    position: relative;
+    overflow: hidden;
+}
+
+.swipe-action-container .swipe-bg {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    padding: 0 1rem;
+}
+
+.swipe-action-container .swipe-bg-left {
+    justify-content: flex-start;
+    background-color: #3b82f6;
+}
+
+.swipe-action-container .swipe-bg-right {
+    justify-content: flex-end;
+    background-color: #ef4444;
 }

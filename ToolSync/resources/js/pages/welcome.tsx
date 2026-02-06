@@ -19,12 +19,7 @@ export default function Welcome() {
             <div className="relative min-h-screen overflow-hidden bg-[#F9F7F4]">
                 {/* Bottom-left waves illustration - Group 77 (back layer) - hidden on mobile, visible on larger screens */}
                 <div className="pointer-events-none absolute bottom-0 left-0 z-0 hidden w-[55vw] max-w-[650px] select-none md:block">
-                    <img
-                        src={signupGroup77}
-                        alt=""
-                        className="h-auto w-full object-contain object-bottom"
-                        draggable={false}
-                    />
+                    <img src={signupGroup77} alt="" className="h-auto w-full object-contain object-bottom" draggable={false} />
                 </div>
 
                 {/* Background artwork - Group 72 (front layer) - hidden on mobile, visible on larger screens */}
@@ -33,7 +28,7 @@ export default function Welcome() {
                 </div>
 
                 {/* Standard website header */}
-                <header className="relative z-10 flex w-full items-center justify-end gap-4 pl-4 pr-5 py-6 sm:pl-8 sm:pr-9 lg:pl-8 lg:pr-8">
+                <header className="relative z-10 flex w-full items-center justify-end gap-4 py-6 pr-5 pl-4 sm:pr-9 sm:pl-8 lg:pr-8 lg:pl-8">
                     <div className="flex items-center gap-3 font-['Inter'] text-sm leading-5 tracking-[-0.02em] text-[#545F71]">
                         <span className="hidden sm:inline">Already have an account?</span>
                         <Link
@@ -46,23 +41,22 @@ export default function Welcome() {
                 </header>
 
                 {/* Content */}
-                <main className="relative z-10 mx-auto grid w-full max-w-screen-2xl grid-cols-1 items-center gap-8 pb-14 pl-4 pr-4 pt-6 sm:pl-6 sm:pr-6 sm:gap-12 lg:grid-cols-2 lg:gap-16 lg:pb-20 lg:pl-8 lg:pr-8">
+                <main className="relative z-10 mx-auto grid w-full max-w-screen-2xl grid-cols-1 items-center gap-8 pt-6 pr-4 pb-14 pl-4 sm:gap-12 sm:pr-6 sm:pl-6 lg:grid-cols-2 lg:gap-16 lg:pr-8 lg:pb-20 lg:pl-8">
                     <section className="text-center lg:text-left">
                         <div className="mb-6 flex items-center justify-center gap-3 lg:justify-start">
                             <img alt="EquipIT" src={equipitLogo} className="h-7 w-auto" draggable={false} />
-                            <div className="font-['Poppins'] text-lg font-extrabold tracking-[-0.02em] text-[#060644] sm:text-xl">
-                                EquipIT
-                            </div>
+                            <div className="font-['Poppins'] text-lg font-extrabold tracking-[-0.02em] text-[#060644] sm:text-xl">EquipIT</div>
                         </div>
 
-                        <h1 className="font-['Poppins'] text-3xl font-black leading-tight tracking-[-0.02em] text-[#060644] drop-shadow-[0px_4px_4px_rgba(0,0,0,0.18)] sm:text-4xl sm:text-5xl lg:text-6xl">
+                        <h1 className="font-['Poppins'] text-3xl leading-tight font-black tracking-[-0.02em] text-[#060644] drop-shadow-[0px_4px_4px_rgba(0,0,0,0.18)] sm:text-4xl sm:text-5xl lg:text-6xl">
                             Borrow Smarter.
-                            <br/>
+                            <br />
                             Work Faster.
                         </h1>
 
-                        <p className="mx-auto mt-4 max-w-md font-['Poppins'] text-sm font-medium leading-6 tracking-[-0.02em] text-[#5D5D5D] sm:mt-6 sm:text-base sm:text-lg lg:mx-0">
-                            Easily request, track, and return equipment in<br className="hidden sm:inline"/> <span className="block text-center lg:text-center">one simple system.</span>
+                        <p className="mx-auto mt-4 max-w-md font-['Poppins'] text-sm leading-6 font-medium tracking-[-0.02em] text-[#5D5D5D] sm:mt-6 sm:text-base sm:text-lg lg:mx-0">
+                            Easily request, track, and return equipment in
+                            <br className="hidden sm:inline" /> <span className="block text-center lg:text-center">one simple system.</span>
                         </p>
                     </section>
 
@@ -83,7 +77,7 @@ export default function Welcome() {
                                             id="first_name"
                                             name="first_name"
                                             autoComplete="given-name"
-                                            className="mt-2 w-full rounded-xl bg-[#F9F7F4] px-4 py-3 font-['Inter'] text-sm font-medium text-[#444444] outline-none ring-1 ring-black/10 focus:ring-2 focus:ring-[#060644]"
+                                            className="mt-2 w-full rounded-xl bg-[#F9F7F4] px-4 py-3 font-['Inter'] text-sm font-medium text-[#444444] ring-1 ring-black/10 outline-none focus:ring-2 focus:ring-[#060644]"
                                             type="text"
                                         />
                                     </div>
@@ -96,7 +90,7 @@ export default function Welcome() {
                                             id="last_name"
                                             name="last_name"
                                             autoComplete="family-name"
-                                            className="mt-2 w-full rounded-xl bg-[#F9F7F4] px-4 py-3 font-['Inter'] text-sm font-medium text-[#444444] outline-none ring-1 ring-black/10 focus:ring-2 focus:ring-[#060644]"
+                                            className="mt-2 w-full rounded-xl bg-[#F9F7F4] px-4 py-3 font-['Inter'] text-sm font-medium text-[#444444] ring-1 ring-black/10 outline-none focus:ring-2 focus:ring-[#060644]"
                                             type="text"
                                         />
                                     </div>
@@ -110,7 +104,7 @@ export default function Welcome() {
                                         id="email"
                                         name="email"
                                         autoComplete="email"
-                                        className="mt-2 w-full rounded-xl bg-[#F9F7F4] px-4 py-3 font-['Inter'] text-sm font-medium text-[#444444] outline-none ring-1 ring-black/10 focus:ring-2 focus:ring-[#060644]"
+                                        className="mt-2 w-full rounded-xl bg-[#F9F7F4] px-4 py-3 font-['Inter'] text-sm font-medium text-[#444444] ring-1 ring-black/10 outline-none focus:ring-2 focus:ring-[#060644]"
                                         type="email"
                                     />
                                 </div>
@@ -123,7 +117,7 @@ export default function Welcome() {
                                         id="password"
                                         name="password"
                                         autoComplete="new-password"
-                                        className="mt-2 w-full rounded-xl bg-[#F9F7F4] px-4 py-3 font-['Inter'] text-sm font-medium text-[#444444] outline-none ring-1 ring-black/10 focus:ring-2 focus:ring-[#060644]"
+                                        className="mt-2 w-full rounded-xl bg-[#F9F7F4] px-4 py-3 font-['Inter'] text-sm font-medium text-[#444444] ring-1 ring-black/10 outline-none focus:ring-2 focus:ring-[#060644]"
                                         type="password"
                                     />
                                 </div>
@@ -136,19 +130,19 @@ export default function Welcome() {
                                         id="confirm_password"
                                         name="confirm_password"
                                         autoComplete="new-password"
-                                        className="mt-2 w-full rounded-xl bg-[#F9F7F4] px-4 py-3 font-['Inter'] text-sm font-medium text-[#444444] outline-none ring-1 ring-black/10 focus:ring-2 focus:ring-[#060644]"
+                                        className="mt-2 w-full rounded-xl bg-[#F9F7F4] px-4 py-3 font-['Inter'] text-sm font-medium text-[#444444] ring-1 ring-black/10 outline-none focus:ring-2 focus:ring-[#060644]"
                                         type="password"
                                     />
                                 </div>
 
                                 <p className="text-[11px] leading-4 text-[#444444]">
-                                    Password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, one number, and one
-                                    special character.
+                                    Password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, one
+                                    number, and one special character.
                                 </p>
 
                                 <button
                                     type="button"
-                                    className="mt-2 inline-flex h-12 w-full items-center justify-center rounded-lg bg-[#547792] font-['Inter'] text-sm font-semibold text-white shadow-sm hover:bg-[#4c6f87] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#060644] focus-visible:ring-offset-2"
+                                    className="mt-2 inline-flex h-12 w-full items-center justify-center rounded-lg bg-[#547792] font-['Inter'] text-sm font-semibold text-white shadow-sm hover:bg-[#4c6f87] focus-visible:ring-2 focus-visible:ring-[#060644] focus-visible:ring-offset-2 focus-visible:outline-none"
                                 >
                                     Register
                                 </button>

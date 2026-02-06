@@ -2,8 +2,8 @@ import { Head, Link } from '@inertiajs/react';
 
 import eqMark from '../../assets/figma/logo.png';
 import waves from '../../assets/figma/signup/Group 45.png';
-import cardBackground from '../../assets/figma/signup/Rectangle 1507.png';
 import emailIcon from '../../assets/figma/signup/Group 8.png';
+import cardBackground from '../../assets/figma/signup/Rectangle 1507.png';
 import passwordIcon from '../../assets/figma/signup/Vector.png';
 
 export default function Login() {
@@ -63,15 +63,8 @@ export default function Login() {
                                     <div className="w-full max-w-md pl-0 pr-0 sm:pl-2 sm:pr-4 md:pl-4 lg:pl-6">
                                         {/* Logo row inside card */}
                                         <div className="mb-5 flex items-center gap-2">
-                                            <img
-                                                src={eqMark}
-                                                alt="EquipIT"
-                                                className="h-7 w-auto sm:h-8"
-                                                draggable={false}
-                                            />
-                                            <span className="font-['Poppins'] text-sm font-semibold tracking-[-0.04em] text-[#545F71]">
-                                                EquipIT
-                                            </span>
+                                            <img src={eqMark} alt="EquipIT" className="h-7 w-auto sm:h-8" draggable={false} />
+                                            <span className="font-['Poppins'] text-sm font-semibold tracking-[-0.04em] text-[#545F71]">EquipIT</span>
                                         </div>
 
                                         <h1 className="font-['Poppins'] text-2xl font-extralight leading-tight tracking-[-0.04em] text-[#060644] sm:text-3xl sm:text-[32px]">
@@ -91,21 +84,16 @@ export default function Login() {
                                                 >
                                                     Email
                                                 </label>
-                                                <div className="mt-2 relative">
+                                                <div className="relative mt-2">
                                                     <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
-                                                        <img
-                                                            src={emailIcon}
-                                                            alt=""
-                                                            className="h-4 w-4 object-contain"
-                                                            draggable={false}
-                                                        />
+                                                        <img src={emailIcon} alt="" className="h-4 w-4 object-contain" draggable={false} />
                                                     </span>
                                                     <input
                                                         id="email"
                                                         name="email"
                                                         type="email"
                                                         autoComplete="email"
-                                                        className="w-full rounded-lg border border-[#060644] bg-[#F9F7F4] py-2.5 pl-9 pr-3 font-['Inter'] text-sm text-[#060644] outline-none shadow-[0px_4px_10px_rgba(0,0,0,0.08)] placeholder:text-[#9CA3AF] focus:border-[#547792] focus:ring-2 focus:ring-[#547792]/40"
+                                                        className="w-full rounded-lg border border-[#060644] bg-[#F9F7F4] py-2.5 pr-3 pl-9 font-['Inter'] text-sm text-[#060644] shadow-[0px_4px_10px_rgba(0,0,0,0.08)] outline-none placeholder:text-[#9CA3AF] focus:border-[#547792] focus:ring-2 focus:ring-[#547792]/40"
                                                         placeholder="you@company.com"
                                                     />
                                                 </div>
@@ -119,21 +107,16 @@ export default function Login() {
                                                 >
                                                     Password
                                                 </label>
-                                                <div className="mt-2 relative">
+                                                <div className="relative mt-2">
                                                     <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
-                                                        <img
-                                                            src={passwordIcon}
-                                                            alt=""
-                                                            className="h-4 w-4 object-contain"
-                                                            draggable={false}
-                                                        />
+                                                        <img src={passwordIcon} alt="" className="h-4 w-4 object-contain" draggable={false} />
                                                     </span>
                                                     <input
                                                         id="password"
                                                         name="password"
                                                         type="password"
                                                         autoComplete="current-password"
-                                                        className="w-full rounded-lg border border-[#060644] bg-[#F9F7F4] py-2.5 pl-9 pr-3 font-['Inter'] text-sm text-[#060644] outline-none shadow-[0px_4px_10px_rgba(0,0,0,0.08)] placeholder:text-[#9CA3AF] focus:border-[#547792] focus:ring-2 focus:ring-[#547792]/40"
+                                                        className="w-full rounded-lg border border-[#060644] bg-[#F9F7F4] py-2.5 pr-3 pl-9 font-['Inter'] text-sm text-[#060644] shadow-[0px_4px_10px_rgba(0,0,0,0.08)] outline-none placeholder:text-[#9CA3AF] focus:border-[#547792] focus:ring-2 focus:ring-[#547792]/40"
                                                         placeholder="Enter your password"
                                                     />
                                                 </div>
@@ -141,7 +124,7 @@ export default function Login() {
 
                                             <button
                                                 type="button"
-                                                className="mt-2 inline-flex h-11 w-full items-center justify-center rounded-md bg-[#547792] font-['Inter'] text-sm font-semibold tracking-[-0.02em] text-white shadow-[0px_6px_16px_rgba(0,0,0,0.25)] hover:bg-[#4a6f86] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#547792]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+                                                className="mt-2 inline-flex h-11 w-full items-center justify-center rounded-md bg-[#547792] font-['Inter'] text-sm font-semibold tracking-[-0.02em] text-white shadow-[0px_6px_16px_rgba(0,0,0,0.25)] hover:bg-[#4a6f86] focus-visible:ring-2 focus-visible:ring-[#547792]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent focus-visible:outline-none"
                                             >
                                                 Login
                                             </button>
