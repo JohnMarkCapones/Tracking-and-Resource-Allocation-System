@@ -19,8 +19,8 @@ export default function Login() {
             </Head>
 
             <div className="relative min-h-screen overflow-hidden bg-[#F9F7F4]">
-                {/* Bottom-left waves illustration */}
-                <div className="pointer-events-none absolute bottom-0 left-0 z-0 w-[55vw] max-w-[750px] select-none">
+                {/* Bottom-left waves illustration - hidden on mobile, visible on larger screens */}
+                <div className="pointer-events-none absolute bottom-0 left-0 z-0 hidden w-[55vw] max-w-[750px] select-none md:block">
                     <img
                         src={waves}
                         alt=""
@@ -30,14 +30,14 @@ export default function Login() {
                 </div>
 
                 {/* Top-right signup header (outside card) */}
-                <header className="relative z-10 flex justify-end px-4 pt-6 sm:px-8 lg:px-30">
-                    <div className="flex items-center gap-3">
-                        <span className="font-['Inter'] text-sm font-medium tracking-[-0.02em] text-[#6B7280]">
+                <header className="relative z-10 flex justify-end px-4 pt-4 sm:px-8 sm:pt-6 lg:px-30">
+                    <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center sm:gap-3">
+                        <span className="hidden text-xs font-medium tracking-[-0.02em] text-[#6B7280] sm:inline-block sm:text-sm">
                             Don&apos;t have an account?
                         </span>
                         <Link
                             href="/"
-                            className="inline-flex items-center justify-center rounded-md bg-[#FAB95B] px-6 py-2.5 font-['Inter'] text-sm font-semibold tracking-[-0.02em] text-white shadow-sm ring-1 ring-black/5 hover:bg-[#f6ac3f]"
+                            className="inline-flex items-center justify-center rounded-md bg-[#FAB95B] px-4 py-2 text-xs font-semibold tracking-[-0.02em] text-white shadow-sm ring-1 ring-black/5 hover:bg-[#f6ac3f] sm:px-6 sm:py-2.5 sm:text-sm"
                         >
                             Sign Up
                         </Link>
@@ -48,19 +48,19 @@ export default function Login() {
                 <div className="relative z-10 flex min-h-[calc(100vh-72px)] items-center justify-center px-4 py-6 sm:px-8 lg:px-12">
                     <main className="relative w-full max-w-5xl">
                         {/* Card background from Figma */}
-                        <div className="relative mx-auto w-full overflow-hidden rounded-[28px]">
+                        <div className="relative mx-auto w-full overflow-hidden rounded-[20px] sm:rounded-[28px]">
                             <img
                                 src={cardBackground}
                                 alt=""
-                                className="block h-auto w-full max-h-[540px] object-cover shadow-[0px_24px_60px_rgba(0,0,0,0.35)]"
+                                className="block h-auto w-full max-h-[540px] object-cover object-center shadow-[0px_24px_60px_rgba(0,0,0,0.35)] sm:object-cover"
                                 draggable={false}
                             />
 
                             {/* Content on top of card – matches Figma white blob layout */}
-                            <div className="pointer-events-none absolute inset-0 flex flex-col px-5 py-5 sm:px-9 sm:py-6 lg:px-12 lg:py-7">
+                            <div className="pointer-events-none absolute inset-0 flex flex-col px-4 py-4 sm:px-9 sm:py-6 lg:px-12 lg:py-7">
                                 {/* Main login content aligned to the white area on the left */}
-                                <div className="pointer-events-auto mt-1 flex flex-1 items-center">
-                                    <div className="max-w-md pl-0 pr-4 sm:pl-2 md:pl-4 lg:pl-6">
+                                <div className="pointer-events-auto mt-1 flex flex-1 items-center justify-center sm:justify-start">
+                                    <div className="w-full max-w-md pl-0 pr-0 sm:pl-2 sm:pr-4 md:pl-4 lg:pl-6">
                                         {/* Logo row inside card */}
                                         <div className="mb-5 flex items-center gap-2">
                                             <img
@@ -74,11 +74,11 @@ export default function Login() {
                                             </span>
                                         </div>
 
-                                        <h1 className="font-['Poppins'] text-3xl font-extralight leading-tight tracking-[-0.04em] text-[#060644] sm:text-[32px]">
+                                        <h1 className="font-['Poppins'] text-2xl font-extralight leading-tight tracking-[-0.04em] text-[#060644] sm:text-3xl sm:text-[32px]">
                                             Welcome Back!
                                         </h1>
 
-                                        <h2 className="mt-5 font-['Poppins'] text-[20px] font-black tracking-[-0.03em] text-[#060644] sm:text-[22px]">
+                                        <h2 className="mt-4 font-['Poppins'] text-lg font-black tracking-[-0.03em] text-[#060644] sm:mt-5 sm:text-[20px] sm:text-[22px]">
                                             Login
                                         </h2>
 
