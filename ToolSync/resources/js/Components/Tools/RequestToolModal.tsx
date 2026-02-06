@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { useState } from 'react';
-import { DayPicker, type DateRange } from 'react-day-picker';
+import { DayPicker, getDefaultClassNames, type DateRange } from 'react-day-picker';
 import Modal from '@/Components/Modal';
 import 'react-day-picker/style.css';
 
@@ -56,31 +56,42 @@ export function RequestToolModal({ show, toolName, toolId, onClose, onSubmit }: 
                         <div>
                             <label className="mb-2 block text-[11px] font-semibold tracking-wide text-gray-500 uppercase">Select Dates</label>
                             <div className="rounded-xl border border-gray-200 p-3">
+                                {/*
+                                 * Use the same DayPicker v9 styling as the tool detail calendar,
+                                 * so arrows, spacing, and selection feel consistent across the app.
+                                 */}
                                 <DayPicker
                                     mode="range"
                                     selected={dateRange}
                                     onSelect={setDateRange}
                                     numberOfMonths={1}
                                     disabled={{ before: new Date() }}
-                                    classNames={{
-                                        root: 'text-xs',
-                                        month: 'space-y-2',
-                                        caption: 'flex justify-center relative items-center h-8',
-                                        caption_label: 'text-xs font-semibold text-gray-900',
-                                        nav: 'flex items-center gap-1',
-                                        nav_button: 'h-6 w-6 bg-transparent p-0 text-gray-500 hover:text-gray-700',
-                                        table: 'w-full border-collapse',
-                                        head_row: 'flex',
-                                        head_cell: 'text-gray-500 rounded w-8 font-medium text-[10px] uppercase',
-                                        row: 'flex w-full mt-1',
-                                        cell: 'text-center text-xs p-0 relative',
-                                        day: 'h-8 w-8 p-0 font-normal rounded-full hover:bg-gray-100',
-                                        day_selected: 'bg-blue-600 text-white hover:bg-blue-700',
-                                        day_today: 'font-semibold text-blue-600',
-                                        day_outside: 'text-gray-300',
-                                        day_disabled: 'text-gray-300',
-                                        day_range_middle: 'bg-blue-50 text-blue-900 rounded-none',
-                                        day_hidden: 'invisible',
+                                    navLayout="around"
+                                    classNames={(() => {
+                                        const defaultClassNames = getDefaultClassNames();
+                                        return {
+                                            root: `${defaultClassNames.root} text-xs`,
+                                            month_caption: `${defaultClassNames.month_caption} mb-1 flex items-center justify-center text-xs font-semibold text-gray-900`,
+                                            nav: `${defaultClassNames.nav}`,
+                                            button_previous: `${defaultClassNames.button_previous} h-7 w-7 rounded-full text-gray-700 hover:bg-gray-100 hover:text-gray-900`,
+                                            button_next: `${defaultClassNames.button_next} h-7 w-7 rounded-full text-gray-700 hover:bg-gray-100 hover:text-gray-900`,
+                                            chevron: `${defaultClassNames.chevron} fill-black`,
+                                            month_grid: `${defaultClassNames.month_grid} w-full border-collapse`,
+                                            weekdays: `${defaultClassNames.weekdays}`,
+                                            weekday: `${defaultClassNames.weekday} text-[10px] font-medium uppercase text-gray-500`,
+                                            week: `${defaultClassNames.week}`,
+                                            day: `${defaultClassNames.day} text-center text-xs`,
+                                            day_button: `${defaultClassNames.day_button} rounded-full font-normal hover:bg-gray-100`,
+                                            selected: 'bg-blue-600 text-white hover:bg-blue-700 rounded-full',
+                                            today: `${defaultClassNames.today} font-semibold text-blue-600`,
+                                            outside: `${defaultClassNames.outside} text-gray-300`,
+                                            disabled: `${defaultClassNames.disabled} text-gray-300`,
+                                            range_middle: `${defaultClassNames.range_middle} bg-blue-50 text-blue-900`,
+                                            hidden: `${defaultClassNames.hidden} invisible`,
+                                        };
+                                    })()}
+                                    styles={{
+                                        chevron: { fill: '#000000' },
                                     }}
                                 />
                             </div>

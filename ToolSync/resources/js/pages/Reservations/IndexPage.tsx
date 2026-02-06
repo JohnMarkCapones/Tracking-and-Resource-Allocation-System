@@ -1,5 +1,6 @@
 import { Head } from '@inertiajs/react';
-import { useState, useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { toast } from '@/Components/Toast';
 import { Breadcrumb } from '@/Components/Breadcrumb';
 import { EmptyState } from '@/Components/EmptyState';
 import AppLayout from '@/Layouts/AppLayout';
@@ -67,12 +68,14 @@ function isInRange(date: Date, start: string, end: string): boolean {
 
 export default function IndexPage() {
     const [filter, setFilter] = useState<FilterStatus>('all');
+    const [reservations, setReservations] = useState<Reservation[]>(MOCK_RESERVATIONS);
+    const [reservationToCancel, setReservationToCancel] = useState<Reservation | null>(null);
     const [currentMonth, setCurrentMonth] = useState(new Date());
 
     const filtered = useMemo(() => {
-        if (filter === 'all') return MOCK_RESERVATIONS;
-        return MOCK_RESERVATIONS.filter((r) => r.status === filter);
-    }, [filter]);
+        if (filter === 'all') return reservations;
+        return reservations.filter((r) => r.status === filter);
+    }, [reservations, filter]);
 
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
@@ -83,7 +86,18 @@ export default function IndexPage() {
     const nextMonth = () => setCurrentMonth(new Date(year, month + 1, 1));
 
     const getReservationsForDay = (date: Date) => {
-        return MOCK_RESERVATIONS.filter((r) => (r.status === 'upcoming' || r.status === 'active') && isInRange(date, r.startDate, r.endDate));
+        return reservations.filter((r) => (r.status === 'upcoming' || r.status === 'active') && isInRange(date, r.startDate, r.endDate));
+    };
+
+    const handleConfirmCancel = () => {
+        if (!reservationToCancel) return;
+
+        // In this prototype view we only update local state. When the real
+        // cancel API exists, this is the single place to call it.
+        setReservations((prev) => prev.map((r) => (r.id === reservationToCancel.id ? { ...r, status: 'cancelled' } : r)));
+
+        toast.success(`Reservation for ${reservationToCancel.toolName} has been cancelled.`);
+        setReservationToCancel(null);
     };
 
     return (
@@ -256,6 +270,7 @@ export default function IndexPage() {
                                         {reservation.status === 'upcoming' && (
                                             <button
                                                 type="button"
+                                                onClick={() => setReservationToCancel(reservation)}
                                                 className="text-xs font-medium text-rose-600 hover:text-rose-700 dark:text-rose-400"
                                             >
                                                 Cancel
@@ -268,6 +283,35 @@ export default function IndexPage() {
                     )}
                 </section>
             </div>
+
+            {reservationToCancel && (
+                <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30">
+                    <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-900">
+                        <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Cancel reservation?</h2>
+                        <p className="mt-2 text-[11px] text-gray-600 dark:text-gray-300">
+                            Are you sure you want to cancel your reservation for{' '}
+                            <span className="font-semibold">{reservationToCancel.toolName}</span> ({reservationToCancel.toolId})? This action
+                            will free up the reserved dates for other users.
+                        </p>
+                        <div className="mt-4 flex justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setReservationToCancel(null)}
+                                className="rounded-full border border-gray-200 px-4 py-1.5 text-[11px] font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                            >
+                                Keep reservation
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmCancel}
+                                className="rounded-full bg-rose-600 px-4 py-1.5 text-[11px] font-semibold text-white hover:bg-rose-700"
+                            >
+                                Yes, cancel it
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </AppLayout>
     );
 }

@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreToolRequest;
 use App\Http\Requests\UpdateToolRequest;
 use App\Models\Tool;
+use App\Models\ToolAllocation;
+use App\Models\Reservation;
 use App\Models\ToolStatusLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -219,6 +221,49 @@ class ToolController extends Controller
 
         return response()->json([
             'message' => 'Tool deleted successfully.',
+        ]);
+    }
+
+    /**
+     * Get availability information for a tool between a date range.
+     *
+     * @urlParam tool int required The ID of the tool. Example: 1
+     * @queryParam from date Start of the range (inclusive). Example: 2026-01-01
+     * @queryParam to date End of the range (inclusive). Example: 2026-01-31
+     */
+    public function availability(Request $request, Tool $tool): JsonResponse
+    {
+        $from = $request->filled('from') ? now()->parse($request->input('from'))->startOfDay() : now()->startOfDay();
+        $to = $request->filled('to') ? now()->parse($request->input('to'))->endOfDay() : now()->copy()->addMonth()->endOfDay();
+
+        $allocations = ToolAllocation::query()
+            ->where('tool_id', $tool->id)
+            ->whereBetween('borrow_date', [$from, $to])
+            ->get([
+                'id',
+                'borrow_date',
+                'expected_return_date',
+                'actual_return_date',
+                'status',
+            ]);
+
+        $reservations = Reservation::query()
+            ->where('tool_id', $tool->id)
+            ->whereBetween('start_date', [$from, $to])
+            ->get([
+                'id',
+                'start_date',
+                'end_date',
+                'status',
+                'recurring',
+                'recurrence_pattern',
+            ]);
+
+        return response()->json([
+            'data' => [
+                'allocations' => $allocations,
+                'reservations' => $reservations,
+            ],
         ]);
     }
 }

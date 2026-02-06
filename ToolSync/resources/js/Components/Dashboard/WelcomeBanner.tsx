@@ -1,3 +1,5 @@
+import { Link } from '@inertiajs/react';
+
 type WelcomeBannerProps = {
     userName: string;
     totalTools: number;
@@ -13,15 +15,15 @@ export function WelcomeBanner({ userName, totalTools, toolsUnderMaintenance, bor
                 <div className="max-w-md">
                     <p className="text-sm font-medium text-blue-100">Welcome back, {userName}!</p>
                     <h2 className="mt-2 text-xl font-semibold">Here&apos;s what&apos;s happening with your tools today</h2>
-                    <button
-                        type="button"
-                        className="mt-4 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-semibold text-blue-800 shadow-sm hover:bg-blue-50"
+                    <Link
+                        href="/tools"
+                        className="mt-4 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-semibold text-blue-800 shadow-sm transition hover:-translate-y-0.5 hover:bg-blue-50 hover:shadow-md"
                     >
                         <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <path d="M10 4V16M4 10H16" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
                         </svg>
                         Borrow new tool
-                    </button>
+                    </Link>
                 </div>
 
                 <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

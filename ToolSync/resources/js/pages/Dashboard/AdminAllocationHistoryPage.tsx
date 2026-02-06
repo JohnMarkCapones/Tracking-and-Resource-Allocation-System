@@ -324,6 +324,13 @@ export default function AdminAllocationHistoryPage() {
 
                         <button
                             type="button"
+                            onClick={() => {
+                                const url = new URL('/api/tool-allocations/export', window.location.origin);
+                                if (statusFilter !== 'all') {
+                                    url.searchParams.set('status', statusFilter.toUpperCase());
+                                }
+                                window.location.href = url.toString();
+                            }}
                             className="inline-flex items-center gap-2 rounded-full bg-amber-400 px-4 py-1.5 text-xs font-semibold text-slate-900 shadow-sm hover:bg-amber-300"
                         >
                             <span>Export CSV</span>

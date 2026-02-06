@@ -18,6 +18,7 @@ CREATE TABLE users (
     email VARCHAR(150) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
     role ENUM('ADMIN', 'USER') NOT NULL DEFAULT 'USER',
+    status ENUM('ACTIVE', 'INACTIVE') NOT NULL DEFAULT 'ACTIVE',
     remember_token VARCHAR(100) DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP 
@@ -106,6 +107,56 @@ CREATE TABLE tool_status_logs (
         FOREIGN KEY (changed_by) 
         REFERENCES users(id)
         ON DELETE SET NULL
+        ON UPDATE CASCADE
+);
+
+/* ================================
+   FAVORITES TABLE
+================================ */
+
+CREATE TABLE favorites (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    tool_id BIGINT UNSIGNED NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_favorites_user
+        FOREIGN KEY (user_id)
+        REFERENCES users(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+    CONSTRAINT fk_favorites_tool
+        FOREIGN KEY (tool_id)
+        REFERENCES tools(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+    UNIQUE KEY uniq_favorites_user_tool (user_id, tool_id)
+);
+
+/* ================================
+   RESERVATIONS TABLE
+================================ */
+
+CREATE TABLE reservations (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tool_id BIGINT UNSIGNED NOT NULL,
+    user_id BIGINT UNSIGNED NOT NULL,
+    start_date DATETIME NOT NULL,
+    end_date DATETIME NOT NULL,
+    status ENUM('UPCOMING', 'ACTIVE', 'COMPLETED', 'CANCELLED') NOT NULL DEFAULT 'UPCOMING',
+    recurring TINYINT(1) NOT NULL DEFAULT 0,
+    recurrence_pattern VARCHAR(50) DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_reservations_tool
+        FOREIGN KEY (tool_id)
+        REFERENCES tools(id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+    CONSTRAINT fk_reservations_user
+        FOREIGN KEY (user_id)
+        REFERENCES users(id)
+        ON DELETE CASCADE
         ON UPDATE CASCADE
 );
 

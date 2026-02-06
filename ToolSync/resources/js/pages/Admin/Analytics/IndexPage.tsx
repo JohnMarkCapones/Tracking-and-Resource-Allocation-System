@@ -64,6 +64,29 @@ export default function IndexPage() {
 
                     <button
                         type="button"
+                        onClick={() => {
+                            const now = new Date();
+                            let from = new Date(now);
+
+                            if (period === '7d') {
+                                from.setDate(now.getDate() - 7);
+                            } else if (period === '30d') {
+                                from.setDate(now.getDate() - 30);
+                            } else if (period === '90d') {
+                                from.setDate(now.getDate() - 90);
+                            } else {
+                                from.setFullYear(now.getFullYear() - 1);
+                            }
+
+                            const toParam = now.toISOString().slice(0, 10);
+                            const fromParam = from.toISOString().slice(0, 10);
+
+                            const url = new URL('/api/analytics/export', window.location.origin);
+                            url.searchParams.set('from', fromParam);
+                            url.searchParams.set('to', toParam);
+
+                            window.location.href = url.toString();
+                        }}
                         className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
                     >
                         <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">

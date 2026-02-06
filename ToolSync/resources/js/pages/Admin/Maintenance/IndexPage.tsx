@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Breadcrumb } from '@/Components/Breadcrumb';
 import { toast } from '@/Components/Toast';
 import AppLayout from '@/Layouts/AppLayout';
+import Modal from '@/Components/Modal';
 
 type MaintenanceStatus = 'scheduled' | 'in_progress' | 'completed' | 'overdue';
 
@@ -124,11 +125,60 @@ const TYPE_STYLES: Record<string, string> = {
 export default function IndexPage() {
     const [activeTab, setActiveTab] = useState<'schedule' | 'deprecation'>('schedule');
     const [filterStatus, setFilterStatus] = useState<'all' | MaintenanceStatus>('all');
+    const [maintenanceRecords, setMaintenanceRecords] = useState<MaintenanceRecord[]>(MOCK_MAINTENANCE);
+    const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
 
-    const filteredMaintenance = filterStatus === 'all' ? MOCK_MAINTENANCE : MOCK_MAINTENANCE.filter((m) => m.status === filterStatus);
+    const [scheduleToolName, setScheduleToolName] = useState('');
+    const [scheduleToolId, setScheduleToolId] = useState('');
+    const [scheduleType, setScheduleType] = useState<'routine' | 'repair' | 'inspection' | 'calibration'>('routine');
+    const [scheduleDate, setScheduleDate] = useState('');
+    const [scheduleAssignee, setScheduleAssignee] = useState('');
+    const [scheduleNotes, setScheduleNotes] = useState('');
 
-    const handleComplete = () => {
+    const filteredMaintenance =
+        filterStatus === 'all' ? maintenanceRecords : maintenanceRecords.filter((m) => m.status === filterStatus);
+
+    const handleComplete = (id: number): void => {
+        setMaintenanceRecords((prev) =>
+            prev.map((record) => (record.id === id ? { ...record, status: 'completed' as const } : record)),
+        );
         toast.success('Maintenance marked as completed');
+    };
+
+    const handleOpenScheduleModal = (): void => {
+        setScheduleToolName('');
+        setScheduleToolId('');
+        setScheduleType('routine');
+        setScheduleDate('');
+        setScheduleAssignee('');
+        setScheduleNotes('');
+        setIsScheduleModalOpen(true);
+    };
+
+    const handleSubmitSchedule = (e: React.FormEvent): void => {
+        e.preventDefault();
+
+        if (!scheduleToolName.trim() || !scheduleToolId.trim() || !scheduleDate || !scheduleAssignee.trim()) {
+            toast.error('Please fill in tool, ID, date, and assignee.');
+            return;
+        }
+
+        const newRecord: MaintenanceRecord = {
+            id: Date.now(),
+            toolName: scheduleToolName.trim(),
+            toolId: scheduleToolId.trim(),
+            type: scheduleType,
+            scheduledDate: scheduleDate,
+            assignee: scheduleAssignee.trim(),
+            status: 'scheduled',
+            notes: scheduleNotes.trim() || 'Scheduled via quick form',
+            usageCount: 0,
+            triggerThreshold: 50,
+        };
+
+        setMaintenanceRecords((prev) => [newRecord, ...prev]);
+        setIsScheduleModalOpen(false);
+        toast.success('Maintenance scheduled.');
     };
 
     return (
@@ -169,6 +219,7 @@ export default function IndexPage() {
 
                     <button
                         type="button"
+                        onClick={handleOpenScheduleModal}
                         className="rounded-full bg-blue-600 px-4 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-blue-700"
                     >
                         + Schedule Maintenance
@@ -182,18 +233,22 @@ export default function IndexPage() {
                             {[
                                 {
                                     label: 'Scheduled',
-                                    count: MOCK_MAINTENANCE.filter((m) => m.status === 'scheduled').length,
+                                    count: maintenanceRecords.filter((m) => m.status === 'scheduled').length,
                                     color: 'text-blue-600',
                                 },
                                 {
                                     label: 'In Progress',
-                                    count: MOCK_MAINTENANCE.filter((m) => m.status === 'in_progress').length,
+                                    count: maintenanceRecords.filter((m) => m.status === 'in_progress').length,
                                     color: 'text-amber-600',
                                 },
-                                { label: 'Overdue', count: MOCK_MAINTENANCE.filter((m) => m.status === 'overdue').length, color: 'text-rose-600' },
+                                {
+                                    label: 'Overdue',
+                                    count: maintenanceRecords.filter((m) => m.status === 'overdue').length,
+                                    color: 'text-rose-600',
+                                },
                                 {
                                     label: 'Completed',
-                                    count: MOCK_MAINTENANCE.filter((m) => m.status === 'completed').length,
+                                    count: maintenanceRecords.filter((m) => m.status === 'completed').length,
                                     color: 'text-emerald-600',
                                 },
                             ].map((stat) => (
@@ -324,6 +379,139 @@ export default function IndexPage() {
                     </div>
                 )}
             </div>
+            <Modal show={isScheduleModalOpen} maxWidth="md" onClose={() => setIsScheduleModalOpen(false)}>
+                <div className="overflow-hidden rounded-lg">
+                    <div className="bg-gradient-to-r from-blue-700 to-blue-500 px-6 py-4 text-white">
+                        <h2 className="text-sm font-semibold">Schedule Maintenance</h2>
+                        <p className="mt-1 text-[11px] text-blue-100">
+                            Create a quick maintenance task for a tool. You can refine details later from the maintenance list.
+                        </p>
+                    </div>
+                    <form onSubmit={handleSubmitSchedule}>
+                        <div className="space-y-4 bg-white px-6 py-5">
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <div>
+                                    <label
+                                        htmlFor="toolName"
+                                        className="mb-1 block text-[11px] font-semibold tracking-wide text-gray-500 uppercase"
+                                    >
+                                        Tool name
+                                    </label>
+                                    <input
+                                        id="toolName"
+                                        type="text"
+                                        value={scheduleToolName}
+                                        onChange={(e) => setScheduleToolName(e.target.value)}
+                                        className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                                        placeholder="e.g. 3D Printer"
+                                    />
+                                </div>
+                                <div>
+                                    <label
+                                        htmlFor="toolId"
+                                        className="mb-1 block text-[11px] font-semibold tracking-wide text-gray-500 uppercase"
+                                    >
+                                        Tool ID
+                                    </label>
+                                    <input
+                                        id="toolId"
+                                        type="text"
+                                        value={scheduleToolId}
+                                        onChange={(e) => setScheduleToolId(e.target.value)}
+                                        className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                                        placeholder="e.g. PR-0010"
+                                    />
+                                </div>
+                            </div>
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <div>
+                                    <label
+                                        htmlFor="maintenanceType"
+                                        className="mb-1 block text-[11px] font-semibold tracking-wide text-gray-500 uppercase"
+                                    >
+                                        Type
+                                    </label>
+                                    <select
+                                        id="maintenanceType"
+                                        value={scheduleType}
+                                        onChange={(e) =>
+                                            setScheduleType(e.target.value as 'routine' | 'repair' | 'inspection' | 'calibration')
+                                        }
+                                        className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                                    >
+                                        <option value="routine">Routine</option>
+                                        <option value="repair">Repair</option>
+                                        <option value="inspection">Inspection</option>
+                                        <option value="calibration">Calibration</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label
+                                        htmlFor="scheduledDate"
+                                        className="mb-1 block text-[11px] font-semibold tracking-wide text-gray-500 uppercase"
+                                    >
+                                        Scheduled date
+                                    </label>
+                                    <input
+                                        id="scheduledDate"
+                                        type="date"
+                                        value={scheduleDate}
+                                        onChange={(e) => setScheduleDate(e.target.value)}
+                                        className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label
+                                    htmlFor="assignee"
+                                    className="mb-1 block text-[11px] font-semibold tracking-wide text-gray-500 uppercase"
+                                >
+                                    Assignee
+                                </label>
+                                <input
+                                    id="assignee"
+                                    type="text"
+                                    value={scheduleAssignee}
+                                    onChange={(e) => setScheduleAssignee(e.target.value)}
+                                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="e.g. Tech Team"
+                                />
+                            </div>
+                            <div>
+                                <label
+                                    htmlFor="notes"
+                                    className="mb-1 block text-[11px] font-semibold tracking-wide text-gray-500 uppercase"
+                                >
+                                    Notes
+                                </label>
+                                <textarea
+                                    id="notes"
+                                    rows={3}
+                                    value={scheduleNotes}
+                                    onChange={(e) => setScheduleNotes(e.target.value)}
+                                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="What needs to be checked or fixed?"
+                                />
+                            </div>
+                        </div>
+                        <div className="flex justify-end gap-2 border-t bg-gray-50 px-6 py-3">
+                            <button
+                                type="button"
+                                onClick={() => setIsScheduleModalOpen(false)}
+                                className="rounded-full border border-gray-200 px-4 py-1.5 text-[11px] font-medium text-gray-700 hover:bg-gray-100"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                className="rounded-full bg-blue-600 px-4 py-1.5 text-[11px] font-semibold text-white hover:bg-blue-700"
+                            >
+                                Schedule
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </Modal>
         </AppLayout>
     );
 }

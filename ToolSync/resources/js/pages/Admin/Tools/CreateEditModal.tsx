@@ -125,7 +125,7 @@ export function CreateEditModal({ show, tool, onClose, onSave }: CreateEditModal
     };
 
     return (
-        <Modal show={show} maxWidth="md" onClose={onClose}>
+        <Modal show={show} maxWidth="xl" onClose={onClose}>
             <div className="overflow-hidden rounded-lg">
                 <div className="bg-gradient-to-r from-slate-900 to-blue-600 px-6 py-4 text-white">
                     <h2 className="text-sm font-semibold">{isEditing ? 'Edit Tool' : 'Add New Tool'}</h2>

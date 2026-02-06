@@ -41,7 +41,7 @@ Route::get('/borrowings', [DashboardController::class, 'borrowings'])
     ->name('borrowings');
 
 Route::get('/notifications', [DashboardController::class, 'notifications'])
-    ->name('notifications');
+    ->name('notifications');    
 
 Route::get('/favorites', function () {
     return Inertia::render('Favorites/IndexPage');

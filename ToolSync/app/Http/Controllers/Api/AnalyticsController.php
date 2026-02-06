@@ -120,4 +120,44 @@ class AnalyticsController extends Controller
             ],
         ]);
     }
+
+    /**
+     * Export analytics summary as CSV
+     */
+    public function export(Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $userId = $request->filled('user_id') ? (int) $request->input('user_id') : null;
+        $from = $request->filled('from') ? Carbon::parse($request->input('from')) : now()->subDays(30)->startOfDay();
+        $to = $request->filled('to') ? Carbon::parse($request->input('to')) : now()->endOfDay();
+
+        $filename = 'analytics_'.now()->format('Ymd_His').'.csv';
+
+        $callback = function () use ($userId, $from, $to): void {
+            $handle = fopen('php://output', 'wb');
+
+            fputcsv($handle, ['Metric', 'Value']);
+
+            $base = ToolAllocation::query()->whereBetween('borrow_date', [$from, $to]);
+            if ($userId) {
+                $base->where('user_id', $userId);
+            }
+
+            $borrowedCount = (int) (clone $base)->where('status', 'BORROWED')->count();
+            $returnedCount = (int) (clone $base)->where('status', 'RETURNED')->count();
+            $overdueCount = (int) (clone $base)
+                ->where('status', 'BORROWED')
+                ->where('expected_return_date', '<', now())
+                ->count();
+
+            fputcsv($handle, ['Borrowed', $borrowedCount]);
+            fputcsv($handle, ['Returned', $returnedCount]);
+            fputcsv($handle, ['Overdue', $overdueCount]);
+
+            fclose($handle);
+        };
+
+        return response()->streamDownload($callback, $filename, [
+            'Content-Type' => 'text/csv',
+        ]);
+    }
 }

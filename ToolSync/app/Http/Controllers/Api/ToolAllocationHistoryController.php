@@ -107,4 +107,69 @@ class ToolAllocationHistoryController extends Controller
 
         return response()->json($paginator);
     }
+
+    /**
+     * Export allocation history as CSV
+     */
+    public function export(Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $filename = 'tool_allocations_'.now()->format('Ymd_His').'.csv';
+
+        $callback = function () use ($request): void {
+            $handle = fopen('php://output', 'wb');
+
+            fputcsv($handle, [
+                'ID',
+                'Tool',
+                'User',
+                'Borrow Date',
+                'Expected Return',
+                'Actual Return',
+                'Status',
+                'Note',
+            ]);
+
+            $query = ToolAllocation::query()->with(['tool', 'user'])->orderByDesc('borrow_date');
+
+            if ($request->filled('tool_id')) {
+                $query->where('tool_id', (int) $request->input('tool_id'));
+            }
+
+            if ($request->filled('user_id')) {
+                $query->where('user_id', (int) $request->input('user_id'));
+            }
+
+            if ($request->filled('status')) {
+                $query->where('status', $request->input('status'));
+            }
+
+            if ($request->filled('from')) {
+                $query->where('borrow_date', '>=', Carbon::parse($request->input('from')));
+            }
+
+            if ($request->filled('to')) {
+                $query->where('borrow_date', '<=', Carbon::parse($request->input('to')));
+            }
+
+            foreach ($query->cursor() as $allocation) {
+                /** @var ToolAllocation $allocation */
+                fputcsv($handle, [
+                    $allocation->id,
+                    $allocation->tool?->name,
+                    $allocation->user?->email,
+                    $allocation->borrow_date,
+                    $allocation->expected_return_date,
+                    $allocation->actual_return_date,
+                    $allocation->status,
+                    $allocation->note,
+                ]);
+            }
+
+            fclose($handle);
+        };
+
+        return response()->streamDownload($callback, $filename, [
+            'Content-Type' => 'text/csv',
+        ]);
+    }
 }

@@ -1,4 +1,4 @@
-import { Link } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
 import { FavoriteButton } from '@/Components/FavoriteButton';
 
 export type ToolCardStatus = 'Available' | 'Borrowed' | 'Maintenance';
@@ -31,7 +31,10 @@ function statusClasses(status: ToolCardStatus): string {
 
 export function ToolCard({ tool }: ToolCardProps) {
     return (
-        <Link href={`/tools/${tool.id}`} className="group rounded-2xl bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
+        <Link
+            href={`/tools/${tool.id}`}
+            className="group rounded-2xl bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md hover:bg-gray-50"
+        >
             <div className="relative mb-3 aspect-[4/3] overflow-hidden rounded-xl bg-gray-100">
                 {tool.imageUrl ? (
                     <img src={tool.imageUrl} alt={tool.name} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
@@ -64,10 +67,31 @@ export function ToolCard({ tool }: ToolCardProps) {
                     type="button"
                     className="mt-3 w-full rounded-full bg-blue-600 py-1.5 text-[11px] font-semibold text-white hover:bg-blue-700"
                     onClick={(e) => {
+                        // Navigate to the tool detail page and auto-open the request
+                        // modal using a query string flag. We stop the Link navigation
+                        // so we can control the destination URL explicitly.
                         e.preventDefault();
+                        e.stopPropagation();
+                        router.visit(`/tools/${tool.id}?request=1`);
                     }}
                 >
                     Request to Borrow
+                </button>
+            )}
+
+            {tool.status === 'Borrowed' && (
+                <button
+                    type="button"
+                    className="mt-3 w-full rounded-full bg-blue-600 py-1.5 text-[11px] font-semibold text-white hover:bg-blue-700"
+                    onClick={(e) => {
+                        // Same flow as borrowing, but messaging is about reserving
+                        // a future slot while the tool is currently borrowed.
+                        e.preventDefault();
+                        e.stopPropagation();
+                        router.visit(`/tools/${tool.id}?request=1`);
+                    }}
+                >
+                    Request a Reservation
                 </button>
             )}
         </Link>

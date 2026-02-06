@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Breadcrumb } from '@/Components/Breadcrumb';
 import { toast } from '@/Components/Toast';
 import AppLayout from '@/Layouts/AppLayout';
+import Modal from '@/Components/Modal';
 
 type DayOfWeek = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
 
@@ -19,6 +20,13 @@ type AutoApprovalRule = {
     condition: string;
     enabled: boolean;
 };
+
+type ConfirmAction =
+    | { type: 'save-general' }
+    | { type: 'save-hours' }
+    | { type: 'save-automation' }
+    | { type: 'remove-holiday'; id: number }
+    | { type: 'toggle-auto-approval'; id: number; nextEnabled: boolean };
 
 export default function IndexPage() {
     const [businessHours, setBusinessHours] = useState<BusinessHours[]>([
@@ -52,6 +60,7 @@ export default function IndexPage() {
     ]);
 
     const [activeTab, setActiveTab] = useState<'general' | 'hours' | 'holidays' | 'automation'>('general');
+    const [pendingConfirm, setPendingConfirm] = useState<ConfirmAction | null>(null);
 
     const toggleBusinessDay = (index: number) => {
         setBusinessHours((prev) => prev.map((bh, i) => (i === index ? { ...bh, enabled: !bh.enabled } : bh)));
@@ -68,16 +77,68 @@ export default function IndexPage() {
         setNewHolidayDate('');
     };
 
-    const removeHoliday = (id: number) => {
-        setHolidays((prev) => prev.filter((h) => h.id !== id));
+    const requestRemoveHoliday = (id: number) => {
+        setPendingConfirm({ type: 'remove-holiday', id });
     };
 
-    const toggleAutoApproval = (id: number) => {
-        setAutoApprovalRules((prev) => prev.map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r)));
+    const requestToggleAutoApproval = (id: number) => {
+        setAutoApprovalRules((prev) => {
+            const current = prev.find((r) => r.id === id);
+            if (!current) return prev;
+            const nextEnabled = !current.enabled;
+            setPendingConfirm({ type: 'toggle-auto-approval', id, nextEnabled });
+            return prev;
+        });
     };
 
-    const handleSave = () => {
-        toast.success('Settings saved successfully');
+    const performConfirmAction = () => {
+        if (!pendingConfirm) {
+            return;
+        }
+
+        switch (pendingConfirm.type) {
+            case 'save-general':
+                toast.success('General settings saved successfully');
+                break;
+            case 'save-hours':
+                toast.success('Business hours saved successfully');
+                break;
+            case 'save-automation':
+                toast.success('Automation settings saved successfully');
+                break;
+            case 'remove-holiday':
+                setHolidays((prev) => prev.filter((h) => h.id !== pendingConfirm.id));
+                toast.success('Holiday removed from calendar.');
+                break;
+            case 'toggle-auto-approval':
+                setAutoApprovalRules((prev) =>
+                    prev.map((rule) =>
+                        rule.id === pendingConfirm.id ? { ...rule, enabled: pendingConfirm.nextEnabled } : rule,
+                    ),
+                );
+                toast.success(
+                    pendingConfirm.nextEnabled
+                        ? 'Auto-approval rule enabled.'
+                        : 'Auto-approval rule disabled.',
+                );
+                break;
+            default:
+                break;
+        }
+
+        setPendingConfirm(null);
+    };
+
+    const requestSaveGeneral = () => {
+        setPendingConfirm({ type: 'save-general' });
+    };
+
+    const requestSaveHours = () => {
+        setPendingConfirm({ type: 'save-hours' });
+    };
+
+    const requestSaveAutomation = () => {
+        setPendingConfirm({ type: 'save-automation' });
     };
 
     const tabs = [
@@ -192,7 +253,7 @@ export default function IndexPage() {
                         <div className="flex justify-end border-t pt-4 dark:border-gray-700">
                             <button
                                 type="button"
-                                onClick={handleSave}
+                                onClick={requestSaveGeneral}
                                 className="rounded-full bg-blue-600 px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700"
                             >
                                 Save Changes
@@ -243,7 +304,7 @@ export default function IndexPage() {
                         <div className="mt-6 flex justify-end border-t pt-4 dark:border-gray-700">
                             <button
                                 type="button"
-                                onClick={handleSave}
+                                onClick={requestSaveHours}
                                 className="rounded-full bg-blue-600 px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700"
                             >
                                 Save Hours
@@ -290,7 +351,7 @@ export default function IndexPage() {
                                     </div>
                                     <button
                                         type="button"
-                                        onClick={() => removeHoliday(holiday.id)}
+                                        onClick={() => requestRemoveHoliday(holiday.id)}
                                         className="text-xs font-medium text-rose-600 hover:text-rose-700 dark:text-rose-400"
                                     >
                                         Remove
@@ -320,7 +381,7 @@ export default function IndexPage() {
                                         <input
                                             type="checkbox"
                                             checked={rule.enabled}
-                                            onChange={() => toggleAutoApproval(rule.id)}
+                                            onChange={() => requestToggleAutoApproval(rule.id)}
                                             className="peer sr-only"
                                         />
                                         <div className="peer h-5 w-9 rounded-full bg-gray-300 peer-checked:bg-blue-600 after:absolute after:top-0.5 after:left-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:after:translate-x-full dark:bg-gray-600" />
@@ -356,7 +417,7 @@ export default function IndexPage() {
                         <div className="mt-6 flex justify-end border-t pt-4 dark:border-gray-700">
                             <button
                                 type="button"
-                                onClick={handleSave}
+                                onClick={requestSaveAutomation}
                                 className="rounded-full bg-blue-600 px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700"
                             >
                                 Save Automation Settings
@@ -365,6 +426,70 @@ export default function IndexPage() {
                     </div>
                 )}
             </div>
+            {pendingConfirm && (
+                <Modal show={true} maxWidth="sm" onClose={() => setPendingConfirm(null)}>
+                    <div className="overflow-hidden rounded-lg">
+                        <div className="bg-gradient-to-r from-slate-900 to-blue-700 px-6 py-3 text-white">
+                            <h2 className="text-sm font-semibold">
+                                {pendingConfirm.type === 'save-general' && 'Save general settings?'}
+                                {pendingConfirm.type === 'save-hours' && 'Save business hours?'}
+                                {pendingConfirm.type === 'save-automation' && 'Save automation settings?'}
+                                {pendingConfirm.type === 'remove-holiday' && 'Remove holiday?'}
+                                {pendingConfirm.type === 'toggle-auto-approval' && 'Update auto-approval rule?'}
+                            </h2>
+                        </div>
+                        <div className="space-y-3 bg-white px-6 py-4 text-[11px] text-gray-700">
+                            {pendingConfirm.type === 'save-general' && (
+                                <p>
+                                    Are you sure you want to save these **borrowing limits and escalation rules**? They
+                                    will immediately affect how new borrowing requests are validated.
+                                </p>
+                            )}
+                            {pendingConfirm.type === 'save-hours' && (
+                                <p>
+                                    Save the updated **operating hours**? Pickups and returns outside these hours will
+                                    be blocked or rescheduled.
+                                </p>
+                            )}
+                            {pendingConfirm.type === 'save-automation' && (
+                                <p>
+                                    Apply these **automation and reminder settings**? Future requests and notifications
+                                    will follow the new behavior.
+                                </p>
+                            )}
+                            {pendingConfirm.type === 'remove-holiday' && (
+                                <p>
+                                    Are you sure you want to remove this holiday from the calendar? Bookings will once
+                                    again be allowed on that date.
+                                </p>
+                            )}
+                            {pendingConfirm.type === 'toggle-auto-approval' && (
+                                <p>
+                                    {pendingConfirm.nextEnabled
+                                        ? 'Enable this auto-approval rule? Matching requests will be approved automatically without manual review.'
+                                        : 'Disable this auto-approval rule? Matching requests will require manual approval.'}
+                                </p>
+                            )}
+                        </div>
+                        <div className="flex justify-end gap-2 border-t bg-gray-50 px-6 py-3">
+                            <button
+                                type="button"
+                                onClick={() => setPendingConfirm(null)}
+                                className="rounded-full border border-gray-200 px-4 py-1.5 text-[11px] font-medium text-gray-700 hover:bg-gray-100"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={performConfirmAction}
+                                className="rounded-full bg-blue-600 px-4 py-1.5 text-[11px] font-semibold text-white hover:bg-blue-700"
+                            >
+                                Yes, continue
+                            </button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
         </AppLayout>
     );
 }

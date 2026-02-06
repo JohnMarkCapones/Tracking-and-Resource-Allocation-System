@@ -1,4 +1,4 @@
-import { DayPicker } from 'react-day-picker';
+import { DayPicker, getDefaultClassNames } from 'react-day-picker';
 import 'react-day-picker/style.css';
 
 type UnavailableDate = {
@@ -17,34 +17,47 @@ export function AvailabilityCalendar({ unavailableDates = [] }: AvailabilityCale
         to: d.to,
     }));
 
+    const defaultClassNames = getDefaultClassNames();
+
     return (
         <div className="rounded-2xl bg-white p-4 shadow-sm">
             <h3 className="mb-3 text-sm font-semibold text-gray-900">Availability Calendar</h3>
             <p className="mb-4 text-[11px] text-gray-500">Gray dates indicate the tool is already booked.</p>
 
+            {/*
+             * react-day-picker v9 classNames — keys changed from v8.
+             * We extend the defaults so the base layout stays intact,
+             * then layer Tailwind utilities on top.
+             */}
             <DayPicker
                 mode="single"
                 numberOfMonths={1}
                 disabled={disabledDays}
                 showOutsideDays
+                navLayout="around"
                 classNames={{
-                    root: 'text-xs',
-                    month: 'space-y-2',
-                    caption: 'flex justify-center relative items-center h-8',
-                    caption_label: 'text-xs font-semibold text-gray-900',
-                    nav: 'flex items-center gap-1',
-                    nav_button: 'h-6 w-6 bg-transparent p-0 text-gray-500 hover:text-gray-700',
-                    table: 'w-full border-collapse',
-                    head_row: 'flex',
-                    head_cell: 'text-gray-500 rounded w-8 font-medium text-[10px] uppercase',
-                    row: 'flex w-full mt-1',
-                    cell: 'text-center text-xs p-0 relative',
-                    day: 'h-8 w-8 p-0 font-normal rounded-full hover:bg-gray-100',
-                    day_selected: 'bg-blue-600 text-white hover:bg-blue-700',
-                    day_today: 'font-semibold text-blue-600',
-                    day_outside: 'text-gray-300',
-                    day_disabled: 'text-gray-300 bg-gray-100 rounded-full',
-                    day_hidden: 'invisible',
+                    root: `${defaultClassNames.root} text-xs`,
+                    month_caption: `${defaultClassNames.month_caption} mb-1 flex items-center justify-center text-xs font-semibold text-gray-900`,
+                    nav: `${defaultClassNames.nav}`,
+                    button_previous: `${defaultClassNames.button_previous} h-7 w-7 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800`,
+                    button_next: `${defaultClassNames.button_next} h-7 w-7 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800`,
+                    chevron: `${defaultClassNames.chevron} fill-gray-500`,
+                    month_grid: `${defaultClassNames.month_grid} w-full border-collapse`,
+                    weekdays: `${defaultClassNames.weekdays}`,
+                    weekday: `${defaultClassNames.weekday} text-[10px] font-medium uppercase text-gray-500`,
+                    week: `${defaultClassNames.week}`,
+                    day: `${defaultClassNames.day} text-center text-xs`,
+                    // Keep DayPicker's layout, but use a simple circular highlight for the selected day.
+                    day_button: `${defaultClassNames.day_button} rounded-full font-normal hover:bg-gray-100`,
+                    selected: 'bg-blue-600 text-white hover:bg-blue-700 rounded-full',
+                    today: `${defaultClassNames.today} font-semibold text-blue-600`,
+                    outside: `${defaultClassNames.outside} text-gray-300`,
+                    disabled: `${defaultClassNames.disabled} rounded-full bg-gray-100 text-gray-300`,
+                    hidden: `${defaultClassNames.hidden} invisible`,
+                }}
+                styles={{
+                    // Force navigation chevrons to render in solid black.
+                    chevron: { fill: '#000000' },
                 }}
             />
 

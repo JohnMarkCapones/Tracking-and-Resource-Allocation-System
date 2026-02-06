@@ -1,16 +1,41 @@
 type ToolFiltersProps = {
     categories: string[];
-    selectedCategory: string | null;
-    onCategoryChange: (category: string | null) => void;
-    selectedStatus: string | null;
-    onStatusChange: (status: string | null) => void;
+    /** Currently selected categories for filtering (multi-select). */
+    selectedCategories: string[];
+    onCategoriesChange: (categories: string[]) => void;
+    /** Currently selected statuses for filtering (multi-select). */
+    selectedStatuses: string[];
+    onStatusesChange: (statuses: string[]) => void;
     onClearAll: () => void;
 };
 
 const STATUSES = ['Available', 'Borrowed', 'Maintenance'];
 
-export function ToolFilters({ categories, selectedCategory, onCategoryChange, selectedStatus, onStatusChange, onClearAll }: ToolFiltersProps) {
-    const hasFilters = selectedCategory !== null || selectedStatus !== null;
+export function ToolFilters({
+    categories,
+    selectedCategories,
+    onCategoriesChange,
+    selectedStatuses,
+    onStatusesChange,
+    onClearAll,
+}: ToolFiltersProps) {
+    const hasFilters = selectedCategories.length > 0 || selectedStatuses.length > 0;
+
+    const toggleCategory = (category: string) => {
+        onCategoriesChange(
+            selectedCategories.includes(category)
+                ? selectedCategories.filter((c) => c !== category)
+                : [...selectedCategories, category],
+        );
+    };
+
+    const toggleStatus = (status: string) => {
+        onStatusesChange(
+            selectedStatuses.includes(status)
+                ? selectedStatuses.filter((s) => s !== status)
+                : [...selectedStatuses, status],
+        );
+    };
 
     return (
         <aside className="space-y-6">
@@ -31,10 +56,10 @@ export function ToolFilters({ categories, selectedCategory, onCategoryChange, se
                     {categories.map((category) => (
                         <label key={category} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-gray-50">
                             <input
-                                type="radio"
-                                name="category"
-                                checked={selectedCategory === category}
-                                onChange={() => onCategoryChange(selectedCategory === category ? null : category)}
+                                type="checkbox"
+                                name={`category-${category}`}
+                                checked={selectedCategories.includes(category)}
+                                onChange={() => toggleCategory(category)}
                                 className="h-3.5 w-3.5 border-gray-300 text-blue-600 focus:ring-blue-500"
                             />
                             <span className="text-gray-700">{category}</span>
@@ -49,10 +74,10 @@ export function ToolFilters({ categories, selectedCategory, onCategoryChange, se
                     {STATUSES.map((status) => (
                         <label key={status} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-gray-50">
                             <input
-                                type="radio"
-                                name="status"
-                                checked={selectedStatus === status}
-                                onChange={() => onStatusChange(selectedStatus === status ? null : status)}
+                                type="checkbox"
+                                name={`status-${status}`}
+                                checked={selectedStatuses.includes(status)}
+                                onChange={() => toggleStatus(status)}
                                 className="h-3.5 w-3.5 border-gray-300 text-blue-600 focus:ring-blue-500"
                             />
                             <span className="text-gray-700">{status}</span>

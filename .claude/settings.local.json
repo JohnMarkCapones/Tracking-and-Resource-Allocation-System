@@ -12,7 +12,11 @@
       "Bash(php.bat artisan test:*)",
       "Bash(php.bat artisan:*)",
       "Bash(powershell -Command \"cd ''C:\\\\Users\\\\John Mark\\\\Desktop\\\\Tracking-and-Resource-Allocation-System\\\\ToolSync''; npm run build 2>&1\")",
-      "Bash(powershell -Command \"Get-Content ''C:\\\\Users\\\\John Mark\\\\Desktop\\\\Tracking-and-Resource-Allocation-System\\\\ToolSync\\\\public\\\\build\\\\assets\\\\app-D6kcN4VM.css'' | Select-Object -First 50\")"
+      "Bash(powershell -Command \"Get-Content ''C:\\\\Users\\\\John Mark\\\\Desktop\\\\Tracking-and-Resource-Allocation-System\\\\ToolSync\\\\public\\\\build\\\\assets\\\\app-D6kcN4VM.css'' | Select-Object -First 50\")",
+      "Bash(npm install:*)",
+      "Bash(npm run types:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npm run format:*)"
     ]
   }
 }

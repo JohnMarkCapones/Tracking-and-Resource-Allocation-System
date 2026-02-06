@@ -1,9 +1,10 @@
 import { Head, usePage } from '@inertiajs/react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { UserTable, type User } from '@/Components/Admin/UserTable';
 import { EmptyState } from '@/Components/EmptyState';
 import { toast } from '@/Components/Toast';
 import AppLayout from '@/Layouts/AppLayout';
+import { apiRequest } from '@/lib/http';
 
 type AdminUsersPageProps = {
     users: User[];
@@ -15,38 +16,99 @@ export default function IndexPage() {
     const [users, setUsers] = useState<User[]>(initialUsers);
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
+    useEffect(() => {
+        let cancelled = false;
+
+        apiRequest<{ data: User[] }>('/api/admin/users')
+            .then((response) => {
+                if (!cancelled) {
+                    setUsers(response.data);
+                }
+            })
+            .catch(() => {
+                // We keep the initial Inertia-provided data if the API call fails.
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
     const handleEdit = (user: User) => {
         toast(`Edit user: ${user.name}`, { icon: '✏️' });
     };
 
-    const handleToggleStatus = (user: User) => {
+    const handleToggleStatus = async (user: User) => {
         const newStatus = user.status === 'Active' ? 'Inactive' : 'Active';
 
-        setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, status: newStatus } : u)));
+        try {
+            setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, status: newStatus } : u)));
 
-        if (newStatus === 'Active') {
-            toast.success(`${user.name} has been activated`);
-        } else {
-            toast(`${user.name} has been deactivated`, { icon: '⚠️' });
+            await apiRequest<{ message: string }>(`/api/admin/users/${user.id}`, {
+                method: 'PUT',
+                body: {
+                    status: newStatus === 'Active' ? 'ACTIVE' : 'INACTIVE',
+                },
+            });
+
+            if (newStatus === 'Active') {
+                toast.success(`${user.name} has been activated`);
+            } else {
+                toast(`${user.name} has been deactivated`, { icon: '⚠️' });
+            }
+        } catch (error) {
+            setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, status: user.status } : u)));
+            const message = error instanceof Error ? error.message : 'Failed to update user status.';
+            toast.error(message);
+        }
+    };
+
+    const updateStatusForIds = async (ids: number[], targetStatus: 'ACTIVE' | 'INACTIVE') => {
+        if (ids.length === 0) return;
+
+        const makeOptimisticStatus = targetStatus === 'ACTIVE' ? 'Active' : 'Inactive';
+
+        setUsers((prev) =>
+            prev.map((user) => (ids.includes(user.id) ? { ...user, status: makeOptimisticStatus as User['status'] } : user)),
+        );
+
+        try {
+            await Promise.all(
+                ids.map((id) =>
+                    apiRequest<{ message: string }>(`/api/admin/users/${id}`, {
+                        method: 'PUT',
+                        body: { status: targetStatus },
+                    }),
+                ),
+            );
+
+            toast.success(
+                targetStatus === 'ACTIVE'
+                    ? `${ids.length} users have been activated`
+                    : `${ids.length} users have been deactivated`,
+            );
+        } catch (error) {
+            // On failure, trigger a refetch to get authoritative server state.
+            try {
+                const response = await apiRequest<{ data: User[] }>('/api/admin/users');
+                setUsers(response.data);
+            } catch {
+                // If even refetch fails, leave optimistic state and surface error.
+            }
+
+            const message = error instanceof Error ? error.message : 'Failed to update some user statuses.';
+            toast.error(message);
+        } finally {
+            setSelectedIds([]);
         }
     };
 
     const handleBulkActivate = () => {
-        if (selectedIds.length === 0) return;
-
-        setUsers((prev) => prev.map((user) => (selectedIds.includes(user.id) ? { ...user, status: 'Active' as const } : user)));
-        toast.success(`${selectedIds.length} users have been activated`);
-        setSelectedIds([]);
+        void updateStatusForIds(selectedIds, 'ACTIVE');
     };
 
     const handleBulkDeactivate = () => {
-        if (selectedIds.length === 0) return;
-
-        setUsers((prev) => prev.map((user) => (selectedIds.includes(user.id) ? { ...user, status: 'Inactive' as const } : user)));
-        toast(`${selectedIds.length} users have been deactivated`, {
-            icon: '⚠️',
-        });
-        setSelectedIds([]);
+        void updateStatusForIds(selectedIds, 'INACTIVE');
     };
 
     const activeUsers = users.filter((u) => u.status === 'Active').length;

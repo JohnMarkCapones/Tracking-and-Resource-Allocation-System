@@ -5,6 +5,8 @@ import { ReturnModal } from '@/Components/Borrowings/ReturnModal';
 import { EmptyState } from '@/Components/EmptyState';
 import { toast } from '@/Components/Toast';
 import AppLayout from '@/Layouts/AppLayout';
+import { apiRequest } from '@/lib/http';
+import type { AllocationDto } from '@/lib/apiTypes';
 
 type BorrowingsPageProps = {
     borrowings: Borrowing[];
@@ -35,27 +37,50 @@ export default function IndexPage() {
         setReturnModalBorrowing(borrowing);
     };
 
-    const handleReturnSubmit = () => {
+    const handleReturnSubmit = async () => {
         if (!returnModalBorrowing) return;
 
-        setBorrowings((prev) =>
-            prev.map((b) =>
-                b.id === returnModalBorrowing.id
-                    ? {
-                          ...b,
-                          status: 'Returned' as const,
-                          returnDate: new Date().toLocaleDateString('en-US', {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric',
-                          }),
-                      }
-                    : b,
-            ),
-        );
+        try {
+            const response = await apiRequest<{ message: string; data: AllocationDto }>(
+                `/api/tool-allocations/${returnModalBorrowing.id}`,
+                {
+                    method: 'PUT',
+                    body: {
+                        status: 'RETURNED',
+                    },
+                },
+            );
 
-        toast.success(`${returnModalBorrowing.tool.name} has been returned successfully!`);
-        setReturnModalBorrowing(null);
+            const updated = response.data;
+
+            const formattedReturnDate =
+                updated.actual_return_date !== null
+                    ? new Date(updated.actual_return_date).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                      })
+                    : undefined;
+
+            setBorrowings((prev) =>
+                prev.map((borrowing) =>
+                    borrowing.id === returnModalBorrowing.id
+                        ? {
+                              ...borrowing,
+                              status: 'Returned' as const,
+                              returnDate: formattedReturnDate,
+                          }
+                        : borrowing,
+                ),
+            );
+
+            toast.success(`${returnModalBorrowing.tool.name} has been returned successfully!`);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to mark tool as returned.';
+            toast.error(message);
+        } finally {
+            setReturnModalBorrowing(null);
+        }
     };
 
     return (

@@ -1,10 +1,14 @@
-import { Head, usePage, Link } from '@inertiajs/react';
-import { useState } from 'react';
+import { Head, usePage, Link, router } from '@inertiajs/react';
+import { useEffect, useState } from 'react';
+import type { DateRange } from 'react-day-picker';
 import { Breadcrumb } from '@/Components/Breadcrumb';
 import { toast } from '@/Components/Toast';
 import { AvailabilityCalendar } from '@/Components/Tools/AvailabilityCalendar';
 import { RequestToolModal } from '@/Components/Tools/RequestToolModal';
 import AppLayout from '@/Layouts/AppLayout';
+import type { Auth } from '@/types';
+import { apiRequest } from '@/lib/http';
+import type { AllocationDto } from '@/lib/apiTypes';
 
 type ToolStatus = 'Available' | 'Borrowed' | 'Maintenance';
 
@@ -24,6 +28,10 @@ type ToolDetail = {
 
 type DetailPageProps = {
     tool: ToolDetail;
+} & {
+    auth: Auth & {
+        has_password: boolean;
+    };
 };
 
 function statusClasses(status: ToolStatus): string {
@@ -39,12 +47,56 @@ function statusClasses(status: ToolStatus): string {
 }
 
 export default function DetailPage() {
-    const { tool } = usePage<DetailPageProps>().props;
+    const page = usePage<DetailPageProps>();
+    const { tool, auth } = page.props;
     const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const handleRequestSubmit = () => {
-        setIsRequestModalOpen(false);
-        toast.success('Borrowing request submitted for approval!');
+    useEffect(() => {
+        // If the URL contains ?request=1, auto-open the request modal.
+        const hasRequestFlag = page.url.includes('request=1');
+        if (hasRequestFlag) {
+            setIsRequestModalOpen(true);
+        }
+    }, [page.url]);
+
+    const handleRequestSubmit = async (data: { dateRange: DateRange; purpose: string }) => {
+        if (!data.dateRange.from || !data.dateRange.to) {
+            // This should already be validated in the modal, but we keep a guard here
+            // to avoid sending incomplete payloads to the backend.
+            toast.error('Please select a valid date range.');
+            return;
+        }
+
+        setIsSubmitting(true);
+
+        try {
+            const payload = {
+                tool_id: tool.id,
+                user_id: auth.user.id,
+                borrow_date: data.dateRange.from.toISOString(),
+                expected_return_date: data.dateRange.to.toISOString(),
+                note: data.purpose,
+            };
+
+            await apiRequest<{ message: string; data: AllocationDto }>('/api/tool-allocations', {
+                method: 'POST',
+                body: payload,
+            });
+
+            setIsRequestModalOpen(false);
+            toast.success('Borrowing request submitted for approval!');
+
+            // Reload only the tool data so availability and counters stay in sync with the database.
+            router.reload({
+                only: ['tool'],
+            });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to submit borrowing request.';
+            toast.error(message);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -139,10 +191,19 @@ export default function DetailPage() {
                         )}
 
                         {tool.status === 'Borrowed' && (
-                            <div className="rounded-2xl bg-amber-50 px-4 py-3 text-center">
-                                <p className="text-xs font-medium text-amber-800">This tool is currently borrowed</p>
-                                <p className="mt-1 text-[11px] text-amber-700">Check the calendar above for available dates</p>
-                            </div>
+                            <>
+                                <div className="rounded-2xl bg-amber-50 px-4 py-3 text-center">
+                                    <p className="text-xs font-medium text-amber-800">This tool is currently borrowed</p>
+                                    <p className="mt-1 text-[11px] text-amber-700">Check the calendar above for available dates</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsRequestModalOpen(true)}
+                                    className="w-full rounded-full bg-blue-600 py-3 text-sm font-semibold text-white shadow-lg hover:bg-blue-700"
+                                >
+                                    Request a Reservation
+                                </button>
+                            </>
                         )}
 
                         {tool.status === 'Maintenance' && (
@@ -166,7 +227,12 @@ export default function DetailPage() {
                 show={isRequestModalOpen}
                 toolName={tool.name}
                 toolId={tool.toolId}
-                onClose={() => setIsRequestModalOpen(false)}
+                onClose={() => {
+                    if (isSubmitting) {
+                        return;
+                    }
+                    setIsRequestModalOpen(false);
+                }}
                 onSubmit={handleRequestSubmit}
             />
         </AppLayout>

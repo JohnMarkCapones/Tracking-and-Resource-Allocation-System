@@ -1,4 +1,4 @@
-import { Head, usePage } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import { useState, useMemo } from 'react';
 import { EmptyState } from '@/Components/EmptyState';
 import { ToolCard, type ToolCardData } from '@/Components/Tools/ToolCard';
@@ -14,18 +14,18 @@ export default function CatalogPage() {
     const { tools, categories } = usePage<CatalogPageProps>().props;
 
     const [search, setSearch] = useState('');
-    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-    const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
+    const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+    const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
 
     const filteredTools = useMemo(() => {
         const query = search.trim().toLowerCase();
 
         return tools.filter((tool) => {
-            if (selectedCategory && tool.category !== selectedCategory) {
+            if (selectedCategories.length > 0 && !selectedCategories.includes(tool.category)) {
                 return false;
             }
 
-            if (selectedStatus && tool.status !== selectedStatus) {
+            if (selectedStatuses.length > 0 && !selectedStatuses.includes(tool.status)) {
                 return false;
             }
 
@@ -34,11 +34,11 @@ export default function CatalogPage() {
             const haystack = `${tool.name} ${tool.toolId} ${tool.category}`.toLowerCase();
             return haystack.includes(query);
         });
-    }, [tools, search, selectedCategory, selectedStatus]);
+    }, [tools, search, selectedCategories, selectedStatuses]);
 
     const handleClearAll = () => {
-        setSelectedCategory(null);
-        setSelectedStatus(null);
+        setSelectedCategories([]);
+        setSelectedStatuses([]);
         setSearch('');
     };
 
@@ -78,6 +78,23 @@ export default function CatalogPage() {
                                 <span className="text-emerald-600">{tools.filter((t) => t.status === 'Available').length} available</span>
                             </>
                         )}
+                        <span className="mx-2 h-4 w-px bg-gray-200" />
+                        <Link
+                            href="/reservations"
+                            className="inline-flex items-center gap-1 rounded-full bg-gray-900 px-3 py-1 text-[11px] font-semibold text-white shadow-sm hover:bg-gray-800"
+                        >
+                            <svg className="h-3 w-3" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path
+                                    d="M3 5.5C3 4.67157 3.67157 4 4.5 4H11.5C12.3284 4 13 4.67157 13 5.5V11.5C13 12.3284 12.3284 13 11.5 13H4.5C3.67157 13 3 12.3284 3 11.5V5.5Z"
+                                    stroke="currentColor"
+                                    strokeWidth="1.3"
+                                />
+                                <path d="M6 3V5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                                <path d="M10 3V5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                                <path d="M3 7H13" stroke="currentColor" strokeWidth="1.3" />
+                            </svg>
+                            My reservations
+                        </Link>
                     </div>
                 </section>
 
@@ -85,15 +102,15 @@ export default function CatalogPage() {
                     <div className="rounded-3xl bg-white p-5 shadow-sm lg:sticky lg:top-4 lg:self-start">
                         <ToolFilters
                             categories={categories}
-                            selectedCategory={selectedCategory}
-                            onCategoryChange={setSelectedCategory}
-                            selectedStatus={selectedStatus}
-                            onStatusChange={setSelectedStatus}
+                            selectedCategories={selectedCategories}
+                            onCategoriesChange={setSelectedCategories}
+                            selectedStatuses={selectedStatuses}
+                            onStatusesChange={setSelectedStatuses}
                             onClearAll={handleClearAll}
                         />
                     </div>
 
-                    <div>
+                    <section className="rounded-3xl bg-white p-5 shadow-sm">
                         {filteredTools.length === 0 ? (
                             <EmptyState
                                 icon={
@@ -110,13 +127,13 @@ export default function CatalogPage() {
                                 }}
                             />
                         ) : (
-                            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                            <div className="grid gap-4 border-t border-gray-100 pt-4 sm:grid-cols-2 xl:grid-cols-3">
                                 {filteredTools.map((tool) => (
                                     <ToolCard key={tool.id} tool={tool} />
                                 ))}
                             </div>
                         )}
-                    </div>
+                    </section>
                 </div>
             </div>
         </AppLayout>
