@@ -12,10 +12,12 @@ A Tracking and Resource Allocation System built with Laravel and React.
 
 ## Prerequisites
 
-- PHP 8.2 or higher
+- PHP 8.2 or higher (8.3+ recommended for lock file)
 - Composer
 - Node.js 22+
 - MySQL
+
+**PHP extensions required:** `openssl`, `mbstring`, `fileinfo`, `pdo_mysql` (enable in `php.ini` if you get "undefined function mb_split" or "openssl required").
 
 ## Installation
 
@@ -62,6 +64,56 @@ This runs the Laravel server, queue worker, and Vite dev server concurrently.
 ```bash
 php artisan test
 ```
+
+## Testing the API
+
+Start the dev server (from the `ToolSync` folder):
+
+```bash
+cd ToolSync
+composer run dev
+```
+
+The API runs at `http://127.0.0.1:9000`. Test the Tool CRUD with:
+
+**List all tools**
+```bash
+curl http://127.0.0.1:9000/api/tools
+```
+
+**Get one tool**
+```bash
+curl http://127.0.0.1:9000/api/tools/1
+```
+
+**Create a tool**
+```bash
+curl -X POST http://127.0.0.1:9000/api/tools \
+  -H "Content-Type: application/json" \
+  -d "{\"name\":\"Test Tool\",\"description\":\"A test\",\"category_id\":1,\"quantity\":1}"
+```
+
+**Update a tool**
+```bash
+curl -X PUT http://127.0.0.1:9000/api/tools/1 \
+  -H "Content-Type: application/json" \
+  -d "{\"name\":\"Updated Name\",\"description\":\"Updated\",\"category_id\":1,\"quantity\":2}"
+```
+
+**Delete a tool**
+```bash
+curl -X DELETE http://127.0.0.1:9000/api/tools/1
+```
+
+**Filter tools** (by category or search)
+```bash
+curl "http://127.0.0.1:9000/api/tools?category_id=1"
+curl "http://127.0.0.1:9000/api/tools?search=Laptop"
+```
+
+**Tool Allocations (borrow/return)** — `GET/POST /api/tool-allocations`, `GET/PUT/PATCH/DELETE /api/tool-allocations/{id}`. List with `?tool_id=1`, `?user_id=1`, or `?status=BORROWED`. Create with JSON: `tool_id`, `user_id`, `borrow_date`, `expected_return_date`, optional `note`.
+
+On Windows PowerShell, use `Invoke-RestMethod` or escape the JSON (e.g. `\"name\":\"Test\"`). You can also use the Scribe API docs at `http://127.0.0.1:9000/docs` after generating them with `php artisan scribe:generate`.
 
 ## Code Quality
 

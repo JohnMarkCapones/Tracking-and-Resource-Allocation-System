@@ -100,6 +100,7 @@ class ToolCategoryController extends Controller
      * Update an existing tool category.
      *
      * @urlParam tool_category int required The ID of the category. Example: 1
+     *
      * @bodyParam name string required The name of the category. Example: Office Equipment
      *
      * @response 200 {

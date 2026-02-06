@@ -1,0 +1,109 @@
+name: Analytics
+description: |-
+
+  APIs for analytics and reporting data
+endpoints:
+  -
+    custom: []
+    httpMethods:
+      - GET
+    uri: api/analytics/overview
+    metadata:
+      custom: []
+      groupName: Analytics
+      groupDescription: |-
+
+        APIs for analytics and reporting data
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Get analytics overview'
+      description: 'Get comprehensive analytics including timeseries data, top tools, and status breakdown.'
+      authenticated: false
+      deprecated: false
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters: []
+    cleanUrlParameters: []
+    queryParameters:
+      user_id:
+        custom: []
+        name: user_id
+        description: 'Filter data by user ID.'
+        required: false
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      from:
+        custom: []
+        name: from
+        description: 'date Start date for the analytics period.'
+        required: false
+        example: '2026-01-01'
+        type: string
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      to:
+        custom: []
+        name: to
+        description: 'date End date for the analytics period.'
+        required: false
+        example: '2026-01-31'
+        type: string
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+    cleanQueryParameters:
+      user_id: 1
+      from: '2026-01-01'
+      to: '2026-01-31'
+    bodyParameters: []
+    cleanBodyParameters: []
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 200
+        content: |-
+          {
+            "data": {
+              "scope": {
+                "user_id": null
+              },
+              "range": {
+                "from": "2026-01-01 00:00:00",
+                "to": "2026-01-31 23:59:59"
+              },
+              "timeseries": {
+                "borrowed": [
+                  {"date": "2026-01-15", "count": 5},
+                  {"date": "2026-01-16", "count": 3}
+                ],
+                "returned": [
+                  {"date": "2026-01-20", "count": 4}
+                ]
+              },
+              "top_tools": [
+                {"tool_id": 1, "tool_name": "Laptop", "borrow_count": 15},
+                {"tool_id": 2, "tool_name": "Projector", "borrow_count": 10}
+              ],
+              "status_breakdown": {
+                "borrowed": 10,
+                "returned": 25,
+                "overdue": 2
+              }
+            }
+          }
+        headers: []
+        description: ''
+    responseFields: []
+    auth: []
+    controller: null
+    method: null
+    route: null

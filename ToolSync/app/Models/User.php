@@ -6,11 +6,12 @@ use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
 
     /**
      * The attributes that are mass assignable.
@@ -20,6 +21,7 @@ class User extends Authenticatable implements MustVerifyEmail
     protected $fillable = [
         'name',
         'email',
+        'role',
         'password',
         'provider',
         'provider_id',
@@ -52,5 +54,18 @@ class User extends Authenticatable implements MustVerifyEmail
     public function hasPassword(): bool
     {
         return ! is_null($this->password);
+    }
+
+    /**
+     * Tool allocations (borrows) for this user.
+     */
+    public function toolAllocations(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(\App\Models\ToolAllocation::class);
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->role === 'ADMIN';
     }
 }

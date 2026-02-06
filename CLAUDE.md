@@ -43,6 +43,62 @@ php artisan test --compact                    # Compact output
 php artisan test --compact --filter=TestName  # Run specific test
 ```
 
+### Backend API Testing (REST)
+
+This project uses Inertia for the main app, but it also includes REST endpoints in `ToolSync/routes/api.php`.
+
+- API base path: `/api` (example: `http://127.0.0.1:8000/api/tools`)
+- Run the backend: `composer run dev` (or `php artisan serve`)
+- List API routes: `php artisan route:list --path=api`
+
+#### Quick manual checks (Windows-friendly)
+
+PowerShell (`Invoke-RestMethod` / `irm`):
+
+```powershell
+irm http://127.0.0.1:8000/api/tool-categories
+
+irm -Method Post `
+  -Uri http://127.0.0.1:8000/api/tool-categories `
+  -ContentType application/json `
+  -Body (@{ name = "IT Equipment" } | ConvertTo-Json)
+```
+
+If you prefer curl on Windows, use `curl.exe` (PowerShell aliases `curl`):
+
+```bash
+curl.exe http://127.0.0.1:8000/api/tools
+```
+
+#### Authenticated endpoint (`/api/user`)
+
+`GET /api/user` is protected by Sanctum (`auth:sanctum`). For quick local testing you can create a token:
+
+```bash
+php artisan tinker
+```
+
+```php
+$user = \App\Models\User::factory()->create();
+$token = $user->createToken('dev')->plainTextToken;
+```
+
+Then call:
+
+```bash
+curl.exe http://127.0.0.1:8000/api/user -H "Authorization: Bearer <token>"
+```
+
+#### Pest patterns for API endpoints
+
+Use `getJson/postJson/putJson/deleteJson` in Feature tests:
+
+```php
+$this->getJson('/api/tools')
+    ->assertOk()
+    ->assertJsonStructure(['data']);
+```
+
 ### Code Formatting
 ```bash
 composer lint         # Format PHP with Pint

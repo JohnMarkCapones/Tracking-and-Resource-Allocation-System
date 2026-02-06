@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreToolRequest;
 use App\Http\Requests\UpdateToolRequest;
 use App\Models\Tool;
+use App\Models\ToolStatusLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -58,7 +59,7 @@ class ToolController extends Controller
         }
 
         if ($request->has('search')) {
-            $query->where('name', 'like', '%' . $request->input('search') . '%');
+            $query->where('name', 'like', '%'.$request->input('search').'%');
         }
 
         $tools = $query->get();
@@ -150,6 +151,7 @@ class ToolController extends Controller
      * Update an existing tool.
      *
      * @urlParam tool int required The ID of the tool. Example: 1
+     *
      * @bodyParam name string The name of the tool. Example: Laptop Pro
      * @bodyParam description string The description of the tool. Example: High-performance laptop
      * @bodyParam image_path string The image path of the tool. Example: images/tools/laptop-pro.png
@@ -178,7 +180,20 @@ class ToolController extends Controller
      */
     public function update(UpdateToolRequest $request, Tool $tool): JsonResponse
     {
-        $tool->update($request->validated());
+        $oldStatus = $tool->status;
+        $validated = $request->validated();
+
+        $tool->update($validated);
+
+        if (array_key_exists('status', $validated) && $validated['status'] !== $oldStatus) {
+            ToolStatusLog::create([
+                'tool_id' => $tool->id,
+                'old_status' => $oldStatus,
+                'new_status' => $validated['status'],
+                'changed_by' => $request->user()?->id,
+                'changed_at' => now(),
+            ]);
+        }
         $tool->load('category');
 
         return response()->json([

@@ -1,0 +1,565 @@
+name: 'Tool Allocations'
+description: |-
+
+  APIs for managing tool allocations (borrow/return operations)
+endpoints:
+  -
+    custom: []
+    httpMethods:
+      - GET
+    uri: api/tool-allocations
+    metadata:
+      custom: []
+      groupName: 'Tool Allocations'
+      groupDescription: |-
+
+        APIs for managing tool allocations (borrow/return operations)
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'List all tool allocations'
+      description: 'Get a list of all tool allocations with optional filters.'
+      authenticated: false
+      deprecated: false
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters: []
+    cleanUrlParameters: []
+    queryParameters:
+      tool_id:
+        custom: []
+        name: tool_id
+        description: 'Filter by tool ID.'
+        required: false
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      user_id:
+        custom: []
+        name: user_id
+        description: 'Filter by user ID.'
+        required: false
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      status:
+        custom: []
+        name: status
+        description: 'Filter by status.'
+        required: false
+        example: BORROWED
+        type: string
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+    cleanQueryParameters:
+      tool_id: 1
+      user_id: 1
+      status: BORROWED
+    bodyParameters: []
+    cleanBodyParameters: []
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 200
+        content: |-
+          {
+            "data": [
+              {
+                "id": 1,
+                "tool_id": 1,
+                "user_id": 1,
+                "borrow_date": "2026-01-29",
+                "expected_return_date": "2026-02-05",
+                "actual_return_date": null,
+                "status": "BORROWED",
+                "note": "For project use",
+                "created_at": "2026-01-29T00:00:00.000000Z",
+                "updated_at": "2026-01-29T00:00:00.000000Z",
+                "tool": {
+                  "id": 1,
+                  "name": "Laptop"
+                },
+                "user": {
+                  "id": 1,
+                  "name": "John Doe"
+                }
+              }
+            ]
+          }
+        headers: []
+        description: ''
+    responseFields: []
+    auth: []
+    controller: null
+    method: null
+    route: null
+  -
+    custom: []
+    httpMethods:
+      - POST
+    uri: api/tool-allocations
+    metadata:
+      custom: []
+      groupName: 'Tool Allocations'
+      groupDescription: |-
+
+        APIs for managing tool allocations (borrow/return operations)
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Create a tool allocation'
+      description: 'Record a new tool borrow operation.'
+      authenticated: false
+      deprecated: false
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters: []
+    cleanUrlParameters: []
+    queryParameters: []
+    cleanQueryParameters: []
+    bodyParameters:
+      tool_id:
+        custom: []
+        name: tool_id
+        description: 'The ID of the tool to borrow.'
+        required: true
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      user_id:
+        custom: []
+        name: user_id
+        description: 'The ID of the user borrowing the tool.'
+        required: true
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      borrow_date:
+        custom: []
+        name: borrow_date
+        description: 'The date of borrowing.'
+        required: true
+        example: '2026-01-29'
+        type: date
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      expected_return_date:
+        custom: []
+        name: expected_return_date
+        description: 'The expected return date.'
+        required: true
+        example: '2026-02-05'
+        type: date
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      note:
+        custom: []
+        name: note
+        description: 'Optional note for the allocation.'
+        required: false
+        example: 'For project use'
+        type: string
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: true
+        deprecated: false
+    cleanBodyParameters:
+      tool_id: 1
+      user_id: 1
+      borrow_date: '2026-01-29'
+      expected_return_date: '2026-02-05'
+      note: 'For project use'
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 201
+        content: |-
+          {
+            "message": "Tool allocation created successfully.",
+            "data": {
+              "id": 1,
+              "tool_id": 1,
+              "user_id": 1,
+              "borrow_date": "2026-01-29",
+              "expected_return_date": "2026-02-05",
+              "actual_return_date": null,
+              "status": "BORROWED",
+              "note": "For project use",
+              "created_at": "2026-01-29T00:00:00.000000Z",
+              "updated_at": "2026-01-29T00:00:00.000000Z",
+              "tool": {
+                "id": 1,
+                "name": "Laptop"
+              },
+              "user": {
+                "id": 1,
+                "name": "John Doe"
+              }
+            }
+          }
+        headers: []
+        description: ''
+      -
+        custom: []
+        status: 409
+        content: |-
+          {
+            "message": "Tool is not available for borrowing."
+          }
+        headers: []
+        description: ''
+    responseFields: []
+    auth: []
+    controller: null
+    method: null
+    route: null
+  -
+    custom: []
+    httpMethods:
+      - GET
+    uri: 'api/tool-allocations/{id}'
+    metadata:
+      custom: []
+      groupName: 'Tool Allocations'
+      groupDescription: |-
+
+        APIs for managing tool allocations (borrow/return operations)
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Get a tool allocation'
+      description: 'Get details of a specific tool allocation.'
+      authenticated: false
+      deprecated: false
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters:
+      id:
+        custom: []
+        name: id
+        description: 'The ID of the tool allocation.'
+        required: true
+        example: 16
+        type: integer
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+      tool_allocation:
+        custom: []
+        name: tool_allocation
+        description: 'The ID of the allocation.'
+        required: true
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+    cleanUrlParameters:
+      id: 16
+      tool_allocation: 1
+    queryParameters: []
+    cleanQueryParameters: []
+    bodyParameters: []
+    cleanBodyParameters: []
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 200
+        content: |-
+          {
+            "data": {
+              "id": 1,
+              "tool_id": 1,
+              "user_id": 1,
+              "borrow_date": "2026-01-29",
+              "expected_return_date": "2026-02-05",
+              "actual_return_date": null,
+              "status": "BORROWED",
+              "note": "For project use",
+              "created_at": "2026-01-29T00:00:00.000000Z",
+              "updated_at": "2026-01-29T00:00:00.000000Z",
+              "tool": {
+                "id": 1,
+                "name": "Laptop"
+              },
+              "user": {
+                "id": 1,
+                "name": "John Doe"
+              }
+            }
+          }
+        headers: []
+        description: ''
+    responseFields: []
+    auth: []
+    controller: null
+    method: null
+    route: null
+  -
+    custom: []
+    httpMethods:
+      - DELETE
+    uri: 'api/tool-allocations/{id}'
+    metadata:
+      custom: []
+      groupName: 'Tool Allocations'
+      groupDescription: |-
+
+        APIs for managing tool allocations (borrow/return operations)
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Delete a tool allocation'
+      description: 'Delete a tool allocation record.'
+      authenticated: false
+      deprecated: false
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters:
+      id:
+        custom: []
+        name: id
+        description: 'The ID of the tool allocation.'
+        required: true
+        example: 16
+        type: integer
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+      tool_allocation:
+        custom: []
+        name: tool_allocation
+        description: 'The ID of the allocation.'
+        required: true
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+    cleanUrlParameters:
+      id: 16
+      tool_allocation: 1
+    queryParameters: []
+    cleanQueryParameters: []
+    bodyParameters: []
+    cleanBodyParameters: []
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 200
+        content: |-
+          {
+            "message": "Tool allocation deleted successfully."
+          }
+        headers: []
+        description: ''
+    responseFields: []
+    auth: []
+    controller: null
+    method: null
+    route: null
+  -
+    custom: []
+    httpMethods:
+      - PUT
+    uri: 'api/tool-allocations/{tool_allocation_id}'
+    metadata:
+      custom: []
+      groupName: 'Tool Allocations'
+      groupDescription: |-
+
+        APIs for managing tool allocations (borrow/return operations)
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Update a tool allocation'
+      description: 'Update an existing tool allocation (e.g., mark as returned).'
+      authenticated: false
+      deprecated: false
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters:
+      tool_allocation_id:
+        custom: []
+        name: tool_allocation_id
+        description: 'The ID of the tool allocation.'
+        required: true
+        example: 16
+        type: integer
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+      tool_allocation:
+        custom: []
+        name: tool_allocation
+        description: 'The ID of the allocation.'
+        required: true
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+    cleanUrlParameters:
+      tool_allocation_id: 16
+      tool_allocation: 1
+    queryParameters: []
+    cleanQueryParameters: []
+    bodyParameters:
+      tool_id:
+        custom: []
+        name: tool_id
+        description: 'The ID of the tool.'
+        required: false
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      user_id:
+        custom: []
+        name: user_id
+        description: 'The ID of the user.'
+        required: false
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      borrow_date:
+        custom: []
+        name: borrow_date
+        description: 'The date of borrowing.'
+        required: false
+        example: '2026-01-29'
+        type: date
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      expected_return_date:
+        custom: []
+        name: expected_return_date
+        description: 'The expected return date.'
+        required: false
+        example: '2026-02-05'
+        type: date
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      actual_return_date:
+        custom: []
+        name: actual_return_date
+        description: 'The actual return date.'
+        required: false
+        example: '2026-02-04'
+        type: date
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: true
+        deprecated: false
+      note:
+        custom: []
+        name: note
+        description: 'Optional note.'
+        required: false
+        example: 'Returned in good condition'
+        type: string
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: true
+        deprecated: false
+      status:
+        custom: []
+        name: status
+        description: 'The status of the allocation.'
+        required: false
+        example: RETURNED
+        type: string
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+    cleanBodyParameters:
+      tool_id: 1
+      user_id: 1
+      borrow_date: '2026-01-29'
+      expected_return_date: '2026-02-05'
+      actual_return_date: '2026-02-04'
+      note: 'Returned in good condition'
+      status: RETURNED
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 200
+        content: |-
+          {
+            "message": "Tool allocation updated successfully.",
+            "data": {
+              "id": 1,
+              "tool_id": 1,
+              "user_id": 1,
+              "borrow_date": "2026-01-29",
+              "expected_return_date": "2026-02-05",
+              "actual_return_date": "2026-02-04",
+              "status": "RETURNED",
+              "note": "Returned in good condition",
+              "created_at": "2026-01-29T00:00:00.000000Z",
+              "updated_at": "2026-01-29T00:00:00.000000Z",
+              "tool": {
+                "id": 1,
+                "name": "Laptop"
+              },
+              "user": {
+                "id": 1,
+                "name": "John Doe"
+              }
+            }
+          }
+        headers: []
+        description: ''
+      -
+        custom: []
+        status: 403
+        content: |-
+          {
+            "message": "Only admins can update tool allocations."
+          }
+        headers: []
+        description: ''
+    responseFields: []
+    auth: []
+    controller: null
+    method: null
+    route: null
