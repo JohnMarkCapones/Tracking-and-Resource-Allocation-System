@@ -1,4 +1,5 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, useForm } from '@inertiajs/react';
+import type { FormEventHandler } from 'react';
 
 import eqMark from '../../assets/figma/logo.png';
 import waves from '../../assets/figma/signup/Group 45.png';
@@ -7,6 +8,17 @@ import cardBackground from '../../assets/figma/signup/Rectangle 1507.png';
 import passwordIcon from '../../assets/figma/signup/Vector.png';
 
 export default function Login() {
+    const { data, setData, post, processing, errors } = useForm({
+        email: '',
+        password: '',
+        remember: false,
+    });
+
+    const submit: FormEventHandler = (e) => {
+        e.preventDefault();
+        post('/login', { onFinish: () => {} });
+    };
+
     return (
         <>
             <Head title="Login">
@@ -75,7 +87,7 @@ export default function Login() {
                                             Login
                                         </h2>
 
-                                        <form className="mt-3 space-y-4">
+                                        <form className="mt-3 space-y-4" onSubmit={submit}>
                                             {/* Email */}
                                             <div>
                                                 <label
@@ -93,10 +105,15 @@ export default function Login() {
                                                         name="email"
                                                         type="email"
                                                         autoComplete="email"
+                                                        value={data.email}
+                                                        onChange={(e) => setData('email', e.target.value)}
                                                         className="w-full rounded-lg border border-[#060644] bg-[#F9F7F4] py-2.5 pr-3 pl-9 font-['Inter'] text-sm text-[#060644] shadow-[0px_4px_10px_rgba(0,0,0,0.08)] outline-none placeholder:text-[#9CA3AF] focus:border-[#547792] focus:ring-2 focus:ring-[#547792]/40"
                                                         placeholder="you@company.com"
                                                     />
                                                 </div>
+                                                {errors.email && (
+                                                    <p className="mt-1 text-xs text-red-600">{errors.email}</p>
+                                                )}
                                             </div>
 
                                             {/* Password */}
@@ -116,17 +133,33 @@ export default function Login() {
                                                         name="password"
                                                         type="password"
                                                         autoComplete="current-password"
+                                                        value={data.password}
+                                                        onChange={(e) => setData('password', e.target.value)}
                                                         className="w-full rounded-lg border border-[#060644] bg-[#F9F7F4] py-2.5 pr-3 pl-9 font-['Inter'] text-sm text-[#060644] shadow-[0px_4px_10px_rgba(0,0,0,0.08)] outline-none placeholder:text-[#9CA3AF] focus:border-[#547792] focus:ring-2 focus:ring-[#547792]/40"
                                                         placeholder="Enter your password"
                                                     />
                                                 </div>
+                                                {errors.password && (
+                                                    <p className="mt-1 text-xs text-red-600">{errors.password}</p>
+                                                )}
                                             </div>
 
+                                            <label className="mt-2 flex cursor-pointer items-center gap-2">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={data.remember}
+                                                    onChange={(e) => setData('remember', e.target.checked)}
+                                                    className="h-4 w-4 rounded border-[#060644] text-[#547792] focus:ring-[#547792]"
+                                                />
+                                                <span className="font-['Inter'] text-xs text-[#545F71]">Remember me</span>
+                                            </label>
+
                                             <button
-                                                type="button"
-                                                className="mt-2 inline-flex h-11 w-full items-center justify-center rounded-md bg-[#547792] font-['Inter'] text-sm font-semibold tracking-[-0.02em] text-white shadow-[0px_6px_16px_rgba(0,0,0,0.25)] hover:bg-[#4a6f86] focus-visible:ring-2 focus-visible:ring-[#547792]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent focus-visible:outline-none"
+                                                type="submit"
+                                                disabled={processing}
+                                                className="mt-2 inline-flex h-11 w-full items-center justify-center rounded-md bg-[#547792] font-['Inter'] text-sm font-semibold tracking-[-0.02em] text-white shadow-[0px_6px_16px_rgba(0,0,0,0.25)] hover:bg-[#4a6f86] focus-visible:ring-2 focus-visible:ring-[#547792]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent focus-visible:outline-none disabled:opacity-70"
                                             >
-                                                Login
+                                                {processing ? 'Signing in…' : 'Login'}
                                             </button>
                                         </form>
                                     </div>

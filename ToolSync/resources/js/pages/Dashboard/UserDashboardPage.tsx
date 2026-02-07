@@ -1,24 +1,96 @@
 import { Head, usePage } from '@inertiajs/react';
+import { useEffect, useState } from 'react';
 import type { BorrowingHistoryItem } from '@/Components/Dashboard/BorrowingHistoryTable';
 import { BorrowingHistoryTable } from '@/Components/Dashboard/BorrowingHistoryTable';
 import type { SummaryData } from '@/Components/Dashboard/SummaryDonutChart';
 import { SummaryDonutChart } from '@/Components/Dashboard/SummaryDonutChart';
 import { WelcomeBanner } from '@/Components/Dashboard/WelcomeBanner';
 import AppLayout from '@/Layouts/AppLayout';
+import { apiRequest } from '@/lib/http';
+import type { DashboardApiResponse } from '@/lib/apiTypes';
 
-type UserDashboardPageProps = {
-    userName: string;
-    totalTools: number;
-    toolsUnderMaintenance: number;
-    borrowedItemsCount: number;
-    availableTools: number;
-    borrowingHistory: BorrowingHistoryItem[];
-    summary: SummaryData;
-};
+type SharedProps = { auth?: { user?: { name?: string } } };
+
+function mapRecentToHistoryItem(
+    a: DashboardApiResponse['data']['recent_activity'][number],
+): BorrowingHistoryItem {
+    const status =
+        a.status === 'RETURNED'
+            ? ('Returned' as const)
+            : a.is_overdue
+              ? ('Overdue' as const)
+              : ('Borrowed' as const);
+    return {
+        equipment: a.tool_name ?? 'Unknown',
+        toolId: 'TL-' + a.tool_id,
+        expectedReturnDate: new Date(a.expected_return_date).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+        }),
+        status,
+    };
+}
 
 export default function UserDashboardPage() {
-    const { userName, totalTools, toolsUnderMaintenance, borrowedItemsCount, availableTools, borrowingHistory, summary } =
-        usePage<UserDashboardPageProps>().props;
+    const { auth } = usePage<SharedProps>().props;
+    const [userName] = useState(auth?.user?.name ?? 'User');
+    const [totalTools, setTotalTools] = useState(0);
+    const [toolsUnderMaintenance, setToolsUnderMaintenance] = useState(0);
+    const [borrowedItemsCount, setBorrowedItemsCount] = useState(0);
+    const [availableTools, setAvailableTools] = useState(0);
+    const [borrowingHistory, setBorrowingHistory] = useState<BorrowingHistoryItem[]>([]);
+    const [summary, setSummary] = useState<SummaryData>({
+        returned: 0,
+        borrowed: 0,
+        underMaintenance: 0,
+        available: 0,
+        overdue: 0,
+    });
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        async function load() {
+            setLoading(true);
+            setError(null);
+            try {
+                const res = await apiRequest<DashboardApiResponse>('/api/dashboard');
+                if (cancelled) return;
+                const d = res.data;
+                const counts = d.counts;
+                setAvailableTools(counts.tools_available_quantity);
+                setToolsUnderMaintenance(counts.tools_maintenance_quantity);
+                setBorrowedItemsCount(counts.borrowed_active_count);
+                setTotalTools(
+                    counts.tools_available_quantity +
+                        counts.tools_maintenance_quantity +
+                        counts.borrowed_active_count,
+                );
+                setBorrowingHistory((d.recent_activity ?? []).map(mapRecentToHistoryItem));
+                setSummary({
+                    returned: d.summary.returned_count,
+                    borrowed: d.summary.not_returned_count,
+                    underMaintenance: counts.tools_maintenance_quantity,
+                    available: counts.tools_available_quantity,
+                    overdue: counts.overdue_count,
+                });
+            } catch (err) {
+                if (!cancelled) {
+                    setError(err instanceof Error ? err.message : 'Failed to load dashboard');
+                }
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        }
+
+        load();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     return (
         <AppLayout
@@ -32,6 +104,17 @@ export default function UserDashboardPage() {
         >
             <Head title="Dashboard" />
 
+            {loading && (
+                <div className="rounded-3xl bg-white px-5 py-12 text-center text-gray-500 shadow-sm">
+                    Loading dashboard…
+                </div>
+            )}
+            {error && (
+                <div className="rounded-3xl bg-red-50 px-5 py-4 text-red-700 shadow-sm">
+                    {error}
+                </div>
+            )}
+            {!loading && !error && (
             <div className="space-y-8">
                 <WelcomeBanner
                     userName={userName}
@@ -144,6 +227,7 @@ export default function UserDashboardPage() {
                     </div>
                 </section>
             </div>
+            )}
         </AppLayout>
     );
 }

@@ -1,7 +1,10 @@
-import { Head, usePage } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Modal from '@/Components/Modal';
 import AppLayout from '@/Layouts/AppLayout';
+import { apiRequest } from '@/lib/http';
+import type { AllocationHistoryItem, AllocationHistoryPaginated } from '@/lib/apiTypes';
+import { mapAllocationStatusToUi } from '@/lib/apiTypes';
 
 type AllocationStatus = 'Returned' | 'Active' | 'Overdue';
 
@@ -17,9 +20,39 @@ type Allocation = {
     statusDetail?: string;
 };
 
-type AdminAllocationHistoryPageProps = {
-    allocations: Allocation[];
-};
+function mapHistoryItemToAllocation(a: AllocationHistoryItem): Allocation {
+    const status = mapAllocationStatusToUi(a) as AllocationStatus;
+    const borrowDate = new Date(a.borrow_date).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+    });
+    const expectedReturn = new Date(a.expected_return_date).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+    });
+    let statusDetail = '';
+    if (a.status === 'RETURNED' && a.actual_return_date) {
+        statusDetail = `Returned on ${new Date(a.actual_return_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`;
+    } else if (status === 'Overdue') {
+        statusDetail = `Overdue since ${expectedReturn}`;
+    } else {
+        statusDetail = `Due on ${expectedReturn}`;
+    }
+
+    return {
+        id: a.id,
+        tool: a.tool?.name ?? 'Unknown',
+        toolId: 'TL-' + a.tool_id,
+        category: 'Other',
+        borrower: a.user?.email ?? a.user?.name ?? 'Unknown',
+        borrowDate,
+        expectedReturn,
+        status,
+        statusDetail,
+    };
+}
 
 type SortKey = 'tool' | 'borrowDate' | 'expectedReturn' | 'status';
 
@@ -63,7 +96,9 @@ function statusIcon(status: AllocationStatus): ReactNode {
 }
 
 export default function AdminAllocationHistoryPage() {
-    const { allocations } = usePage<AdminAllocationHistoryPageProps>().props;
+    const [allocations, setAllocations] = useState<Allocation[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     const [statusFilter, setStatusFilter] = useState<'all' | AllocationStatus>('all');
     const [search, setSearch] = useState('');
@@ -74,6 +109,33 @@ export default function AdminAllocationHistoryPage() {
     const [selectedAllocation, setSelectedAllocation] = useState<Allocation | null>(null);
 
     const pageSize = 8;
+
+    useEffect(() => {
+        let cancelled = false;
+
+        async function load() {
+            setLoading(true);
+            setError(null);
+            try {
+                const res = await apiRequest<AllocationHistoryPaginated>(
+                    '/api/tool-allocations/history?per_page=100',
+                );
+                if (cancelled) return;
+                setAllocations((res.data ?? []).map(mapHistoryItemToAllocation));
+            } catch (err) {
+                if (!cancelled) {
+                    setError(err instanceof Error ? err.message : 'Failed to load allocation history');
+                }
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        }
+
+        load();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const summary = useMemo(() => {
         const total = allocations.length;
@@ -246,6 +308,17 @@ export default function AdminAllocationHistoryPage() {
         >
             <Head title="Allocation History" />
 
+            {loading && (
+                <div className="rounded-3xl bg-white px-5 py-12 text-center text-gray-500 shadow-sm">
+                    Loading allocation history…
+                </div>
+            )}
+            {error && (
+                <div className="rounded-3xl bg-red-50 px-5 py-4 text-red-700 shadow-sm">
+                    {error}
+                </div>
+            )}
+            {!loading && !error && (
             <div className="space-y-6">
                 {/* Summary + overdue risk strip */}
                 <section className="flex flex-wrap gap-3 rounded-3xl bg-white px-5 py-3 text-[11px] text-gray-600 shadow-sm">
@@ -550,6 +623,7 @@ export default function AdminAllocationHistoryPage() {
                     )}
                 </Modal>
             </div>
+            )}
         </AppLayout>
     );
 }

@@ -5,9 +5,15 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreToolAllocationRequest;
 use App\Http\Requests\UpdateToolAllocationRequest;
+use App\Models\SystemSetting;
 use App\Models\Tool;
 use App\Models\ToolAllocation;
 use App\Models\ToolStatusLog;
+use App\Models\User;
+use App\Services\ActivityLogger;
+use App\Services\AutoApprovalEvaluator;
+use App\Services\DateValidationService;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -118,6 +124,45 @@ class ToolAllocationController extends Controller
     {
         $validated = $request->validated();
 
+        $borrowDate = Carbon::parse($validated['borrow_date']);
+        $expectedReturn = Carbon::parse($validated['expected_return_date']);
+        $dateValidator = app(DateValidationService::class);
+        $dateErrors = $dateValidator->validateRangeForBooking($borrowDate, $expectedReturn);
+        if ($dateErrors !== []) {
+            return response()->json([
+                'message' => implode(' ', $dateErrors),
+            ], 422);
+        }
+
+        $borrower = User::query()->findOrFail((int) $validated['user_id']);
+        $maxBorrowings = (int) (SystemSetting::query()->where('key', 'max_borrowings')->value('value') ?? 3);
+        $maxDuration = (int) (SystemSetting::query()->where('key', 'max_duration')->value('value') ?? 14);
+        $currentBorrowed = ToolAllocation::query()
+            ->where('user_id', $borrower->id)
+            ->where('status', 'BORROWED')
+            ->count();
+        $durationDays = $borrowDate->diffInDays($expectedReturn) + 1;
+        $evaluator = app(AutoApprovalEvaluator::class);
+        $bypassLimits = $evaluator->passesAnyRule($borrower, [
+            'user_id' => $borrower->id,
+            'borrow_date' => $validated['borrow_date'],
+            'expected_return_date' => $validated['expected_return_date'],
+            'tool_id' => (int) $validated['tool_id'],
+        ]);
+
+        if (! $bypassLimits) {
+            if ($currentBorrowed >= $maxBorrowings) {
+                return response()->json([
+                    'message' => "You have reached the maximum concurrent borrowings ({$maxBorrowings}). Return a tool before borrowing another.",
+                ], 422);
+            }
+            if ($durationDays > $maxDuration) {
+                return response()->json([
+                    'message' => "Borrow duration cannot exceed {$maxDuration} days. Requested: {$durationDays} days.",
+                ], 422);
+            }
+        }
+
         $allocation = DB::transaction(function () use ($validated, $request): ToolAllocation {
             /** @var Tool $tool */
             $tool = Tool::query()->lockForUpdate()->findOrFail((int) $validated['tool_id']);
@@ -151,6 +196,15 @@ class ToolAllocationController extends Controller
 
             return $allocation;
         });
+
+        ActivityLogger::log(
+            'tool_allocation.created',
+            'ToolAllocation',
+            $allocation->id,
+            "Tool allocation #{$allocation->id} created for tool #{$allocation->tool_id}.",
+            ['tool_id' => $allocation->tool_id, 'user_id' => $allocation->user_id],
+            $request->user()?->id
+        );
 
         $allocation->load(['tool', 'user']);
 
@@ -252,9 +306,9 @@ class ToolAllocationController extends Controller
 
         $validated = $request->validated();
 
-        DB::transaction(function () use ($validated, $request, $toolAllocation): void {
-            $oldAllocationStatus = $toolAllocation->status;
+        $oldAllocationStatus = $toolAllocation->status;
 
+        DB::transaction(function () use ($validated, $request, $toolAllocation): void {
             if (($validated['status'] ?? null) === 'RETURNED' && empty($validated['actual_return_date'])) {
                 $validated['actual_return_date'] = now();
             }
@@ -285,6 +339,17 @@ class ToolAllocationController extends Controller
                 }
             }
         });
+
+        if ($oldAllocationStatus !== $toolAllocation->status) {
+            ActivityLogger::log(
+                'tool_allocation.updated',
+                'ToolAllocation',
+                $toolAllocation->id,
+                "Tool allocation #{$toolAllocation->id} status changed to {$toolAllocation->status}.",
+                ['old_status' => $oldAllocationStatus, 'new_status' => $toolAllocation->status],
+                $request->user()?->id
+            );
+        }
 
         $toolAllocation->load(['tool', 'user']);
 

@@ -1,12 +1,43 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
+import { useEffect } from 'react';
 import { Breadcrumb } from '@/Components/Breadcrumb';
 import { EmptyState } from '@/Components/EmptyState';
 import { FavoriteButton } from '@/Components/FavoriteButton';
 import AppLayout from '@/Layouts/AppLayout';
 import { useFavoritesStore } from '@/stores/favoritesStore';
+import { apiRequest } from '@/lib/http';
+import type { FavoriteApiItem } from '@/lib/apiTypes';
+
+type FavoritesApiResponse = { data: FavoriteApiItem[] };
 
 export default function IndexPage() {
-    const { favorites, recentlyViewed, clearRecentlyViewed } = useFavoritesStore();
+    const { favorites, recentlyViewed, clearRecentlyViewed, setFavorites } = useFavoritesStore();
+
+    useEffect(() => {
+        let cancelled = false;
+
+        async function load() {
+            try {
+                const res = await apiRequest<FavoritesApiResponse>('/api/favorites');
+                if (cancelled) return;
+                setFavorites(
+                    (res.data ?? []).map((t) => ({
+                        id: t.id,
+                        name: t.name,
+                        toolId: t.toolId,
+                        category: t.category,
+                    })),
+                );
+            } catch {
+                // 401 will redirect in http.ts; other errors leave store as-is
+            }
+        }
+
+        load();
+        return () => {
+            cancelled = true;
+        };
+    }, [setFavorites]);
 
     return (
         <AppLayout
@@ -50,7 +81,7 @@ export default function IndexPage() {
                             description="Start adding tools to your favorites by clicking the heart icon on any tool."
                             action={{
                                 label: 'Browse Tools',
-                                onClick: () => (window.location.href = '/tools'),
+                                onClick: () => router.visit('/tools'),
                             }}
                         />
                     ) : (

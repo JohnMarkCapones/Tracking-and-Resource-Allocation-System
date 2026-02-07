@@ -260,4 +260,9 @@ class AdminDashboardController extends Controller
     {
         return Inertia::render('Admin/Reports/IndexPage');
     }
+
+    public function categories(): Response
+    {
+        return Inertia::render('Admin/Categories/IndexPage');
+    }
 }

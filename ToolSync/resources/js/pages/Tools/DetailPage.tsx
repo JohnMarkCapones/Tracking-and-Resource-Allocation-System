@@ -10,6 +10,13 @@ import type { Auth } from '@/types';
 import { apiRequest } from '@/lib/http';
 import type { AllocationDto } from '@/lib/apiTypes';
 
+type AvailabilityApiResponse = {
+    data: {
+        allocations: Array<{ borrow_date: string; expected_return_date: string; actual_return_date: string | null; status: string }>;
+        reservations: Array<{ start_date: string; end_date: string; status: string }>;
+    };
+};
+
 type ToolStatus = 'Available' | 'Borrowed' | 'Maintenance';
 
 type ToolDetail = {
@@ -51,48 +58,98 @@ export default function DetailPage() {
     const { tool, auth } = page.props;
     const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [unavailableDates, setUnavailableDates] = useState<Array<{ from: Date; to: Date }>>([]);
 
     useEffect(() => {
-        // If the URL contains ?request=1, auto-open the request modal.
         const hasRequestFlag = page.url.includes('request=1');
         if (hasRequestFlag) {
             setIsRequestModalOpen(true);
         }
     }, [page.url]);
 
+    useEffect(() => {
+        let cancelled = false;
+        const from = new Date();
+        const to = new Date();
+        to.setMonth(to.getMonth() + 2);
+
+        apiRequest<AvailabilityApiResponse>(
+            `/api/tools/${tool.id}/availability?from=${from.toISOString().slice(0, 10)}&to=${to.toISOString().slice(0, 10)}`,
+        )
+            .then((res) => {
+                if (cancelled) return;
+                const ranges: Array<{ from: Date; to: Date }> = [];
+                for (const a of res.data.allocations ?? []) {
+                    if (a.status === 'BORROWED') {
+                        ranges.push({
+                            from: new Date(a.borrow_date),
+                            to: new Date(a.expected_return_date),
+                        });
+                    }
+                }
+                for (const r of res.data.reservations ?? []) {
+                    if (r.status !== 'cancelled' && r.status !== 'completed') {
+                        ranges.push({
+                            from: new Date(r.start_date),
+                            to: new Date(r.end_date),
+                        });
+                    }
+                }
+                setUnavailableDates(ranges);
+            })
+            .catch(() => {
+                if (!cancelled) setUnavailableDates([]);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [tool.id]);
+
     const handleRequestSubmit = async (data: { dateRange: DateRange; purpose: string }) => {
         if (!data.dateRange.from || !data.dateRange.to) {
-            // This should already be validated in the modal, but we keep a guard here
-            // to avoid sending incomplete payloads to the backend.
             toast.error('Please select a valid date range.');
             return;
         }
 
         setIsSubmitting(true);
 
+        const startDate = data.dateRange.from.toISOString().slice(0, 10);
+        const endDate = data.dateRange.to.toISOString().slice(0, 10);
+
         try {
-            const payload = {
-                tool_id: tool.id,
-                user_id: auth.user.id,
-                borrow_date: data.dateRange.from.toISOString(),
-                expected_return_date: data.dateRange.to.toISOString(),
-                note: data.purpose,
-            };
+            if (tool.status === 'Borrowed') {
+                await apiRequest('/api/reservations', {
+                    method: 'POST',
+                    body: {
+                        tool_id: tool.id,
+                        start_date: startDate,
+                        end_date: endDate,
+                        recurring: false,
+                    },
+                });
+                setIsRequestModalOpen(false);
+                toast.success('Reservation created.');
+                router.visit('/reservations');
+                return;
+            }
 
             await apiRequest<{ message: string; data: AllocationDto }>('/api/tool-allocations', {
                 method: 'POST',
-                body: payload,
+                body: {
+                    tool_id: tool.id,
+                    user_id: auth.user.id,
+                    borrow_date: startDate,
+                    expected_return_date: endDate,
+                    note: data.purpose,
+                },
             });
 
             setIsRequestModalOpen(false);
             toast.success('Borrowing request submitted for approval!');
-
-            // Reload only the tool data so availability and counters stay in sync with the database.
-            router.reload({
-                only: ['tool'],
-            });
+            router.reload({ only: ['tool'] });
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to submit borrowing request.';
+            const message = error instanceof Error ? error.message : 'Failed to submit request.';
             toast.error(message);
         } finally {
             setIsSubmitting(false);
@@ -178,7 +235,7 @@ export default function DetailPage() {
                     </div>
 
                     <div className="space-y-4">
-                        <AvailabilityCalendar />
+                        <AvailabilityCalendar unavailableDates={unavailableDates} />
 
                         {tool.status === 'Available' && (
                             <button

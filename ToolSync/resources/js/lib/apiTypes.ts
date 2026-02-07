@@ -112,3 +112,159 @@ export function mapAllocationStatusToUi(allocation: AllocationDto, now: Date = n
     return 'Active';
 }
 
+// --- API response types (match backend JSON) ---
+
+export type DashboardCounts = {
+    tools_available_quantity: number;
+    tools_maintenance_quantity: number;
+    borrowed_active_count: number;
+    overdue_count: number;
+};
+
+export type DashboardRecentActivityItem = {
+    id: number;
+    tool_id: number;
+    tool_name: string | null;
+    user_id: number;
+    user_name: string | null;
+    expected_return_date: string;
+    status: string;
+    status_display: string;
+    is_overdue: boolean;
+};
+
+export type DashboardSummary = {
+    returned_count: number;
+    not_returned_count: number;
+    returned_percent: number;
+    not_returned_percent: number;
+    range_days: number;
+};
+
+export type DashboardApiResponse = {
+    data: {
+        scope: { user_id: number | null };
+        counts: DashboardCounts;
+        recent_activity: DashboardRecentActivityItem[];
+        summary: DashboardSummary;
+    };
+};
+
+export type AllocationHistoryItem = AllocationDto & { is_overdue?: boolean; status_display?: string };
+
+export type AllocationHistoryPaginated = {
+    current_page: number;
+    data: AllocationHistoryItem[];
+    per_page: number;
+    total: number;
+};
+
+export type ReservationApiItem = {
+    id: number;
+    toolName: string;
+    toolId: string;
+    startDate: string;
+    endDate: string;
+    status: string;
+    recurring: boolean;
+    recurrencePattern: string | null;
+};
+
+export type SettingsGeneral = Record<string, string>;
+
+export type SettingsBusinessHour = {
+    day_of_week: number;
+    enabled: boolean;
+    open: string;
+    close: string;
+};
+
+export type SettingsHoliday = {
+    id: number;
+    name: string;
+    date: string;
+};
+
+export type SettingsAutoApprovalRule = {
+    id: number;
+    name: string;
+    condition: string;
+    enabled: boolean;
+};
+
+export type SettingsApiResponse = {
+    data: {
+        general: SettingsGeneral;
+        business_hours: SettingsBusinessHour[];
+        holidays: SettingsHoliday[];
+        auto_approval_rules: SettingsAutoApprovalRule[];
+    };
+};
+
+export type MaintenanceScheduleApiItem = {
+    id: number;
+    toolName: string;
+    toolId: string;
+    type: string;
+    scheduledDate: string;
+    completedDate: string | null;
+    assignee: string;
+    status: string;
+    notes: string | null;
+    usageCount: number;
+    triggerThreshold: number;
+};
+
+export type ToolDeprecationApiItem = {
+    id: number;
+    toolName: string;
+    toolId: string;
+    reason: string;
+    retireDate: string;
+    replacementId: string | null;
+    status: string;
+};
+
+export type DepartmentApiItem = { id: number; name: string };
+
+export type ActivityLogApiItem = {
+    id: number;
+    user_id: number | null;
+    user_name: string | null;
+    action: string;
+    subject_type: string | null;
+    subject_id: number | null;
+    description: string | null;
+    properties: Record<string, unknown> | null;
+    created_at: string;
+};
+
+export type AnalyticsOverviewApiResponse = {
+    data: {
+        scope: { user_id: number | null };
+        range: { from: string; to: string };
+        timeseries: {
+            borrowed: Array<{ date: string; count: number }>;
+            returned: Array<{ date: string; count: number }>;
+        };
+        top_tools: Array<{ tool_id: number; tool_name: string; borrow_count: number }>;
+        status_breakdown: { borrowed: number; returned: number; overdue: number };
+    };
+};
+
+export type UsageHeatmapCellApi = { date: string; count: number };
+
+export type UsageHeatmapApiResponse = {
+    data: {
+        from: string;
+        to: string;
+        cells: UsageHeatmapCellApi[];
+    };
+};
+
+export type FavoriteApiItem = {
+    id: number;
+    name: string;
+    toolId: string;
+    category: string;
+};

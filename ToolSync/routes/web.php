@@ -15,9 +15,10 @@ Route::get('/', function () {
 Route::get('/dashboard', [DashboardController::class, 'index'])
     ->name('dashboard');
 
+// Login page: /profile/login. Named 'login' so auth redirects here when unauthenticated.
 Route::get('/profile/login', function () {
     return Inertia::render('Profile/login');
-})->name('profile.login');
+})->name('login');
 
 Route::get('/admin/dashboard', [AdminDashboardController::class, 'index'])
     ->name('admin.dashboard');
@@ -27,6 +28,9 @@ Route::get('/admin/allocation-history', [AdminDashboardController::class, 'alloc
 
 Route::get('/admin/tools', [AdminDashboardController::class, 'tools'])
     ->name('admin.tools');
+
+Route::get('/admin/categories', [AdminDashboardController::class, 'categories'])
+    ->name('admin.categories');
 
 Route::get('/admin/users', [AdminDashboardController::class, 'users'])
     ->name('admin.users');

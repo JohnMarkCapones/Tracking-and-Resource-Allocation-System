@@ -2,9 +2,12 @@ import { useState, useEffect } from 'react';
 import type { Tool, ToolStatus } from '@/Components/Admin/ToolTable';
 import Modal from '@/Components/Modal';
 
+const DEFAULT_CATEGORIES = ['Laptops', 'Projectors', 'Cameras', 'Printers', 'Tablets', 'Audio Equipment', 'Other'];
+
 type CreateEditModalProps = {
     show: boolean;
     tool: Tool | null;
+    categories?: string[];
     onClose: () => void;
     onSave: (data: ToolFormData) => void;
 };
@@ -26,19 +29,17 @@ function nextSpecId(): string {
     return `spec-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-const CATEGORIES = ['Laptops', 'Projectors', 'Cameras', 'Printers', 'Tablets', 'Audio Equipment', 'Other'];
-
 const STATUSES: ToolStatus[] = ['Available', 'Borrowed', 'Maintenance'];
 
 const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor'];
 
-export function CreateEditModal({ show, tool, onClose, onSave }: CreateEditModalProps) {
+export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, onClose, onSave }: CreateEditModalProps) {
     const isEditing = tool !== null;
 
     const [formData, setFormData] = useState<ToolFormData>({
         name: '',
         toolId: '',
-        category: CATEGORIES[0],
+        category: categories[0] ?? DEFAULT_CATEGORIES[0],
         status: 'Available',
         condition: 'Good',
         description: '',
@@ -71,7 +72,7 @@ export function CreateEditModal({ show, tool, onClose, onSave }: CreateEditModal
             setFormData({
                 name: '',
                 toolId: '',
-                category: CATEGORIES[0],
+                category: categories[0] ?? DEFAULT_CATEGORIES[0],
                 status: 'Available',
                 condition: 'Good',
                 description: '',
@@ -194,7 +195,7 @@ export function CreateEditModal({ show, tool, onClose, onSave }: CreateEditModal
                                     }
                                     className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
                                 >
-                                    {CATEGORIES.map((cat) => (
+                                    {categories.map((cat) => (
                                         <option key={cat} value={cat}>
                                             {cat}
                                         </option>

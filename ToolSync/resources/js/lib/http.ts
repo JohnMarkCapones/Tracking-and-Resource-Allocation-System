@@ -6,6 +6,23 @@ type ApiRequestOptions = {
     signal?: AbortSignal;
 };
 
+/** Error with status and payload for API callers (e.g. 401 → redirect to login). */
+export type ApiError = Error & { status?: number; payload?: unknown };
+
+function isApiError(err: unknown): err is ApiError {
+    return err instanceof Error && 'status' in err;
+}
+
+/** 401 Unauthorized – caller can redirect to login when this is thrown. */
+export function isUnauthorized(err: unknown): boolean {
+    return isApiError(err) && err.status === 401;
+}
+
+function getCsrfToken(): string | null {
+    const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : null;
+}
+
 async function handleResponse<T>(response: Response): Promise<T> {
     const contentType = response.headers.get('content-type') ?? '';
 
@@ -13,16 +30,17 @@ async function handleResponse<T>(response: Response): Promise<T> {
     const payload = isJson ? await response.json() : await response.text();
 
     if (!response.ok) {
-        const message =
-            (isJson && typeof payload === 'object' && payload && 'message' in payload && typeof (payload as any).message === 'string'
-                ? (payload as any).message
-                : response.statusText) || 'Request failed';
+        const msg =
+            isJson &&
+            typeof payload === 'object' &&
+            payload !== null &&
+            'message' in payload &&
+            typeof (payload as { message?: string }).message === 'string'
+                ? (payload as { message: string }).message
+                : response.statusText;
+        const message = msg || 'Request failed';
 
-        // Throw a structured error so callers can decide how to handle it.
-        const error = new Error(message) as Error & {
-            status?: number;
-            payload?: unknown;
-        };
+        const error = new Error(message) as ApiError;
         error.status = response.status;
         error.payload = payload;
         throw error;
@@ -34,13 +52,23 @@ async function handleResponse<T>(response: Response): Promise<T> {
 export async function apiRequest<T>(url: string, options: ApiRequestOptions = {}): Promise<T> {
     const { method = 'GET', body, signal } = options;
 
+    const headers: Record<string, string> = {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+    };
+
+    // Required for Laravel Sanctum stateful (cookie) auth on same-origin.
+    if (method !== 'GET') {
+        const token = getCsrfToken();
+        if (token) {
+            headers['X-XSRF-TOKEN'] = token;
+        }
+    }
+
     const init: RequestInit = {
         method,
-        headers: {
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-        },
+        headers,
         credentials: 'same-origin',
         signal,
     };
@@ -51,6 +79,13 @@ export async function apiRequest<T>(url: string, options: ApiRequestOptions = {}
 
     const response = await fetch(url, init);
 
-    return handleResponse<T>(response);
+    try {
+        return await handleResponse<T>(response);
+    } catch (err) {
+        if (isUnauthorized(err)) {
+            window.location.href = '/profile/login';
+        }
+        throw err;
+    }
 }
 

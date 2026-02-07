@@ -1,6 +1,8 @@
-type ActivityType = 'request' | 'approved' | 'picked_up' | 'returned' | 'overdue' | 'maintenance' | 'created' | 'updated' | 'deleted';
+import type { ActivityLogApiItem } from '@/lib/apiTypes';
 
-type ActivityItem = {
+export type ActivityType = 'request' | 'approved' | 'picked_up' | 'returned' | 'overdue' | 'maintenance' | 'created' | 'updated' | 'deleted';
+
+export type ActivityItem = {
     id: number;
     type: ActivityType;
     title: string;
@@ -9,6 +11,52 @@ type ActivityItem = {
     user?: string;
     toolName?: string;
 };
+
+/** Map API activity log entry to ActivityItem for use in ActivityTimeline. Use when feeding timeline from GET /api/activity-logs. */
+export function mapActivityLogToItem(log: ActivityLogApiItem): ActivityItem {
+    const action = log.action ?? '';
+    const type: ActivityType =
+        action.includes('created') || action.includes('.created')
+            ? 'created'
+            : action.includes('updated') || action.includes('.updated')
+              ? 'updated'
+              : action.includes('deleted') || action.includes('.deleted')
+                ? 'deleted'
+                : action.includes('returned') || action.includes('return')
+                  ? 'returned'
+                  : action.includes('approved') || action.includes('approve')
+                    ? 'approved'
+                    : action.includes('maintenance')
+                      ? 'maintenance'
+                      : action.includes('overdue')
+                        ? 'overdue'
+                        : 'updated';
+    const date = new Date(log.created_at);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+    const timestamp =
+        diffMins < 60
+            ? `${diffMins} min ago`
+            : diffHours < 24
+              ? `${diffHours} hours ago`
+              : diffDays === 1
+                ? 'Yesterday'
+                : diffDays < 7
+                  ? `${diffDays} days ago`
+                  : date.toLocaleDateString();
+
+    return {
+        id: log.id,
+        type,
+        title: action.replace(/\./g, ' ').replace(/_/g, ' ') || 'Activity',
+        description: log.description ?? '',
+        timestamp,
+        user: log.user_name ?? undefined,
+    };
+}
 
 type ActivityTimelineProps = {
     activities: ActivityItem[];

@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { toast } from '@/Components/Toast';
 import { useFavoritesStore } from '@/stores/favoritesStore';
+import { apiRequest } from '@/lib/http';
 
 type FavoriteButtonProps = {
     tool: {
@@ -25,17 +27,32 @@ const iconSizeClasses = {
 };
 
 export function FavoriteButton({ tool, size = 'md', className = '' }: FavoriteButtonProps) {
-    const { isFavorite, toggleFavorite } = useFavoritesStore();
+    const { isFavorite, addFavorite, removeFavorite } = useFavoritesStore();
+    const [pending, setPending] = useState(false);
     const isFav = isFavorite(tool.id);
 
-    const handleClick = (e: React.MouseEvent) => {
+    const handleClick = async (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
-        toggleFavorite(tool);
-        if (isFav) {
-            toast.success(`${tool.name} removed from favorites`);
-        } else {
-            toast.success(`${tool.name} added to favorites`);
+        if (pending) return;
+        setPending(true);
+        try {
+            if (isFav) {
+                await apiRequest(`/api/favorites/${tool.id}`, { method: 'DELETE' });
+                removeFavorite(tool.id);
+                toast.success(`${tool.name} removed from favorites`);
+            } else {
+                await apiRequest('/api/favorites', {
+                    method: 'POST',
+                    body: { tool_id: tool.id },
+                });
+                addFavorite(tool);
+                toast.success(`${tool.name} added to favorites`);
+            }
+        } catch {
+            toast.error(isFav ? 'Could not remove favorite' : 'Could not add favorite');
+        } finally {
+            setPending(false);
         }
     };
 

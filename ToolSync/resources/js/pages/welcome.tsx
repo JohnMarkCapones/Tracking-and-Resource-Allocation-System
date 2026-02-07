@@ -1,10 +1,30 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, useForm } from '@inertiajs/react';
+import type { FormEventHandler } from 'react';
 
 import equipitLogo from '../assets/figma/logo.png';
 import signupGroup72 from '../assets/figma/signup/Group 72.png';
 import signupGroup77 from '../assets/figma/signup/Group 77.png';
 
 export default function Welcome() {
+    const { data, setData, post, processing, errors, transform } = useForm({
+        first_name: '',
+        last_name: '',
+        email: '',
+        password: '',
+        password_confirmation: '',
+    });
+
+    const submit: FormEventHandler = (e) => {
+        e.preventDefault();
+        transform((d) => ({
+            name: [d.first_name, d.last_name].map((s) => s.trim()).filter(Boolean).join(' ') || 'User',
+            email: d.email,
+            password: d.password,
+            password_confirmation: d.password_confirmation,
+        }));
+        post('/register');
+    };
+
     return (
         <>
             <Head title="Landing">
@@ -67,7 +87,7 @@ export default function Welcome() {
                                 Create Your Account Now!
                             </h2>
 
-                            <form className="mt-7 space-y-4">
+                            <form className="mt-7 space-y-4" onSubmit={submit}>
                                 <div className="grid grid-cols-1 gap-4">
                                     <div>
                                         <label className="font-['Inter'] text-sm font-medium text-[#444444]" htmlFor="first_name">
@@ -77,6 +97,8 @@ export default function Welcome() {
                                             id="first_name"
                                             name="first_name"
                                             autoComplete="given-name"
+                                            value={data.first_name}
+                                            onChange={(e) => setData('first_name', e.target.value)}
                                             className="mt-2 w-full rounded-xl bg-[#F9F7F4] px-4 py-3 font-['Inter'] text-sm font-medium text-[#444444] ring-1 ring-black/10 outline-none focus:ring-2 focus:ring-[#060644]"
                                             type="text"
                                         />
@@ -90,11 +112,18 @@ export default function Welcome() {
                                             id="last_name"
                                             name="last_name"
                                             autoComplete="family-name"
+                                            value={data.last_name}
+                                            onChange={(e) => setData('last_name', e.target.value)}
                                             className="mt-2 w-full rounded-xl bg-[#F9F7F4] px-4 py-3 font-['Inter'] text-sm font-medium text-[#444444] ring-1 ring-black/10 outline-none focus:ring-2 focus:ring-[#060644]"
                                             type="text"
                                         />
                                     </div>
                                 </div>
+                                {((errors as Record<string, string | undefined>)['name'] ?? errors.first_name ?? errors.last_name) && (
+                                    <p className="text-xs text-red-600">
+                                        {(errors as Record<string, string | undefined>)['name'] ?? errors.first_name ?? errors.last_name}
+                                    </p>
+                                )}
 
                                 <div>
                                     <label className="font-['Inter'] text-sm font-medium text-[#444444]" htmlFor="email">
@@ -104,9 +133,12 @@ export default function Welcome() {
                                         id="email"
                                         name="email"
                                         autoComplete="email"
+                                        value={data.email}
+                                        onChange={(e) => setData('email', e.target.value)}
                                         className="mt-2 w-full rounded-xl bg-[#F9F7F4] px-4 py-3 font-['Inter'] text-sm font-medium text-[#444444] ring-1 ring-black/10 outline-none focus:ring-2 focus:ring-[#060644]"
                                         type="email"
                                     />
+                                    {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email}</p>}
                                 </div>
 
                                 <div>
@@ -117,9 +149,12 @@ export default function Welcome() {
                                         id="password"
                                         name="password"
                                         autoComplete="new-password"
+                                        value={data.password}
+                                        onChange={(e) => setData('password', e.target.value)}
                                         className="mt-2 w-full rounded-xl bg-[#F9F7F4] px-4 py-3 font-['Inter'] text-sm font-medium text-[#444444] ring-1 ring-black/10 outline-none focus:ring-2 focus:ring-[#060644]"
                                         type="password"
                                     />
+                                    {errors.password && <p className="mt-1 text-xs text-red-600">{errors.password}</p>}
                                 </div>
 
                                 <div>
@@ -130,9 +165,14 @@ export default function Welcome() {
                                         id="confirm_password"
                                         name="confirm_password"
                                         autoComplete="new-password"
+                                        value={data.password_confirmation}
+                                        onChange={(e) => setData('password_confirmation', e.target.value)}
                                         className="mt-2 w-full rounded-xl bg-[#F9F7F4] px-4 py-3 font-['Inter'] text-sm font-medium text-[#444444] ring-1 ring-black/10 outline-none focus:ring-2 focus:ring-[#060644]"
                                         type="password"
                                     />
+                                    {errors.password_confirmation && (
+                                        <p className="mt-1 text-xs text-red-600">{errors.password_confirmation}</p>
+                                    )}
                                 </div>
 
                                 <p className="text-[11px] leading-4 text-[#444444]">
@@ -141,10 +181,11 @@ export default function Welcome() {
                                 </p>
 
                                 <button
-                                    type="button"
-                                    className="mt-2 inline-flex h-12 w-full items-center justify-center rounded-lg bg-[#547792] font-['Inter'] text-sm font-semibold text-white shadow-sm hover:bg-[#4c6f87] focus-visible:ring-2 focus-visible:ring-[#060644] focus-visible:ring-offset-2 focus-visible:outline-none"
+                                    type="submit"
+                                    disabled={processing}
+                                    className="mt-2 inline-flex h-12 w-full items-center justify-center rounded-lg bg-[#547792] font-['Inter'] text-sm font-semibold text-white shadow-sm hover:bg-[#4c6f87] focus-visible:ring-2 focus-visible:ring-[#060644] focus-visible:ring-offset-2 focus-visible:outline-none disabled:opacity-70"
                                 >
-                                    Register
+                                    {processing ? 'Creating account…' : 'Register'}
                                 </button>
                             </form>
                         </div>

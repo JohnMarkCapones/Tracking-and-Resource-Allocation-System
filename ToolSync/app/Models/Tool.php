@@ -34,4 +34,14 @@ class Tool extends Model
     {
         return $this->hasMany(ToolStatusLog::class);
     }
+
+    public function maintenanceSchedules(): HasMany
+    {
+        return $this->hasMany(MaintenanceSchedule::class);
+    }
+
+    public function deprecations(): HasMany
+    {
+        return $this->hasMany(ToolDeprecation::class);
+    }
 }

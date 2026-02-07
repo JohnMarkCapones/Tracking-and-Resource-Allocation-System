@@ -14,6 +14,7 @@ type AppLayoutProps = PropsWithChildren<{
         | 'borrowing-history'
         | 'admin-dashboard'
         | 'admin-tools'
+        | 'admin-categories'
         | 'admin-allocation-history'
         | 'admin-users'
         | 'admin-analytics'
@@ -98,6 +99,7 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
     type SidebarItemKey =
         | 'dashboard'
         | 'tools'
+        | 'categories'
         | 'history'
         | 'users'
         | 'favorites'
@@ -133,6 +135,12 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                   href: '/admin/tools',
                   label: 'Tools Management',
                   isActive: activeRoute === 'admin-tools',
+              },
+              {
+                  key: 'categories',
+                  href: '/admin/categories',
+                  label: 'Categories',
+                  isActive: activeRoute === 'admin-categories',
               },
               {
                   key: 'users',

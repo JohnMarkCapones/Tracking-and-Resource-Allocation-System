@@ -1,9 +1,11 @@
 import { Head } from '@inertiajs/react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Breadcrumb } from '@/Components/Breadcrumb';
 import { toast } from '@/Components/Toast';
 import AppLayout from '@/Layouts/AppLayout';
 import Modal from '@/Components/Modal';
+import { apiRequest } from '@/lib/http';
+import type { MaintenanceScheduleApiItem, ToolDeprecationApiItem } from '@/lib/apiTypes';
 
 type MaintenanceStatus = 'scheduled' | 'in_progress' | 'completed' | 'overdue';
 
@@ -21,69 +23,22 @@ type MaintenanceRecord = {
     triggerThreshold: number;
 };
 
-const MOCK_MAINTENANCE: MaintenanceRecord[] = [
-    {
-        id: 1,
-        toolName: 'Canon EOS R6',
-        toolId: 'CM-0001',
-        type: 'repair',
-        scheduledDate: '2026-02-08',
-        assignee: 'Tech Team',
-        status: 'in_progress',
-        notes: 'Sensor cleaning required',
-        usageCount: 45,
-        triggerThreshold: 50,
-    },
-    {
-        id: 2,
-        toolName: '3D Printer',
-        toolId: 'PR-0010',
-        type: 'routine',
-        scheduledDate: '2026-02-15',
-        assignee: 'Lab Admin',
-        status: 'scheduled',
-        notes: 'Monthly nozzle and bed check',
-        usageCount: 28,
-        triggerThreshold: 30,
-    },
-    {
-        id: 3,
-        toolName: 'Oscilloscope',
-        toolId: 'EL-0003',
-        type: 'calibration',
-        scheduledDate: '2026-02-01',
-        assignee: 'QA Team',
-        status: 'overdue',
-        notes: 'Annual calibration due',
-        usageCount: 55,
-        triggerThreshold: 50,
-    },
-    {
-        id: 4,
-        toolName: 'Multimeter',
-        toolId: 'EL-0001',
-        type: 'inspection',
-        scheduledDate: '2026-01-28',
-        completedDate: '2026-01-28',
-        assignee: 'Tech Team',
-        status: 'completed',
-        notes: 'All readings accurate',
-        usageCount: 38,
-        triggerThreshold: 50,
-    },
-    {
-        id: 5,
-        toolName: 'Drill Press',
-        toolId: 'ME-0001',
-        type: 'routine',
-        scheduledDate: '2026-02-20',
-        assignee: 'Shop Manager',
-        status: 'scheduled',
-        notes: 'Belt and blade inspection',
-        usageCount: 12,
-        triggerThreshold: 25,
-    },
-];
+function mapScheduleToRecord(m: MaintenanceScheduleApiItem): MaintenanceRecord {
+    const status = m.status as MaintenanceStatus;
+    return {
+        id: m.id,
+        toolName: m.toolName,
+        toolId: m.toolId,
+        type: m.type as MaintenanceRecord['type'],
+        scheduledDate: m.scheduledDate,
+        completedDate: m.completedDate ?? undefined,
+        assignee: m.assignee,
+        status,
+        notes: m.notes ?? '',
+        usageCount: m.usageCount,
+        triggerThreshold: m.triggerThreshold,
+    };
+}
 
 type DeprecationItem = {
     id: number;
@@ -95,18 +50,18 @@ type DeprecationItem = {
     status: 'pending' | 'approved' | 'retired';
 };
 
-const MOCK_DEPRECATIONS: DeprecationItem[] = [
-    {
-        id: 1,
-        toolName: 'Old Oscilloscope',
-        toolId: 'OS-0001',
-        reason: 'End of life - no parts available',
-        retireDate: '2026-03-01',
-        replacementId: 'EL-0003',
-        status: 'approved',
-    },
-    { id: 2, toolName: 'Legacy Multimeter', toolId: 'EL-0099', reason: 'Accuracy below standards', retireDate: '2026-04-15', status: 'pending' },
-];
+function mapDeprecationToItem(d: ToolDeprecationApiItem): DeprecationItem {
+    const status = d.status as DeprecationItem['status'];
+    return {
+        id: d.id,
+        toolName: d.toolName,
+        toolId: d.toolId,
+        reason: d.reason,
+        retireDate: d.retireDate,
+        replacementId: d.replacementId ?? undefined,
+        status: status === 'pending' || status === 'approved' || status === 'retired' ? status : 'pending',
+    };
+}
 
 const STATUS_STYLES: Record<MaintenanceStatus, string> = {
     scheduled: 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
@@ -122,10 +77,26 @@ const TYPE_STYLES: Record<string, string> = {
     calibration: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
 };
 
+type SchedulesResponse = { data: MaintenanceScheduleApiItem[] };
+type DeprecationsResponse = { data: ToolDeprecationApiItem[] };
+
+async function loadSchedules(): Promise<MaintenanceRecord[]> {
+    const res = await apiRequest<SchedulesResponse>('/api/maintenance-schedules');
+    return (res.data ?? []).map(mapScheduleToRecord);
+}
+
+async function loadDeprecations(): Promise<DeprecationItem[]> {
+    const res = await apiRequest<DeprecationsResponse>('/api/tool-deprecations');
+    return (res.data ?? []).map(mapDeprecationToItem);
+}
+
 export default function IndexPage() {
     const [activeTab, setActiveTab] = useState<'schedule' | 'deprecation'>('schedule');
     const [filterStatus, setFilterStatus] = useState<'all' | MaintenanceStatus>('all');
-    const [maintenanceRecords, setMaintenanceRecords] = useState<MaintenanceRecord[]>(MOCK_MAINTENANCE);
+    const [maintenanceRecords, setMaintenanceRecords] = useState<MaintenanceRecord[]>([]);
+    const [deprecations, setDeprecations] = useState<DeprecationItem[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
 
     const [scheduleToolName, setScheduleToolName] = useState('');
@@ -135,14 +106,46 @@ export default function IndexPage() {
     const [scheduleAssignee, setScheduleAssignee] = useState('');
     const [scheduleNotes, setScheduleNotes] = useState('');
 
+    useEffect(() => {
+        let cancelled = false;
+
+        async function load() {
+            setLoading(true);
+            setError(null);
+            try {
+                const [schedules, deps] = await Promise.all([loadSchedules(), loadDeprecations()]);
+                if (cancelled) return;
+                setMaintenanceRecords(schedules);
+                setDeprecations(deps);
+            } catch (err) {
+                if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load maintenance data');
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        }
+
+        load();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
     const filteredMaintenance =
         filterStatus === 'all' ? maintenanceRecords : maintenanceRecords.filter((m) => m.status === filterStatus);
 
-    const handleComplete = (id: number): void => {
-        setMaintenanceRecords((prev) =>
-            prev.map((record) => (record.id === id ? { ...record, status: 'completed' as const } : record)),
-        );
-        toast.success('Maintenance marked as completed');
+    const handleComplete = async (id: number): Promise<void> => {
+        try {
+            await apiRequest(`/api/maintenance-schedules/${id}`, {
+                method: 'PUT',
+                body: { status: 'completed', completed_date: new Date().toISOString().slice(0, 10) },
+            });
+            setMaintenanceRecords((prev) =>
+                prev.map((record) => (record.id === id ? { ...record, status: 'completed' as const } : record)),
+            );
+            toast.success('Maintenance marked as completed');
+        } catch {
+            toast.error('Could not update maintenance');
+        }
     };
 
     const handleOpenScheduleModal = (): void => {
@@ -155,7 +158,7 @@ export default function IndexPage() {
         setIsScheduleModalOpen(true);
     };
 
-    const handleSubmitSchedule = (e: React.FormEvent): void => {
+    const handleSubmitSchedule = async (e: React.FormEvent): Promise<void> => {
         e.preventDefault();
 
         if (!scheduleToolName.trim() || !scheduleToolId.trim() || !scheduleDate || !scheduleAssignee.trim()) {
@@ -163,22 +166,30 @@ export default function IndexPage() {
             return;
         }
 
-        const newRecord: MaintenanceRecord = {
-            id: Date.now(),
-            toolName: scheduleToolName.trim(),
-            toolId: scheduleToolId.trim(),
-            type: scheduleType,
-            scheduledDate: scheduleDate,
-            assignee: scheduleAssignee.trim(),
-            status: 'scheduled',
-            notes: scheduleNotes.trim() || 'Scheduled via quick form',
-            usageCount: 0,
-            triggerThreshold: 50,
-        };
+        const toolIdNum = parseInt(scheduleToolId.replace(/^TL-?/i, ''), 10);
+        if (Number.isNaN(toolIdNum)) {
+            toast.error('Tool ID must be a number or in format TL-1.');
+            return;
+        }
 
-        setMaintenanceRecords((prev) => [newRecord, ...prev]);
-        setIsScheduleModalOpen(false);
-        toast.success('Maintenance scheduled.');
+        try {
+            await apiRequest('/api/maintenance-schedules', {
+                method: 'POST',
+                body: {
+                    tool_id: toolIdNum,
+                    type: scheduleType,
+                    scheduled_date: scheduleDate,
+                    assignee: scheduleAssignee.trim(),
+                    notes: scheduleNotes.trim() || null,
+                },
+            });
+            const schedules = await loadSchedules();
+            setMaintenanceRecords(schedules);
+            setIsScheduleModalOpen(false);
+            toast.success('Maintenance scheduled.');
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to schedule maintenance');
+        }
     };
 
     return (
@@ -197,6 +208,17 @@ export default function IndexPage() {
         >
             <Head title="Maintenance" />
 
+            {loading && (
+                <div className="rounded-3xl bg-white px-5 py-12 text-center text-gray-500 shadow-sm dark:bg-gray-800 dark:text-gray-400">
+                    Loading maintenance data…
+                </div>
+            )}
+            {error && (
+                <div className="rounded-3xl bg-red-50 px-5 py-4 text-red-700 shadow-sm dark:bg-red-900/20 dark:text-red-400">
+                    {error}
+                </div>
+            )}
+            {!loading && !error && (
             <div className="space-y-6">
                 {/* Tabs */}
                 <div className="flex items-center justify-between">
@@ -350,7 +372,7 @@ export default function IndexPage() {
                 {activeTab === 'deprecation' && (
                     <div className="space-y-3">
                         <p className="text-xs text-gray-500 dark:text-gray-400">Tools scheduled for retirement</p>
-                        {MOCK_DEPRECATIONS.map((item) => (
+                        {deprecations.map((item) => (
                             <div key={item.id} className="rounded-2xl bg-white p-5 shadow-sm dark:bg-gray-800">
                                 <div className="flex items-start justify-between">
                                     <div>
@@ -379,6 +401,7 @@ export default function IndexPage() {
                     </div>
                 )}
             </div>
+            )}
             <Modal show={isScheduleModalOpen} maxWidth="md" onClose={() => setIsScheduleModalOpen(false)}>
                 <div className="overflow-hidden rounded-lg">
                     <div className="bg-gradient-to-r from-blue-700 to-blue-500 px-6 py-4 text-white">

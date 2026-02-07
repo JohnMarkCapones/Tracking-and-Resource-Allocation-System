@@ -1,5 +1,5 @@
 import { Head, router, usePage } from '@inertiajs/react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AdminStatBar } from '@/Components/Dashboard/AdminStatBar';
 import type { BorrowingStatusSegment } from '@/Components/Dashboard/BorrowingStatusDonut';
 import { BorrowingStatusDonut } from '@/Components/Dashboard/BorrowingStatusDonut';
@@ -8,6 +8,8 @@ import { MostBorrowedBarChart } from '@/Components/Dashboard/MostBorrowedBarChar
 import AppLayout from '@/Layouts/AppLayout';
 import { toast } from '@/Components/Toast';
 import { CreateEditModal, type ToolFormData } from '@/pages/Admin/Tools/CreateEditModal';
+import { apiRequest } from '@/lib/http';
+import type { DashboardApiResponse } from '@/lib/apiTypes';
 
 type AdminMetrics = {
     totalTools: number;
@@ -79,11 +81,71 @@ function activityToneClasses(tone: ActivityTone): string {
     return 'bg-emerald-500';
 }
 
+// Mock most-borrowed tools until the API provides this aggregate.
+const MOCK_MOST_BORROWED: MostBorrowedTool[] = [
+    { name: 'Laptop', count: 24 },
+    { name: 'Projector', count: 18 },
+    { name: 'Camera', count: 12 },
+    { name: 'Tablet', count: 8 },
+];
+
 export default function AdminDashboardPage() {
-    const { metrics, mostBorrowedTools, borrowingStatus } = usePage<AdminDashboardPageProps>().props;
+    const fallbackProps = usePage<AdminDashboardPageProps>().props;
+    const [metrics, setMetrics] = useState<AdminMetrics>(fallbackProps.metrics);
+    const [mostBorrowedTools] = useState<MostBorrowedTool[]>(
+        fallbackProps.mostBorrowedTools?.length ? fallbackProps.mostBorrowedTools : MOCK_MOST_BORROWED,
+    );
+    const [borrowingStatus, setBorrowingStatus] = useState<BorrowingStatusSegment[]>(
+        fallbackProps.borrowingStatus ?? [
+            { label: 'Returned', value: 0 },
+            { label: 'Active', value: 0 },
+        ],
+    );
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d');
     const [isAddToolModalOpen, setIsAddToolModalOpen] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        async function load() {
+            setLoading(true);
+            setError(null);
+            try {
+                const res = await apiRequest<DashboardApiResponse>('/api/dashboard');
+                if (cancelled) return;
+                const d = res.data;
+                const c = d.counts;
+                const total =
+                    c.tools_available_quantity + c.tools_maintenance_quantity + c.borrowed_active_count;
+                setMetrics({
+                    totalTools: total,
+                    availableTools: c.tools_available_quantity,
+                    borrowedTools: c.borrowed_active_count,
+                    toolsUnderMaintenance: c.tools_maintenance_quantity,
+                    totalUsers: 0,
+                    activeBorrowings: c.borrowed_active_count,
+                });
+                setBorrowingStatus([
+                    { label: 'Returned', value: d.summary.returned_count },
+                    { label: 'Active', value: d.summary.not_returned_count },
+                ]);
+            } catch (err) {
+                if (!cancelled) {
+                    setError(err instanceof Error ? err.message : 'Failed to load dashboard');
+                }
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        }
+
+        load();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const handleAddToolSave = (data: ToolFormData) => {
         setIsAddToolModalOpen(false);
@@ -91,8 +153,6 @@ export default function AdminDashboardPage() {
         router.visit('/admin/tools');
     };
 
-    // For now we reuse the same mock data for each range. Once real data
-    // is available this state can drive different datasets from the server.
     const displayTools = mostBorrowedTools;
     const displayBorrowingStatus = borrowingStatus;
 
@@ -109,6 +169,17 @@ export default function AdminDashboardPage() {
         >
             <Head title="Admin Dashboard" />
 
+            {loading && (
+                <div className="rounded-3xl bg-white px-5 py-12 text-center text-gray-500 shadow-sm">
+                    Loading dashboard…
+                </div>
+            )}
+            {error && (
+                <div className="rounded-3xl bg-red-50 px-5 py-4 text-red-700 shadow-sm">
+                    {error}
+                </div>
+            )}
+            {!loading && !error && (
             <div className="space-y-8">
                 <section className="flex flex-col gap-3 rounded-3xl bg-white/70 p-4 shadow-sm backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between">
                     <div>
@@ -346,6 +417,7 @@ export default function AdminDashboardPage() {
                     </div>
                 </section>
             </div>
+            )}
 
             <CreateEditModal
                 show={isAddToolModalOpen}

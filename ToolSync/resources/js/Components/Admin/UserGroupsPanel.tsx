@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { apiRequest } from '@/lib/http';
+import type { DepartmentApiItem } from '@/lib/apiTypes';
 
 type Department = {
     id: number;
@@ -15,13 +17,7 @@ type Role = {
     userCount: number;
 };
 
-const MOCK_DEPARTMENTS: Department[] = [
-    { id: 1, name: 'Engineering', memberCount: 12, maxBorrowings: 5, allowedCategories: ['Electronics', 'Computing', 'Mechanical'] },
-    { id: 2, name: 'Design', memberCount: 6, maxBorrowings: 3, allowedCategories: ['Computing', 'Photography'] },
-    { id: 3, name: 'Research', memberCount: 8, maxBorrowings: 4, allowedCategories: ['Electronics', 'Measurement', 'Computing'] },
-    { id: 4, name: 'Marketing', memberCount: 4, maxBorrowings: 2, allowedCategories: ['Photography', 'Computing'] },
-    { id: 5, name: 'Quality', memberCount: 3, maxBorrowings: 3, allowedCategories: ['Measurement', 'Electronics'] },
-];
+type DepartmentsResponse = { data: DepartmentApiItem[] };
 
 const MOCK_ROLES: Role[] = [
     { id: 1, name: 'Admin', permissions: ['manage_tools', 'manage_users', 'approve_requests', 'view_reports', 'manage_settings'], userCount: 2 },
@@ -44,8 +40,33 @@ type Tab = 'departments' | 'roles';
 
 export function UserGroupsPanel() {
     const [activeTab, setActiveTab] = useState<Tab>('departments');
-    const [departments] = useState(MOCK_DEPARTMENTS);
+    const [departments, setDepartments] = useState<Department[]>([]);
     const [roles] = useState(MOCK_ROLES);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        apiRequest<DepartmentsResponse>('/api/departments')
+            .then((res) => {
+                if (cancelled) return;
+                setDepartments(
+                    (res.data ?? []).map((d) => ({
+                        id: d.id,
+                        name: d.name,
+                        memberCount: 0,
+                        maxBorrowings: 0,
+                        allowedCategories: [],
+                    })),
+                );
+            })
+            .catch(() => {
+                if (!cancelled) setDepartments([]);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     return (
         <div className="space-y-4">

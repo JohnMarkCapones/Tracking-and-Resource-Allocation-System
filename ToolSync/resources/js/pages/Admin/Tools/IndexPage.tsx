@@ -1,23 +1,58 @@
-import { Head, usePage } from '@inertiajs/react';
-import { useState } from 'react';
+import { Head } from '@inertiajs/react';
+import { useState, useEffect } from 'react';
 import { ToolTable, type Tool } from '@/Components/Admin/ToolTable';
 import { EmptyState } from '@/Components/EmptyState';
 import { toast } from '@/Components/Toast';
 import AppLayout from '@/Layouts/AppLayout';
+import { apiRequest } from '@/lib/http';
+import type { ToolDto, ToolCategoryDto } from '@/lib/apiTypes';
+import { mapToolStatusToUi } from '@/lib/apiTypes';
 import { CreateEditModal, type ToolFormData } from './CreateEditModal';
 
-type AdminToolsPageProps = {
-    tools: Tool[];
-};
+function mapDtoToTool(dto: ToolDto): Tool {
+    return {
+        id: dto.id,
+        name: dto.name,
+        toolId: 'TL-' + dto.id,
+        category: dto.category?.name ?? 'Other',
+        status: mapToolStatusToUi(dto.status),
+        condition: 'Good',
+        lastMaintenance: 'N/A',
+        totalBorrowings: 0,
+        description: dto.description ?? undefined,
+        specifications: {},
+    };
+}
+
+const statusToApi = (s: string): 'AVAILABLE' | 'BORROWED' | 'MAINTENANCE' =>
+    s === 'Borrowed' ? 'BORROWED' : s === 'Maintenance' ? 'MAINTENANCE' : 'AVAILABLE';
 
 export default function IndexPage() {
-    const { tools: initialTools } = usePage<AdminToolsPageProps>().props;
-
-    const [tools, setTools] = useState<Tool[]>(initialTools);
+    const [tools, setTools] = useState<Tool[]>([]);
+    const [categories, setCategories] = useState<ToolCategoryDto[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingTool, setEditingTool] = useState<Tool | null>(null);
     const [deleteConfirm, setDeleteConfirm] = useState<Tool | null>(null);
+    const [saving, setSaving] = useState(false);
+
+    const loadTools = () => {
+        setLoading(true);
+        setError(null);
+        apiRequest<{ data: ToolDto[] }>('/api/tools')
+            .then((res) => setTools((res.data ?? []).map(mapDtoToTool)))
+            .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load tools'))
+            .finally(() => setLoading(false));
+    };
+
+    useEffect(() => {
+        apiRequest<{ data: ToolCategoryDto[] }>('/api/tool-categories').then((res) =>
+            setCategories(res.data ?? []),
+        );
+        loadTools();
+    }, []);
 
     const handleEdit = (tool: Tool) => {
         setEditingTool(tool);
@@ -28,48 +63,98 @@ export default function IndexPage() {
         setDeleteConfirm(tool);
     };
 
-    const confirmDelete = () => {
-        if (deleteConfirm) {
+    const confirmDelete = async () => {
+        if (!deleteConfirm) return;
+        setSaving(true);
+        try {
+            await apiRequest(`/api/tools/${deleteConfirm.id}`, { method: 'DELETE' });
             setTools((prev) => prev.filter((t) => t.id !== deleteConfirm.id));
             setSelectedIds((prev) => prev.filter((id) => id !== deleteConfirm.id));
             toast.success(`${deleteConfirm.name} has been deleted`);
             setDeleteConfirm(null);
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to delete tool');
+        } finally {
+            setSaving(false);
         }
     };
 
-    const handleSave = (data: ToolFormData) => {
-        if (editingTool) {
-            setTools((prev) => prev.map((tool) => (tool.id === editingTool.id ? { ...tool, ...data } : tool)));
-            toast.success(`${data.name} has been updated`);
-        } else {
-            const newTool: Tool = {
-                id: Math.max(...tools.map((t) => t.id), 0) + 1,
-                ...data,
-                lastMaintenance: 'N/A',
-                totalBorrowings: 0,
-            };
-            setTools((prev) => [...prev, newTool]);
-            toast.success(`${data.name} has been added`);
+    const handleSave = async (data: ToolFormData) => {
+        const categoryId = categories.find((c) => c.name === data.category)?.id;
+        if (categoryId === undefined) {
+            toast.error('Please select a valid category');
+            return;
         }
-
-        setIsModalOpen(false);
-        setEditingTool(null);
+        const payload = {
+            name: data.name,
+            description: data.description || null,
+            category_id: categoryId,
+            status: statusToApi(data.status),
+            quantity: 1,
+        };
+        setSaving(true);
+        try {
+            if (editingTool) {
+                const res = await apiRequest<{ data: ToolDto }>(`/api/tools/${editingTool.id}`, {
+                    method: 'PUT',
+                    body: payload,
+                });
+                setTools((prev) =>
+                    prev.map((t) => (t.id === editingTool.id ? mapDtoToTool(res.data) : t)),
+                );
+                toast.success(`${data.name} has been updated`);
+            } else {
+                const res = await apiRequest<{ data: ToolDto }>('/api/tools', {
+                    method: 'POST',
+                    body: payload,
+                });
+                setTools((prev) => [...prev, mapDtoToTool(res.data)]);
+                toast.success(`${data.name} has been added`);
+            }
+            setIsModalOpen(false);
+            setEditingTool(null);
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to save tool');
+        } finally {
+            setSaving(false);
+        }
     };
 
-    const handleBulkDelete = () => {
+    const handleBulkDelete = async () => {
         if (selectedIds.length === 0) return;
-
-        setTools((prev) => prev.filter((tool) => !selectedIds.includes(tool.id)));
-        toast.success(`${selectedIds.length} tools have been deleted`);
-        setSelectedIds([]);
+        setSaving(true);
+        try {
+            for (const id of selectedIds) {
+                await apiRequest(`/api/tools/${id}`, { method: 'DELETE' });
+            }
+            setTools((prev) => prev.filter((t) => !selectedIds.includes(t.id)));
+            toast.success(`${selectedIds.length} tools have been deleted`);
+            setSelectedIds([]);
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to delete tools');
+        } finally {
+            setSaving(false);
+        }
     };
 
-    const handleBulkMaintenance = () => {
+    const handleBulkMaintenance = async () => {
         if (selectedIds.length === 0) return;
-
-        setTools((prev) => prev.map((tool) => (selectedIds.includes(tool.id) ? { ...tool, status: 'Maintenance' as const } : tool)));
-        toast.success(`${selectedIds.length} tools marked for maintenance`);
-        setSelectedIds([]);
+        setSaving(true);
+        try {
+            for (const id of selectedIds) {
+                await apiRequest(`/api/tools/${id}`, {
+                    method: 'PUT',
+                    body: { status: 'MAINTENANCE' },
+                });
+            }
+            loadTools();
+            toast.success(`${selectedIds.length} tools marked for maintenance`);
+            setSelectedIds([]);
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to update tools');
+        } finally {
+            setSaving(false);
+        }
     };
 
     return (
@@ -86,6 +171,18 @@ export default function IndexPage() {
             <Head title="Tool Management" />
 
             <div className="space-y-6">
+                {error && (
+                    <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+                        {error}
+                    </div>
+                )}
+                {loading && (
+                    <div className="rounded-xl bg-gray-50 px-4 py-8 text-center text-sm text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                        Loading tools…
+                    </div>
+                )}
+                {!loading && (
+                <>
                 <section className="flex flex-col gap-3 rounded-3xl bg-white/70 p-4 shadow-sm backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <p className="text-xs font-medium text-gray-500">Tools inventory</p>
@@ -182,11 +279,14 @@ export default function IndexPage() {
                         onSelectionChange={setSelectedIds}
                     />
                 )}
+                </>
+                )}
             </div>
 
             <CreateEditModal
                 show={isModalOpen}
                 tool={editingTool}
+                categories={categories.map((c) => c.name)}
                 onClose={() => {
                     setIsModalOpen(false);
                     setEditingTool(null);

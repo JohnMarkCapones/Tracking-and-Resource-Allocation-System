@@ -98,7 +98,7 @@ export default function Register() {
 
                 <div className="mt-4 flex items-center justify-end">
                     <Link
-                        href="/login"
+                        href="/profile/login"
                         className="rounded-md text-sm text-gray-600 underline hover:text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none"
                     >
                         Already registered?

@@ -1,23 +1,98 @@
 import { Head } from '@inertiajs/react';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ToolUtilizationChart, TrendAnalysisChart, CategoryDistributionChart, UserActivityMetrics } from '@/Components/Admin/AnalyticsCharts';
 import { UsageHeatmap } from '@/Components/Admin/UsageHeatmap';
 import { Breadcrumb } from '@/Components/Breadcrumb';
 import AppLayout from '@/Layouts/AppLayout';
+import { apiRequest } from '@/lib/http';
+import type { AnalyticsOverviewApiResponse, UsageHeatmapApiResponse } from '@/lib/apiTypes';
 
 type Period = '7d' | '30d' | '90d' | '1y';
 
-const METRIC_CARDS = [
-    { label: 'Total Borrowings', value: '482', change: '+12%', positive: true },
-    { label: 'Active Tools', value: '64', change: '+3', positive: true },
-    { label: 'Overdue Items', value: '5', change: '-2', positive: true },
-    { label: 'Avg. Return Time', value: '4.2d', change: '+0.3d', positive: false },
-    { label: 'Utilization Rate', value: '78%', change: '+5%', positive: true },
-    { label: 'New Users', value: '12', change: '+8', positive: true },
-];
+type MetricCard = { label: string; value: string; change: string; positive: boolean };
+
+function getPeriodRange(period: Period): { from: string; to: string } {
+    const to = new Date();
+    const from = new Date();
+    if (period === '7d') from.setDate(to.getDate() - 7);
+    else if (period === '30d') from.setDate(to.getDate() - 30);
+    else if (period === '90d') from.setDate(to.getDate() - 90);
+    else from.setFullYear(to.getFullYear() - 1);
+    return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+}
+
+/** Convert API heatmap cells (date + count per day) to day/hour grid. API has no hour, so we put daily count in hour 12 for that day of week and aggregate. */
+function heatmapApiToCells(cells: Array<{ date: string; count: number }>): Array<{ day: number; hour: number; value: number }> {
+    const map = new Map<string, number>();
+    for (const c of cells) {
+        const day = new Date(c.date).getDay();
+        const key = `${day}-12`;
+        map.set(key, (map.get(key) ?? 0) + c.count);
+    }
+    return Array.from(map.entries()).map(([key, value]) => {
+        const [day, hour] = key.split('-').map(Number);
+        return { day, hour, value };
+    });
+}
 
 export default function IndexPage() {
     const [period, setPeriod] = useState<Period>('30d');
+    const [overview, setOverview] = useState<AnalyticsOverviewApiResponse['data'] | null>(null);
+    const [heatmapCells, setHeatmapCells] = useState<Array<{ day: number; hour: number; value: number }> | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    const { from, to } = useMemo(() => getPeriodRange(period), [period]);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        async function load() {
+            setLoading(true);
+            setError(null);
+            try {
+                const [overviewRes, heatmapRes] = await Promise.all([
+                    apiRequest<AnalyticsOverviewApiResponse>(`/api/analytics/overview?from=${from}&to=${to}`),
+                    apiRequest<UsageHeatmapApiResponse>(`/api/analytics/usage-heatmap?from=${from}&to=${to}`),
+                ]);
+                if (cancelled) return;
+                setOverview(overviewRes.data);
+                setHeatmapCells(heatmapApiToCells(heatmapRes.data?.cells ?? []));
+            } catch (err) {
+                if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load analytics');
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        }
+
+        load();
+        return () => {
+            cancelled = true;
+        };
+    }, [from, to]);
+
+    const metricCards: MetricCard[] = useMemo(() => {
+        const b = overview?.status_breakdown;
+        if (!b) {
+            return [
+                { label: 'Total Borrowings', value: '—', change: '—', positive: true },
+                { label: 'Active Tools', value: '—', change: '—', positive: true },
+                { label: 'Overdue Items', value: '—', change: '—', positive: true },
+                { label: 'Avg. Return Time', value: '—', change: '—', positive: true },
+                { label: 'Utilization Rate', value: '—', change: '—', positive: true },
+                { label: 'New Users', value: '—', change: '—', positive: true },
+            ];
+        }
+        const total = b.borrowed + b.returned;
+        return [
+            { label: 'Total Borrowings', value: String(total), change: 'vs period', positive: true },
+            { label: 'Active Tools', value: String(b.borrowed), change: 'currently out', positive: true },
+            { label: 'Overdue Items', value: String(b.overdue), change: 'need attention', positive: b.overdue === 0 },
+            { label: 'Avg. Return Time', value: '—', change: '—', positive: true },
+            { label: 'Utilization Rate', value: total > 0 ? `${Math.round((b.borrowed / total) * 100)}%` : '0%', change: '—', positive: true },
+            { label: 'New Users', value: '—', change: '—', positive: true },
+        ];
+    }, [overview]);
 
     return (
         <AppLayout
@@ -35,6 +110,17 @@ export default function IndexPage() {
         >
             <Head title="Analytics" />
 
+            {loading && (
+                <div className="rounded-3xl bg-white px-5 py-12 text-center text-gray-500 shadow-sm dark:bg-gray-800 dark:text-gray-400">
+                    Loading analytics…
+                </div>
+            )}
+            {error && (
+                <div className="rounded-3xl bg-red-50 px-5 py-4 text-red-700 shadow-sm dark:bg-red-900/20 dark:text-red-400">
+                    {error}
+                </div>
+            )}
+            {!loading && !error && (
             <div className="space-y-6">
                 {/* Period Selector */}
                 <div className="flex items-center justify-between">
@@ -98,7 +184,7 @@ export default function IndexPage() {
 
                 {/* Metric Cards */}
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-                    {METRIC_CARDS.map((metric) => (
+                    {metricCards.map((metric) => (
                         <div key={metric.label} className="rounded-2xl bg-white p-4 shadow-sm dark:bg-gray-800">
                             <p className="text-[10px] font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400">{metric.label}</p>
                             <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">{metric.value}</p>
@@ -121,8 +207,9 @@ export default function IndexPage() {
                 </div>
 
                 {/* Heatmap */}
-                <UsageHeatmap />
+                <UsageHeatmap data={heatmapCells ?? undefined} />
             </div>
+            )}
         </AppLayout>
     );
 }

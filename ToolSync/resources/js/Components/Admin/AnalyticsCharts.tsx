@@ -25,7 +25,7 @@ export function ToolUtilizationChart() {
                     <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 10 }} stroke="#9ca3af" />
                     <Tooltip
                         contentStyle={{ fontSize: 11, borderRadius: 8, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                        formatter={(value: number) => [`${value} days`, 'Used']}
+                        formatter={(value: number | undefined) => [`${value ?? 0} days`, 'Used']}
                     />
                     <Bar dataKey="usage" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={16} />
                 </BarChart>

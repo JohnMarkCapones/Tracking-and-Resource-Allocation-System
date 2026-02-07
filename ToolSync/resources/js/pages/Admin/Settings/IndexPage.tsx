@@ -1,11 +1,24 @@
 import { Head } from '@inertiajs/react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Breadcrumb } from '@/Components/Breadcrumb';
 import { toast } from '@/Components/Toast';
 import AppLayout from '@/Layouts/AppLayout';
 import Modal from '@/Components/Modal';
+import { apiRequest } from '@/lib/http';
+import type { SettingsApiResponse } from '@/lib/apiTypes';
 
 type DayOfWeek = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+
+const DAY_ORDER: DayOfWeek[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+const DAY_TO_API: Record<DayOfWeek, number> = {
+    monday: 1,
+    tuesday: 2,
+    wednesday: 3,
+    thursday: 4,
+    friday: 5,
+    saturday: 6,
+    sunday: 0,
+};
 
 type BusinessHours = {
     day: DayOfWeek;
@@ -13,6 +26,8 @@ type BusinessHours = {
     open: string;
     close: string;
 };
+
+type HolidayRow = { id: number; name: string; date: string };
 
 type AutoApprovalRule = {
     id: number;
@@ -24,20 +39,19 @@ type AutoApprovalRule = {
 type ConfirmAction =
     | { type: 'save-general' }
     | { type: 'save-hours' }
+    | { type: 'save-holidays' }
     | { type: 'save-automation' }
     | { type: 'remove-holiday'; id: number }
     | { type: 'toggle-auto-approval'; id: number; nextEnabled: boolean };
 
+const defaultBusinessHours: BusinessHours[] = DAY_ORDER.map((day) =>
+    day === 'saturday' || day === 'sunday'
+        ? { day, enabled: false, open: '09:00', close: '13:00' }
+        : { day, enabled: true, open: '08:00', close: '17:00' },
+);
+
 export default function IndexPage() {
-    const [businessHours, setBusinessHours] = useState<BusinessHours[]>([
-        { day: 'monday', enabled: true, open: '08:00', close: '17:00' },
-        { day: 'tuesday', enabled: true, open: '08:00', close: '17:00' },
-        { day: 'wednesday', enabled: true, open: '08:00', close: '17:00' },
-        { day: 'thursday', enabled: true, open: '08:00', close: '17:00' },
-        { day: 'friday', enabled: true, open: '08:00', close: '17:00' },
-        { day: 'saturday', enabled: false, open: '09:00', close: '13:00' },
-        { day: 'sunday', enabled: false, open: '09:00', close: '13:00' },
-    ]);
+    const [businessHours, setBusinessHours] = useState<BusinessHours[]>(defaultBusinessHours);
 
     const [maxBorrowings, setMaxBorrowings] = useState(3);
     const [maxDuration, setMaxDuration] = useState(14);
@@ -45,19 +59,64 @@ export default function IndexPage() {
     const [reminderDays, setReminderDays] = useState(2);
     const [overdueEscalationDays, setOverdueEscalationDays] = useState(3);
 
-    const [holidays, setHolidays] = useState([
-        { id: 1, name: 'New Year', date: '2026-01-01' },
-        { id: 2, name: 'Independence Day', date: '2026-06-12' },
-        { id: 3, name: 'Christmas', date: '2026-12-25' },
-    ]);
+    const [holidays, setHolidays] = useState<HolidayRow[]>([]);
     const [newHolidayName, setNewHolidayName] = useState('');
     const [newHolidayDate, setNewHolidayDate] = useState('');
 
-    const [autoApprovalRules, setAutoApprovalRules] = useState<AutoApprovalRule[]>([
-        { id: 1, name: 'Admin auto-approve', condition: 'User role is Admin', enabled: true },
-        { id: 2, name: 'Short-term borrow', condition: 'Duration <= 3 days', enabled: true },
-        { id: 3, name: 'Low-value tools', condition: 'Tool category is Consumables', enabled: false },
-    ]);
+    const [autoApprovalRules, setAutoApprovalRules] = useState<AutoApprovalRule[]>([]);
+
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        async function load() {
+            setLoading(true);
+            setError(null);
+            try {
+                const res = await apiRequest<SettingsApiResponse>('/api/settings');
+                if (cancelled) return;
+                const d = res.data;
+                const g = d.general ?? {};
+                setMaxBorrowings(parseInt(g.max_borrowings ?? '3', 10));
+                setMaxDuration(parseInt(g.max_duration ?? '14', 10));
+                setDefaultDuration(parseInt(g.default_duration ?? '7', 10));
+                setReminderDays(parseInt(g.reminder_days ?? '2', 10));
+                setOverdueEscalationDays(parseInt(g.overdue_escalation_days ?? '3', 10));
+
+                const hours = (d.business_hours ?? []).slice().sort((a, b) => a.day_of_week - b.day_of_week);
+                const uiOrder = [1, 2, 3, 4, 5, 6, 0].map((dow) => hours.find((h) => h.day_of_week === dow));
+                setBusinessHours(
+                    DAY_ORDER.map((day, i) => {
+                        const h = uiOrder[i];
+                        return h
+                            ? { day, enabled: h.enabled, open: h.open ?? '09:00', close: h.close ?? '17:00' }
+                            : { day, enabled: day !== 'saturday' && day !== 'sunday', open: '08:00', close: '17:00' };
+                    }),
+                );
+
+                setHolidays((d.holidays ?? []).map((h) => ({ id: h.id, name: h.name, date: h.date })));
+                setAutoApprovalRules(
+                    (d.auto_approval_rules ?? []).map((r) => ({
+                        id: r.id,
+                        name: r.name,
+                        condition: r.condition,
+                        enabled: r.enabled,
+                    })),
+                );
+            } catch (err) {
+                if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load settings');
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        }
+
+        load();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const [activeTab, setActiveTab] = useState<'general' | 'hours' | 'holidays' | 'automation'>('general');
     const [pendingConfirm, setPendingConfirm] = useState<ConfirmAction | null>(null);
@@ -72,7 +131,7 @@ export default function IndexPage() {
 
     const addHoliday = () => {
         if (!newHolidayName || !newHolidayDate) return;
-        setHolidays((prev) => [...prev, { id: Date.now(), name: newHolidayName, date: newHolidayDate }]);
+        setHolidays((prev) => [...prev, { id: 0, name: newHolidayName, date: newHolidayDate }]);
         setNewHolidayName('');
         setNewHolidayDate('');
     };
@@ -91,42 +150,100 @@ export default function IndexPage() {
         });
     };
 
-    const performConfirmAction = () => {
-        if (!pendingConfirm) {
-            return;
-        }
+    const performConfirmAction = async () => {
+        if (!pendingConfirm) return;
 
-        switch (pendingConfirm.type) {
-            case 'save-general':
-                toast.success('General settings saved successfully');
-                break;
-            case 'save-hours':
-                toast.success('Business hours saved successfully');
-                break;
-            case 'save-automation':
-                toast.success('Automation settings saved successfully');
-                break;
-            case 'remove-holiday':
-                setHolidays((prev) => prev.filter((h) => h.id !== pendingConfirm.id));
-                toast.success('Holiday removed from calendar.');
-                break;
-            case 'toggle-auto-approval':
-                setAutoApprovalRules((prev) =>
-                    prev.map((rule) =>
-                        rule.id === pendingConfirm.id ? { ...rule, enabled: pendingConfirm.nextEnabled } : rule,
-                    ),
-                );
-                toast.success(
-                    pendingConfirm.nextEnabled
-                        ? 'Auto-approval rule enabled.'
-                        : 'Auto-approval rule disabled.',
-                );
-                break;
-            default:
-                break;
-        }
-
+        const confirm = pendingConfirm;
         setPendingConfirm(null);
+
+        try {
+            switch (confirm.type) {
+                case 'save-general':
+                    await apiRequest('/api/settings', {
+                        method: 'PUT',
+                        body: {
+                            general: {
+                                max_borrowings: maxBorrowings,
+                                max_duration: maxDuration,
+                                default_duration: defaultDuration,
+                                reminder_days: reminderDays,
+                                overdue_escalation_days: overdueEscalationDays,
+                            },
+                        },
+                    });
+                    toast.success('General settings saved successfully');
+                    break;
+                case 'save-hours':
+                    await apiRequest('/api/settings', {
+                        method: 'PUT',
+                        body: {
+                            business_hours: businessHours.map((bh) => ({
+                                day_of_week: DAY_TO_API[bh.day],
+                                enabled: bh.enabled,
+                                open: bh.open,
+                                close: bh.close,
+                            })),
+                        },
+                    });
+                    toast.success('Business hours saved successfully');
+                    break;
+                case 'save-automation':
+                    await apiRequest('/api/settings', {
+                        method: 'PUT',
+                        body: {
+                            auto_approval_rules: autoApprovalRules.map((r) => ({ id: r.id, enabled: r.enabled })),
+                        },
+                    });
+                    toast.success('Automation settings saved successfully');
+                    break;
+                case 'save-holidays':
+                    await apiRequest('/api/settings', {
+                        method: 'PUT',
+                        body: {
+                            holidays: holidays.map((h) =>
+                                h.id > 0 ? { id: h.id, name: h.name, date: h.date } : { name: h.name, date: h.date },
+                            ),
+                        },
+                    });
+                    toast.success('Holiday calendar saved.');
+                    break;
+                case 'remove-holiday': {
+                    const nextHolidays = holidays.filter((h) => h.id !== confirm.id);
+                    await apiRequest('/api/settings', {
+                        method: 'PUT',
+                        body: {
+                            holidays: nextHolidays.map((h) =>
+                                h.id > 0 ? { id: h.id, name: h.name, date: h.date } : { name: h.name, date: h.date },
+                            ),
+                        },
+                    });
+                    setHolidays(nextHolidays);
+                    toast.success('Holiday removed from calendar.');
+                    break;
+                }
+                case 'toggle-auto-approval': {
+                    const nextRules = autoApprovalRules.map((r) =>
+                        r.id === confirm.id ? { ...r, enabled: confirm.nextEnabled } : r,
+                    );
+                    await apiRequest('/api/settings', {
+                        method: 'PUT',
+                        body: {
+                            auto_approval_rules: nextRules.map((r) => ({ id: r.id, enabled: r.enabled })),
+                        },
+                    });
+                    setAutoApprovalRules(nextRules);
+                    toast.success(
+                        confirm.nextEnabled ? 'Auto-approval rule enabled.' : 'Auto-approval rule disabled.',
+                    );
+                    break;
+                }
+                default:
+                    break;
+            }
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to save settings');
+            setPendingConfirm(confirm);
+        }
     };
 
     const requestSaveGeneral = () => {
@@ -139,6 +256,10 @@ export default function IndexPage() {
 
     const requestSaveAutomation = () => {
         setPendingConfirm({ type: 'save-automation' });
+    };
+
+    const requestSaveHolidays = () => {
+        setPendingConfirm({ type: 'save-holidays' });
     };
 
     const tabs = [
@@ -164,6 +285,17 @@ export default function IndexPage() {
         >
             <Head title="System Settings" />
 
+            {loading && (
+                <div className="rounded-3xl bg-white px-5 py-12 text-center text-gray-500 shadow-sm dark:bg-gray-800 dark:text-gray-400">
+                    Loading settings…
+                </div>
+            )}
+            {error && (
+                <div className="rounded-3xl bg-red-50 px-5 py-4 text-red-700 shadow-sm dark:bg-red-900/20 dark:text-red-400">
+                    {error}
+                </div>
+            )}
+            {!loading && !error && (
             <div className="space-y-6">
                 {/* Tabs */}
                 <div className="inline-flex items-center gap-1 rounded-full bg-white px-1 py-1 text-[11px] shadow-sm dark:bg-gray-800">
@@ -344,7 +476,7 @@ export default function IndexPage() {
 
                         <div className="space-y-2">
                             {holidays.map((holiday) => (
-                                <div key={holiday.id} className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3 dark:bg-gray-700">
+                                <div key={holiday.id || holiday.date + holiday.name} className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3 dark:bg-gray-700">
                                     <div>
                                         <p className="text-xs font-medium text-gray-900 dark:text-white">{holiday.name}</p>
                                         <p className="text-[10px] text-gray-500 dark:text-gray-400">{holiday.date}</p>
@@ -358,6 +490,15 @@ export default function IndexPage() {
                                     </button>
                                 </div>
                             ))}
+                        </div>
+                        <div className="mt-6 flex justify-end border-t pt-4 dark:border-gray-700">
+                            <button
+                                type="button"
+                                onClick={requestSaveHolidays}
+                                className="rounded-full bg-blue-600 px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700"
+                            >
+                                Save holidays
+                            </button>
                         </div>
                     </div>
                 )}
@@ -426,6 +567,7 @@ export default function IndexPage() {
                     </div>
                 )}
             </div>
+            )}
             {pendingConfirm && (
                 <Modal show={true} maxWidth="sm" onClose={() => setPendingConfirm(null)}>
                     <div className="overflow-hidden rounded-lg">
@@ -433,6 +575,7 @@ export default function IndexPage() {
                             <h2 className="text-sm font-semibold">
                                 {pendingConfirm.type === 'save-general' && 'Save general settings?'}
                                 {pendingConfirm.type === 'save-hours' && 'Save business hours?'}
+                                {pendingConfirm.type === 'save-holidays' && 'Save holiday calendar?'}
                                 {pendingConfirm.type === 'save-automation' && 'Save automation settings?'}
                                 {pendingConfirm.type === 'remove-holiday' && 'Remove holiday?'}
                                 {pendingConfirm.type === 'toggle-auto-approval' && 'Update auto-approval rule?'}
@@ -449,6 +592,12 @@ export default function IndexPage() {
                                 <p>
                                     Save the updated **operating hours**? Pickups and returns outside these hours will
                                     be blocked or rescheduled.
+                                </p>
+                            )}
+                            {pendingConfirm.type === 'save-holidays' && (
+                                <p>
+                                    Save the **holiday calendar**? New holidays will be stored and removed ones will be
+                                    deleted.
                                 </p>
                             )}
                             {pendingConfirm.type === 'save-automation' && (

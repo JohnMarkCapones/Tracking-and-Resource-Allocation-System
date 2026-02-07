@@ -1,5 +1,5 @@
-import { Head, usePage, Link } from '@inertiajs/react';
-import { useState, useMemo } from 'react';
+import { Head, usePage, Link, router } from '@inertiajs/react';
+import { useState, useMemo, useEffect } from 'react';
 import { BorrowingCard, type Borrowing } from '@/Components/Borrowings/BorrowingCard';
 import { ReturnModal } from '@/Components/Borrowings/ReturnModal';
 import { EmptyState } from '@/Components/EmptyState';
@@ -7,19 +7,65 @@ import { toast } from '@/Components/Toast';
 import AppLayout from '@/Layouts/AppLayout';
 import { apiRequest } from '@/lib/http';
 import type { AllocationDto } from '@/lib/apiTypes';
+import { mapAllocationStatusToUi } from '@/lib/apiTypes';
 
-type BorrowingsPageProps = {
-    borrowings: Borrowing[];
-};
-
+type SharedProps = { auth?: { user?: { id: number } } };
 type FilterStatus = 'all' | 'Active' | 'Overdue' | 'Returned';
 
-export default function IndexPage() {
-    const { borrowings: initialBorrowings } = usePage<BorrowingsPageProps>().props;
+function allocationToBorrowing(a: AllocationDto): Borrowing {
+    const status = mapAllocationStatusToUi(a);
+    const borrowDate = new Date(a.borrow_date).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+    });
+    const dueDate = a.expected_return_date;
+    const returnDate =
+        a.actual_return_date != null
+            ? new Date(a.actual_return_date).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+              })
+            : undefined;
 
-    const [borrowings, setBorrowings] = useState<Borrowing[]>(initialBorrowings);
+    return {
+        id: a.id,
+        tool: {
+            id: a.tool.id,
+            name: a.tool.name,
+            toolId: 'TL-' + a.tool.id,
+            category: 'Other',
+        },
+        borrowDate,
+        dueDate,
+        returnDate,
+        status,
+    };
+}
+
+export default function IndexPage() {
+    const page = usePage<SharedProps>();
+    const userId = page.props.auth?.user?.id;
+
+    const [borrowings, setBorrowings] = useState<Borrowing[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
     const [returnModalBorrowing, setReturnModalBorrowing] = useState<Borrowing | null>(null);
+
+    useEffect(() => {
+        if (userId == null) {
+            setLoading(false);
+            return;
+        }
+        setLoading(true);
+        setError(null);
+        apiRequest<{ data: AllocationDto[] }>(`/api/tool-allocations?user_id=${userId}`)
+            .then((res) => setBorrowings((res.data ?? []).map(allocationToBorrowing)))
+            .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load borrowings'))
+            .finally(() => setLoading(false));
+    }, [userId]);
 
     const filteredBorrowings = useMemo(() => {
         if (filterStatus === 'all') return borrowings;
@@ -96,6 +142,18 @@ export default function IndexPage() {
             <Head title="My Borrowings" />
 
             <div className="space-y-6">
+                {error && (
+                    <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+                        {error}
+                    </div>
+                )}
+                {loading && (
+                    <div className="rounded-xl bg-gray-50 px-4 py-8 text-center text-sm text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                        Loading borrowings…
+                    </div>
+                )}
+                {!loading && (
+                <>
                 <section className="flex flex-wrap gap-3 rounded-3xl bg-white px-5 py-3 text-[11px] text-gray-600 shadow-sm">
                     <div className="inline-flex items-center gap-2 rounded-full bg-gray-50 px-3 py-1">
                         <span className="font-semibold text-gray-900">{summary.total}</span>
@@ -165,7 +223,7 @@ export default function IndexPage() {
                             filterStatus === 'all'
                                 ? {
                                       label: 'Browse Tools',
-                                      onClick: () => {},
+                                      onClick: () => router.visit('/tools'),
                                   }
                                 : undefined
                         }
@@ -176,6 +234,8 @@ export default function IndexPage() {
                             <BorrowingCard key={borrowing.id} borrowing={borrowing} onReturn={handleReturn} />
                         ))}
                     </div>
+                )}
+                </>
                 )}
             </div>
 

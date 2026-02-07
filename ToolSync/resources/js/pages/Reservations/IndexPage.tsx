@@ -1,9 +1,11 @@
 import { Head } from '@inertiajs/react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from '@/Components/Toast';
 import { Breadcrumb } from '@/Components/Breadcrumb';
 import { EmptyState } from '@/Components/EmptyState';
 import AppLayout from '@/Layouts/AppLayout';
+import { apiRequest } from '@/lib/http';
+import type { ReservationApiItem } from '@/lib/apiTypes';
 
 type Reservation = {
     id: number;
@@ -16,22 +18,21 @@ type Reservation = {
     recurrencePattern?: string;
 };
 
-const MOCK_RESERVATIONS: Reservation[] = [
-    { id: 1, toolName: 'MacBook Pro 14"', toolId: 'LP-0001', startDate: '2026-02-10', endDate: '2026-02-14', status: 'upcoming' },
-    { id: 2, toolName: 'Dell XPS 15', toolId: 'LP-0002', startDate: '2026-02-06', endDate: '2026-02-08', status: 'active' },
-    { id: 3, toolName: 'Epson EB-X51', toolId: 'PR-0001', startDate: '2026-01-20', endDate: '2026-01-25', status: 'completed' },
-    {
-        id: 4,
-        toolName: 'Canon EOS R6',
-        toolId: 'CM-0001',
-        startDate: '2026-02-15',
-        endDate: '2026-02-20',
-        status: 'upcoming',
-        recurring: true,
-        recurrencePattern: 'Weekly',
-    },
-    { id: 5, toolName: 'HP LaserJet', toolId: 'PT-0001', startDate: '2026-01-10', endDate: '2026-01-12', status: 'cancelled' },
-];
+type ReservationsApiResponse = { data: ReservationApiItem[] };
+
+function mapApiToReservation(r: ReservationApiItem): Reservation {
+    const status = r.status.toLowerCase() as Reservation['status'];
+    return {
+        id: r.id,
+        toolName: r.toolName,
+        toolId: r.toolId,
+        startDate: r.startDate,
+        endDate: r.endDate,
+        status: status === 'upcoming' || status === 'active' || status === 'completed' || status === 'cancelled' ? status : 'upcoming',
+        recurring: r.recurring,
+        recurrencePattern: r.recurrencePattern ?? undefined,
+    };
+}
 
 const STATUS_STYLES: Record<string, string> = {
     upcoming: 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
@@ -68,9 +69,36 @@ function isInRange(date: Date, start: string, end: string): boolean {
 
 export default function IndexPage() {
     const [filter, setFilter] = useState<FilterStatus>('all');
-    const [reservations, setReservations] = useState<Reservation[]>(MOCK_RESERVATIONS);
+    const [reservations, setReservations] = useState<Reservation[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [reservationToCancel, setReservationToCancel] = useState<Reservation | null>(null);
     const [currentMonth, setCurrentMonth] = useState(new Date());
+
+    useEffect(() => {
+        let cancelled = false;
+
+        async function load() {
+            setLoading(true);
+            setError(null);
+            try {
+                const res = await apiRequest<ReservationsApiResponse>('/api/reservations');
+                if (cancelled) return;
+                setReservations((res.data ?? []).map(mapApiToReservation));
+            } catch (err) {
+                if (!cancelled) {
+                    setError(err instanceof Error ? err.message : 'Failed to load reservations');
+                }
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        }
+
+        load();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const filtered = useMemo(() => {
         if (filter === 'all') return reservations;
@@ -89,14 +117,21 @@ export default function IndexPage() {
         return reservations.filter((r) => (r.status === 'upcoming' || r.status === 'active') && isInRange(date, r.startDate, r.endDate));
     };
 
-    const handleConfirmCancel = () => {
+    const handleConfirmCancel = async () => {
         if (!reservationToCancel) return;
 
-        // In this prototype view we only update local state. When the real
-        // cancel API exists, this is the single place to call it.
-        setReservations((prev) => prev.map((r) => (r.id === reservationToCancel.id ? { ...r, status: 'cancelled' } : r)));
-
-        toast.success(`Reservation for ${reservationToCancel.toolName} has been cancelled.`);
+        try {
+            await apiRequest(`/api/reservations/${reservationToCancel.id}`, {
+                method: 'PUT',
+                body: { status: 'CANCELLED' },
+            });
+            setReservations((prev) =>
+                prev.map((r) => (r.id === reservationToCancel.id ? { ...r, status: 'cancelled' as const } : r)),
+            );
+            toast.success(`Reservation for ${reservationToCancel.toolName} has been cancelled.`);
+        } catch {
+            toast.error('Could not cancel reservation');
+        }
         setReservationToCancel(null);
     };
 
@@ -115,6 +150,17 @@ export default function IndexPage() {
         >
             <Head title="Reservations" />
 
+            {loading && (
+                <div className="rounded-3xl bg-white px-5 py-12 text-center text-gray-500 shadow-sm dark:bg-gray-800 dark:text-gray-400">
+                    Loading reservations…
+                </div>
+            )}
+            {error && (
+                <div className="rounded-3xl bg-red-50 px-5 py-4 text-red-700 shadow-sm dark:bg-red-900/20 dark:text-red-400">
+                    {error}
+                </div>
+            )}
+            {!loading && !error && (
             <div className="space-y-6">
                 {/* Calendar View */}
                 <section className="rounded-3xl bg-white p-5 shadow-sm dark:bg-gray-800">
@@ -283,6 +329,7 @@ export default function IndexPage() {
                     )}
                 </section>
             </div>
+            )}
 
             {reservationToCancel && (
                 <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30">

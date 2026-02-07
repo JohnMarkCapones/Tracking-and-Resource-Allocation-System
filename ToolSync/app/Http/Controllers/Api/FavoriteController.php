@@ -54,13 +54,13 @@ class FavoriteController extends Controller
         ], 201);
     }
 
-    public function destroy(Request $request, int $toolId): JsonResponse
+    public function destroy(Request $request, int $tool): JsonResponse
     {
         $user = $request->user();
 
         Favorite::query()
             ->where('user_id', $user?->id)
-            ->where('tool_id', $toolId)
+            ->where('tool_id', $tool)
             ->delete();
 
         return response()->json([

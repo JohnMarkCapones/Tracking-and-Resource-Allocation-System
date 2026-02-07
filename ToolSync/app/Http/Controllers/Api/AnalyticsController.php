@@ -160,4 +160,37 @@ class AnalyticsController extends Controller
             'Content-Type' => 'text/csv',
         ]);
     }
+
+    /**
+     * Usage heatmap data: borrow count per day for a range (e.g. last 12 weeks).
+     */
+    public function usageHeatmap(Request $request): JsonResponse
+    {
+        $from = $request->filled('from') ? Carbon::parse($request->input('from'))->startOfDay() : now()->subWeeks(12)->startOfDay();
+        $to = $request->filled('to') ? Carbon::parse($request->input('to'))->endOfDay() : now()->endOfDay();
+        $userId = $request->filled('user_id') ? (int) $request->input('user_id') : null;
+
+        $query = ToolAllocation::query()
+            ->whereBetween('borrow_date', [$from, $to])
+            ->selectRaw('DATE(borrow_date) as d, COUNT(*) as c')
+            ->groupBy(DB::raw('DATE(borrow_date)'))
+            ->orderBy('d');
+
+        if ($userId !== null) {
+            $query->where('user_id', $userId);
+        }
+
+        $cells = $query->get()->map(fn ($r) => [
+            'date' => $r->d,
+            'count' => (int) $r->c,
+        ]);
+
+        return response()->json([
+            'data' => [
+                'from' => $from->toDateString(),
+                'to' => $to->toDateString(),
+                'cells' => $cells,
+            ],
+        ]);
+    }
 }

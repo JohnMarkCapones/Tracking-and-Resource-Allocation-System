@@ -14,6 +14,7 @@ type FavoritesState = {
     recentlyViewed: FavoriteTool[];
     addFavorite: (tool: Omit<FavoriteTool, 'addedAt'>) => void;
     removeFavorite: (id: number) => void;
+    setFavorites: (tools: Omit<FavoriteTool, 'addedAt'>[]) => void;
     isFavorite: (id: number) => boolean;
     toggleFavorite: (tool: Omit<FavoriteTool, 'addedAt'>) => void;
     addToRecentlyViewed: (tool: Omit<FavoriteTool, 'addedAt'>) => void;
@@ -44,6 +45,13 @@ export const useFavoritesStore = create<FavoritesState>()(
                 set((state) => ({
                     favorites: state.favorites.filter((f) => f.id !== id),
                 }));
+            },
+
+            setFavorites: (tools) => {
+                const now = new Date().toISOString();
+                set({
+                    favorites: tools.map((t) => ({ ...t, addedAt: now })),
+                });
             },
 
             isFavorite: (id) => {

@@ -1,17 +1,58 @@
-import { Head, Link, usePage } from '@inertiajs/react';
-import { useState, useMemo } from 'react';
+import { Head, Link } from '@inertiajs/react';
+import { useState, useMemo, useEffect } from 'react';
 import { EmptyState } from '@/Components/EmptyState';
 import { ToolCard, type ToolCardData } from '@/Components/Tools/ToolCard';
 import { ToolFilters } from '@/Components/Tools/ToolFilters';
 import AppLayout from '@/Layouts/AppLayout';
+import { apiRequest } from '@/lib/http';
+import type { ToolDto, ToolCategoryDto } from '@/lib/apiTypes';
+import { mapToolStatusToUi } from '@/lib/apiTypes';
 
-type CatalogPageProps = {
-    tools: ToolCardData[];
-    categories: string[];
-};
+function mapToolToCardData(dto: ToolDto): ToolCardData {
+    return {
+        id: dto.id,
+        name: dto.name,
+        toolId: 'TL-' + dto.id,
+        category: dto.category?.name ?? 'Other',
+        status: mapToolStatusToUi(dto.status),
+        condition: 'Good',
+        imageUrl: dto.image_path ? (dto.image_path.startsWith('http') ? dto.image_path : `/${dto.image_path}`) : undefined,
+    };
+}
 
 export default function CatalogPage() {
-    const { tools, categories } = usePage<CatalogPageProps>().props;
+    const [tools, setTools] = useState<ToolCardData[]>([]);
+    const [categories, setCategories] = useState<string[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        async function load() {
+            setLoading(true);
+            setError(null);
+            try {
+                const [toolsRes, categoriesRes] = await Promise.all([
+                    apiRequest<{ data: ToolDto[] }>('/api/tools'),
+                    apiRequest<{ data: ToolCategoryDto[] }>('/api/tool-categories'),
+                ]);
+                if (cancelled) return;
+                setTools((toolsRes.data ?? []).map(mapToolToCardData));
+                setCategories((categoriesRes.data ?? []).map((c) => c.name));
+            } catch (err) {
+                if (cancelled) return;
+                setError(err instanceof Error ? err.message : 'Failed to load tools');
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        }
+
+        load();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const [search, setSearch] = useState('');
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -55,6 +96,16 @@ export default function CatalogPage() {
             <Head title="Tool Catalog" />
 
             <div className="space-y-6">
+                {error && (
+                    <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+                        {error}
+                    </div>
+                )}
+                {loading && (
+                    <div className="rounded-xl bg-gray-50 px-4 py-8 text-center text-sm text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                        Loading tools…
+                    </div>
+                )}
                 <section className="flex flex-col gap-4 rounded-3xl bg-white/70 p-4 shadow-sm backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center rounded-full bg-white px-4 py-2 shadow-sm">
                         <svg className="mr-2 h-4 w-4 text-gray-400" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -98,6 +149,7 @@ export default function CatalogPage() {
                     </div>
                 </section>
 
+                {!loading && (
                 <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
                     <div className="rounded-3xl bg-white p-5 shadow-sm lg:sticky lg:top-4 lg:self-start">
                         <ToolFilters
@@ -135,6 +187,7 @@ export default function CatalogPage() {
                         )}
                     </section>
                 </div>
+                )}
             </div>
         </AppLayout>
     );
