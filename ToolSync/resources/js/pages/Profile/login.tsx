@@ -8,7 +8,7 @@ import cardBackground from '../../assets/figma/signup/Rectangle 1507.png';
 import passwordIcon from '../../assets/figma/signup/Vector.png';
 
 export default function Login() {
-    const { data, setData, post, processing, errors } = useForm({
+    const { data, setData, post, processing, errors, reset } = useForm({
         email: '',
         password: '',
         remember: false,
@@ -16,7 +16,9 @@ export default function Login() {
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
-        post('/login', { onFinish: () => {} });
+        post('/login', {
+            onFinish: () => reset('password'),
+        });
     };
 
     return (
@@ -96,24 +98,26 @@ export default function Login() {
                                                 >
                                                     Email
                                                 </label>
-                                                <div className="relative mt-2">
-                                                    <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
-                                                        <img src={emailIcon} alt="" className="h-4 w-4 object-contain" draggable={false} />
-                                                    </span>
-                                                    <input
-                                                        id="email"
-                                                        name="email"
-                                                        type="email"
-                                                        autoComplete="email"
-                                                        value={data.email}
-                                                        onChange={(e) => setData('email', e.target.value)}
-                                                        className="w-full rounded-lg border border-[#060644] bg-[#F9F7F4] py-2.5 pr-3 pl-9 font-['Inter'] text-sm text-[#060644] shadow-[0px_4px_10px_rgba(0,0,0,0.08)] outline-none placeholder:text-[#9CA3AF] focus:border-[#547792] focus:ring-2 focus:ring-[#547792]/40"
-                                                        placeholder="you@company.com"
-                                                    />
+                                                <div className="mt-2">
+                                                    <div className="relative">
+                                                        <span className="pointer-events-none absolute left-3 top-1/2 flex h-4 w-4 -translate-y-1/2 items-center justify-center">
+                                                            <img src={emailIcon} alt="" className="h-4 w-4 shrink-0 object-contain" draggable={false} />
+                                                        </span>
+                                                        <input
+                                                            id="email"
+                                                            name="email"
+                                                            type="email"
+                                                            autoComplete="email"
+                                                            value={data.email}
+                                                            onChange={(e) => setData('email', e.target.value)}
+                                                            className="w-full rounded-lg border border-[#060644] bg-[#F9F7F4] py-2.5 pr-3 pl-9 font-['Inter'] text-sm text-[#060644] shadow-[0px_4px_10px_rgba(0,0,0,0.08)] outline-none placeholder:text-[#9CA3AF] focus:border-[#547792] focus:ring-2 focus:ring-[#547792]/40"
+                                                            placeholder="you@company.com"
+                                                        />
+                                                    </div>
+                                                    {errors.email && (
+                                                        <p className="mt-1 text-xs text-red-600">{errors.email}</p>
+                                                    )}
                                                 </div>
-                                                {errors.email && (
-                                                    <p className="mt-1 text-xs text-red-600">{errors.email}</p>
-                                                )}
                                             </div>
 
                                             {/* Password */}
@@ -124,24 +128,26 @@ export default function Login() {
                                                 >
                                                     Password
                                                 </label>
-                                                <div className="relative mt-2">
-                                                    <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
-                                                        <img src={passwordIcon} alt="" className="h-4 w-4 object-contain" draggable={false} />
-                                                    </span>
-                                                    <input
-                                                        id="password"
-                                                        name="password"
-                                                        type="password"
-                                                        autoComplete="current-password"
-                                                        value={data.password}
-                                                        onChange={(e) => setData('password', e.target.value)}
-                                                        className="w-full rounded-lg border border-[#060644] bg-[#F9F7F4] py-2.5 pr-3 pl-9 font-['Inter'] text-sm text-[#060644] shadow-[0px_4px_10px_rgba(0,0,0,0.08)] outline-none placeholder:text-[#9CA3AF] focus:border-[#547792] focus:ring-2 focus:ring-[#547792]/40"
-                                                        placeholder="Enter your password"
-                                                    />
+                                                <div className="mt-2">
+                                                    <div className="relative">
+                                                        <span className="pointer-events-none absolute left-3 top-1/2 flex h-4 w-4 -translate-y-1/2 items-center justify-center">
+                                                            <img src={passwordIcon} alt="" className="h-4 w-4 shrink-0 object-contain" draggable={false} />
+                                                        </span>
+                                                        <input
+                                                            id="password"
+                                                            name="password"
+                                                            type="password"
+                                                            autoComplete="current-password"
+                                                            value={data.password}
+                                                            onChange={(e) => setData('password', e.target.value)}
+                                                            className="w-full rounded-lg border border-[#060644] bg-[#F9F7F4] py-2.5 pr-3 pl-9 font-['Inter'] text-sm text-[#060644] shadow-[0px_4px_10px_rgba(0,0,0,0.08)] outline-none placeholder:text-[#9CA3AF] focus:border-[#547792] focus:ring-2 focus:ring-[#547792]/40"
+                                                            placeholder="Enter your password"
+                                                        />
+                                                    </div>
+                                                    {errors.password && (
+                                                        <p className="mt-1 text-xs text-red-600">{errors.password}</p>
+                                                    )}
                                                 </div>
-                                                {errors.password && (
-                                                    <p className="mt-1 text-xs text-red-600">{errors.password}</p>
-                                                )}
                                             </div>
 
                                             <label className="mt-2 flex cursor-pointer items-center gap-2">
@@ -157,7 +163,7 @@ export default function Login() {
                                             <button
                                                 type="submit"
                                                 disabled={processing}
-                                                className="mt-2 inline-flex h-11 w-full items-center justify-center rounded-md bg-[#547792] font-['Inter'] text-sm font-semibold tracking-[-0.02em] text-white shadow-[0px_6px_16px_rgba(0,0,0,0.25)] hover:bg-[#4a6f86] focus-visible:ring-2 focus-visible:ring-[#547792]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent focus-visible:outline-none disabled:opacity-70"
+                                                className="mt-2 inline-flex h-11 w-full items-center justify-center rounded-md bg-[#547792] font-['Inter'] text-sm font-semibold tracking-[-0.02em] text-white shadow-[0px_6px_16px_rgba(0,0,0,0.25)] hover:bg-[#4a6f86] focus-visible:ring-2 focus-visible:ring-[#547792]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent focus-visible:outline-none disabled:opacity-70 disabled:cursor-not-allowed"
                                             >
                                                 {processing ? 'Signing in…' : 'Login'}
                                             </button>

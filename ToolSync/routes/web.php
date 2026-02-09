@@ -20,20 +20,26 @@ Route::get('/profile/login', function () {
     return Inertia::render('Profile/login');
 })->name('login');
 
-Route::get('/admin/dashboard', [AdminDashboardController::class, 'index'])
-    ->name('admin.dashboard');
-
-Route::get('/admin/allocation-history', [AdminDashboardController::class, 'allocationHistory'])
-    ->name('admin.allocation-history');
-
-Route::get('/admin/tools', [AdminDashboardController::class, 'tools'])
-    ->name('admin.tools');
-
-Route::get('/admin/categories', [AdminDashboardController::class, 'categories'])
-    ->name('admin.categories');
-
-Route::get('/admin/users', [AdminDashboardController::class, 'users'])
-    ->name('admin.users');
+Route::middleware(['auth', 'admin'])->group(function () {
+    Route::get('/admin/dashboard', [AdminDashboardController::class, 'index'])
+        ->name('admin.dashboard');
+    Route::get('/admin/allocation-history', [AdminDashboardController::class, 'allocationHistory'])
+        ->name('admin.allocation-history');
+    Route::get('/admin/tools', [AdminDashboardController::class, 'tools'])
+        ->name('admin.tools');
+    Route::get('/admin/categories', [AdminDashboardController::class, 'categories'])
+        ->name('admin.categories');
+    Route::get('/admin/users', [AdminDashboardController::class, 'users'])
+        ->name('admin.users');
+    Route::get('/admin/analytics', [AdminDashboardController::class, 'analytics'])
+        ->name('admin.analytics');
+    Route::get('/admin/settings', [AdminDashboardController::class, 'settings'])
+        ->name('admin.settings');
+    Route::get('/admin/maintenance', [AdminDashboardController::class, 'maintenance'])
+        ->name('admin.maintenance');
+    Route::get('/admin/reports', [AdminDashboardController::class, 'reports'])
+        ->name('admin.reports');
+});
 
 Route::get('/tools', [ToolController::class, 'catalog'])
     ->name('tools.catalog');
@@ -58,18 +64,6 @@ Route::get('/reservations', function () {
 Route::get('/messages', function () {
     return Inertia::render('Messages/IndexPage');
 })->name('messages');
-
-Route::get('/admin/analytics', [AdminDashboardController::class, 'analytics'])
-    ->name('admin.analytics');
-
-Route::get('/admin/settings', [AdminDashboardController::class, 'settings'])
-    ->name('admin.settings');
-
-Route::get('/admin/maintenance', [AdminDashboardController::class, 'maintenance'])
-    ->name('admin.maintenance');
-
-Route::get('/admin/reports', [AdminDashboardController::class, 'reports'])
-    ->name('admin.reports');
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');

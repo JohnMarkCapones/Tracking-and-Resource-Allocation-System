@@ -5,6 +5,7 @@ import ApplicationLogo from '@/Components/ApplicationLogo';
 import { LaserFlow } from '@/Components/LaserFlow';
 import { ThemeToggle } from '@/Components/ThemeToggle';
 import { type SharedData, type User } from '@/types';
+import equipitLogo from '../assets/figma/logo.png';
 
 type AppLayoutProps = PropsWithChildren<{
     header?: ReactNode;
@@ -88,11 +89,16 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
     const desktopNavItemClasses = (isActive: boolean): string =>
         [
             sidebarLinkBaseClasses,
-            isActive ? 'bg-blue-900 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700',
+            isActive
+                ? 'bg-[#060644]/10 text-[#060644] shadow-sm dark:bg-[#060644] dark:text-white'
+                : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700',
         ].join(' ');
 
     const mobileNavItemClasses = (isActive: boolean): string =>
-        ['block rounded-md px-3 py-2 text-base font-medium', isActive ? 'bg-blue-900 text-white' : 'text-gray-700 hover:bg-gray-100'].join(' ');
+        [
+            'block rounded-md px-3 py-2 text-base font-medium',
+            isActive ? 'bg-[#060644]/10 text-[#060644] dark:bg-[#060644] dark:text-white' : 'text-gray-700 hover:bg-gray-100',
+        ].join(' ');
 
     const isAdminLayout = variant === 'admin';
 
@@ -217,9 +223,9 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                 <aside className="hidden w-64 flex-shrink-0 border-r bg-white px-4 pt-6 pb-6 shadow-sm lg:flex lg:flex-col dark:border-gray-700 dark:bg-gray-800">
                     <div className="flex items-center gap-2 px-2">
                         <Link href="/">
-                            <ApplicationLogo className="h-8 w-8" />
+                            <img src={equipitLogo} alt="ToolSync" className="h-8 w-auto" />
                         </Link>
-                        <span className="text-lg font-semibold tracking-wide text-gray-900 dark:text-white">ToolSync</span>
+                        <span className="text-lg font-semibold tracking-wide text-[#060644] dark:text-white">ToolSync</span>
                     </div>
 
                     <nav className="mt-8 space-y-1">
@@ -228,9 +234,11 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                                 <span className="flex items-center gap-3">
                                     <span
                                         className={
-                                            item.key === 'dashboard'
-                                                ? 'flex h-7 w-7 items-center justify-center rounded-lg bg-slate-900 text-[11px] text-white'
-                                                : 'flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-[11px] text-slate-700'
+                                            item.isActive
+                                                ? 'flex h-7 w-7 items-center justify-center rounded-lg bg-[#060644]/15 text-[11px] text-[#060644] dark:bg-white/20 dark:text-white'
+                                                : item.key === 'dashboard'
+                                                  ? 'flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-[11px] text-slate-700 dark:bg-[#060644] dark:text-white'
+                                                  : 'flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-[11px] text-slate-700 dark:bg-slate-600 dark:text-slate-200'
                                         }
                                     >
                                         {item.key === 'dashboard' && (
@@ -398,9 +406,9 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                             <div className="flex items-center justify-between gap-2 px-2">
                                 <div className="flex items-center gap-2">
                                     <Link href="/">
-                                        <ApplicationLogo className="h-8 w-8" />
+                                        <img src={equipitLogo} alt="ToolSync" className="h-8 w-auto" />
                                     </Link>
-                                    <span className="text-lg font-semibold tracking-wide text-gray-900 dark:text-white">ToolSync</span>
+                                    <span className="text-lg font-semibold tracking-wide text-[#060644] dark:text-white">ToolSync</span>
                                 </div>
                                 <button
                                     type="button"
@@ -429,7 +437,7 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
 
                             <div className="mt-auto space-y-4 rounded-2xl bg-neutral-50 px-4 py-4 text-sm text-gray-700">
                                 <div className="flex items-center gap-3">
-                                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">
+                                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#060644] text-xs font-semibold text-white">
                                         {displayName.charAt(0).toUpperCase()}
                                     </div>
                                     <div>
@@ -512,7 +520,7 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                                                 <p className="text-[11px] font-semibold tracking-wide text-gray-500 uppercase">Notifications</p>
                                                 <button
                                                     type="button"
-                                                    className="text-[11px] font-medium text-blue-600 hover:text-blue-700"
+                                                    className="text-[11px] font-medium text-[#060644] hover:text-[#050538]"
                                                     onClick={() => setIsNotificationsOpen(false)}
                                                 >
                                                     Mark all as read
