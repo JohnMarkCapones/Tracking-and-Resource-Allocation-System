@@ -17,6 +17,21 @@ export function RequestToolModal({ show, toolName, toolId, onClose, onSubmit }: 
     const [purpose, setPurpose] = useState('');
     const [error, setError] = useState('');
 
+    const handleDateSelect = (selectedDate: Date | undefined) => {
+        if (!selectedDate) {
+            setDateRange(undefined);
+            return;
+        }
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const endDate = new Date(selectedDate);
+        endDate.setHours(0, 0, 0, 0);
+
+        // Always create a range from today to the selected date
+        setDateRange({ from: today, to: endDate });
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
@@ -61,11 +76,24 @@ export function RequestToolModal({ show, toolName, toolId, onClose, onSubmit }: 
                                  * so arrows, spacing, and selection feel consistent across the app.
                                  */}
                                 <DayPicker
-                                    mode="range"
-                                    selected={dateRange}
-                                    onSelect={setDateRange}
+                                    mode="single"
+                                    selected={dateRange?.to}
+                                    onSelect={handleDateSelect}
                                     numberOfMonths={1}
                                     disabled={{ before: new Date() }}
+                                    modifiers={{ 
+                                        range_start: dateRange?.from ? [dateRange.from] : [],
+                                        range_end: dateRange?.to ? [dateRange.to] : [],
+                                        range_middle: dateRange?.from && dateRange?.to ? (date) => {
+                                            if (!dateRange.from || !dateRange.to) return false;
+                                            return date > dateRange.from && date < dateRange.to;
+                                        } : []
+                                    }}
+                                    modifiersClassNames={{
+                                        range_start: 'bg-blue-600 text-white hover:bg-blue-700 rounded-full',
+                                        range_end: 'bg-blue-600 text-white hover:bg-blue-700 rounded-full',
+                                        range_middle: 'bg-blue-50 text-blue-900'
+                                    }}
                                     navLayout="around"
                                     classNames={(() => {
                                         const defaultClassNames = getDefaultClassNames();

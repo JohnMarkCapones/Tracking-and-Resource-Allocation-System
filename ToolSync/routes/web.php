@@ -9,18 +9,16 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 Route::get('/', function () {
-    return Inertia::render('welcome');
+    return Inertia::render('welcome', [
+        'status' => session('status'),
+        'verification_email' => session('verification_email'),
+    ]);
 })->name('home');
 
-Route::get('/dashboard', [DashboardController::class, 'index'])
-    ->name('dashboard');
+// Backward-compatible redirect for any old links.
+Route::redirect('/profile/login', '/login', 302);
 
-// Login page: /profile/login. Named 'login' so auth redirects here when unauthenticated.
-Route::get('/profile/login', function () {
-    return Inertia::render('Profile/login');
-})->name('login');
-
-Route::middleware(['auth', 'admin'])->group(function () {
+Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::redirect('/admin', '/admin/dashboard', 302);
     Route::get('/admin/dashboard', [AdminDashboardController::class, 'index'])
         ->name('admin.dashboard');
@@ -48,25 +46,23 @@ Route::get('/tools', [ToolController::class, 'catalog'])
 Route::get('/tools/{id}', [ToolController::class, 'show'])
     ->name('tools.show');
 
-Route::get('/borrowings', [DashboardController::class, 'borrowings'])
-    ->name('borrowings');
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/dashboard', [DashboardController::class, 'index'])
+        ->name('dashboard');
+    Route::get('/borrowings', [DashboardController::class, 'borrowings'])
+        ->name('borrowings');
+    Route::get('/notifications', [DashboardController::class, 'notifications'])
+        ->name('notifications');
+    Route::get('/favorites', function () {
+        return Inertia::render('Favorites/IndexPage');
+    })->name('favorites');
+    Route::get('/reservations', function () {
+        return Inertia::render('Reservations/IndexPage');
+    })->name('reservations');
+    Route::get('/messages', function () {
+        return Inertia::render('Messages/IndexPage');
+    })->name('messages');
 
-Route::get('/notifications', [DashboardController::class, 'notifications'])
-    ->name('notifications');    
-
-Route::get('/favorites', function () {
-    return Inertia::render('Favorites/IndexPage');
-})->name('favorites');
-
-Route::get('/reservations', function () {
-    return Inertia::render('Reservations/IndexPage');
-})->name('reservations');
-
-Route::get('/messages', function () {
-    return Inertia::render('Messages/IndexPage');
-})->name('messages');
-
-Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');

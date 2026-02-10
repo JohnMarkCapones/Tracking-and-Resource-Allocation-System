@@ -96,10 +96,12 @@ class DashboardController extends Controller
             ->limit($recentLimit)
             ->get()
             ->map(function (ToolAllocation $a): array {
-                $expected = $a->expected_return_date;
+                // Read raw DB value for expected_return_date (e.g. "2026-02-11 00:00:00")
+                // and compare against end-of-day so a tool due on Feb 11 is only overdue on Feb 12.
+                $rawExpected = $a->getRawOriginal('expected_return_date');
                 $isOverdue = $a->status === 'BORROWED'
-                    && ! empty($expected)
-                    && Carbon::parse($expected)->isPast();
+                    && ! empty($rawExpected)
+                    && Carbon::parse(substr((string) $rawExpected, 0, 10))->endOfDay()->isPast();
 
                 $statusDisplay = $isOverdue ? 'OVERDUE' : $a->status;
 
@@ -109,8 +111,8 @@ class DashboardController extends Controller
                     'tool_name' => $a->tool?->name,
                     'user_id' => $a->user_id,
                     'user_name' => $a->user?->name,
-                    'borrow_date' => $a->borrow_date?->format('Y-m-d'),
-                    'expected_return_date' => $a->expected_return_date?->format('Y-m-d'),
+                    'borrow_date' => substr((string) $a->getRawOriginal('borrow_date'), 0, 10),
+                    'expected_return_date' => substr((string) $rawExpected, 0, 10),
                     'status' => $a->status,
                     'status_display' => $statusDisplay,
                     'is_overdue' => $isOverdue,

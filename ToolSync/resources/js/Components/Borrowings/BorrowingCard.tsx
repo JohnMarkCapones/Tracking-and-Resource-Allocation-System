@@ -20,7 +20,7 @@ export type Borrowing = {
 type BorrowingCardProps = {
     borrowing: Borrowing;
     onReturn: (borrowing: Borrowing) => void;
-    /** True after user got 403 (admin must confirm); shows "Return requested" and hides Return button. */
+    /** True when the user requested a return and it's awaiting admin verification. */
     returnRequested?: boolean;
 };
 
@@ -77,7 +77,7 @@ export function BorrowingCard({ borrowing, onReturn, returnRequested = false }: 
 
                 {returnRequested ? (
                     <span className="rounded-full bg-amber-50 px-3 py-1.5 text-[11px] font-semibold text-amber-700">
-                        Return requested
+                        Pending
                     </span>
                 ) : (isActive || isOverdue) ? (
                     <button

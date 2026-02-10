@@ -87,56 +87,12 @@ export default function IndexPage() {
         setReturnModalBorrowing(borrowing);
     };
 
-    const handleReturnSubmit = async () => {
+    const handleReturnSubmit = () => {
         if (!returnModalBorrowing) return;
 
-        try {
-            const response = await apiRequest<{ message: string; data: AllocationDto }>(
-                `/api/tool-allocations/${returnModalBorrowing.id}`,
-                {
-                    method: 'PUT',
-                    body: {
-                        status: 'RETURNED',
-                    },
-                },
-            );
-
-            const updated = response.data;
-
-            const formattedReturnDate =
-                updated.actual_return_date !== null
-                    ? new Date(updated.actual_return_date).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                      })
-                    : undefined;
-
-            setBorrowings((prev) =>
-                prev.map((borrowing) =>
-                    borrowing.id === returnModalBorrowing.id
-                        ? {
-                              ...borrowing,
-                              status: 'Returned' as const,
-                              returnDate: formattedReturnDate,
-                          }
-                        : borrowing,
-                ),
-            );
-
-            toast.success(`${returnModalBorrowing.tool.name} has been returned successfully!`);
-        } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to mark tool as returned.';
-            const isAdminRequired = typeof error === 'object' && error !== null && 'status' in error && (error as { status?: number }).status === 403;
-            if (isAdminRequired) {
-                setReturnRequestedIds((prev) => new Set(prev).add(returnModalBorrowing.id));
-                toast(message, { icon: 'ℹ️', duration: 6000 });
-            } else {
-                toast.error(message);
-            }
-        } finally {
-            setReturnModalBorrowing(null);
-        }
+        setReturnRequestedIds((prev) => new Set(prev).add(returnModalBorrowing.id));
+        toast(`${returnModalBorrowing.tool.name} return is pending admin verification.`, { icon: 'ℹ️', duration: 6000 });
+        setReturnModalBorrowing(null);
     };
 
     return (

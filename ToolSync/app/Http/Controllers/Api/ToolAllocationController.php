@@ -10,6 +10,7 @@ use App\Models\Tool;
 use App\Models\ToolAllocation;
 use App\Models\ToolStatusLog;
 use App\Models\User;
+use App\Notifications\InAppSystemNotification;
 use App\Services\ActivityLogger;
 use App\Services\AutoApprovalEvaluator;
 use App\Services\DateValidationService;
@@ -17,6 +18,7 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 
 /**
  * @group Tool Allocations
@@ -61,13 +63,16 @@ class ToolAllocationController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        $actor = $request->user();
         $query = ToolAllocation::with(['tool', 'user']);
 
         if ($request->has('tool_id')) {
             $query->where('tool_id', $request->input('tool_id'));
         }
 
-        if ($request->has('user_id')) {
+        if ($actor && ! $actor->isAdmin()) {
+            $query->where('user_id', $actor->id);
+        } elseif ($request->has('user_id')) {
             $query->where('user_id', $request->input('user_id'));
         }
 
@@ -123,6 +128,14 @@ class ToolAllocationController extends Controller
     public function store(StoreToolAllocationRequest $request): JsonResponse
     {
         $validated = $request->validated();
+        $actor = $request->user();
+
+        if ($actor && ! $actor->isAdmin()) {
+            $validated['user_id'] = $actor->id;
+        }
+
+        // DEBUG: log what arrives from the frontend
+        \Log::info('BORROW DEBUG - validated input', $validated);
 
         $borrowDate = Carbon::parse($validated['borrow_date']);
         $expectedReturn = Carbon::parse($validated['expected_return_date']);
@@ -163,13 +176,10 @@ class ToolAllocationController extends Controller
             }
         }
 
-        // Store dates as midnight UTC so the calendar date (e.g. Feb 10–11) is preserved regardless of app timezone.
-        $borrowDateUtc = Carbon::createFromFormat('Y-m-d', $validated['borrow_date'], 'UTC')->startOfDay();
-        $expectedReturnUtc = Carbon::createFromFormat('Y-m-d', $validated['expected_return_date'], 'UTC')->startOfDay();
-        $createPayload = array_merge($validated, [
-            'borrow_date' => $borrowDateUtc,
-            'expected_return_date' => $expectedReturnUtc,
-        ]);
+        // Pass the validated Y-m-d strings directly. MySQL will store them as
+        // "2026-02-10 00:00:00" with no timezone conversion, so the calendar date
+        // is always preserved exactly as the user selected it.
+        $createPayload = $validated;
 
         $allocation = DB::transaction(function () use ($createPayload, $validated, $request): ToolAllocation {
             /** @var Tool $tool */
@@ -185,6 +195,13 @@ class ToolAllocationController extends Controller
 
             $allocation = ToolAllocation::create($createPayload);
             $allocation->refresh();
+
+            // DEBUG: log what actually got stored
+            $rawRow = \DB::table('tool_allocations')->where('id', $allocation->id)->first();
+            \Log::info('BORROW DEBUG - raw DB row', [
+                'borrow_date' => $rawRow->borrow_date,
+                'expected_return_date' => $rawRow->expected_return_date,
+            ]);
 
             $tool->quantity = max(0, (int) $tool->quantity - 1);
             if ($tool->quantity === 0 && $tool->status === 'AVAILABLE') {
@@ -215,6 +232,24 @@ class ToolAllocationController extends Controller
         );
 
         $allocation->load(['tool', 'user']);
+        $toolName = $allocation->tool?->name ?? "Tool #{$allocation->tool_id}";
+
+        $allocation->user?->notify(new InAppSystemNotification(
+            'success',
+            'Borrowing confirmed',
+            "Your borrowing for {$toolName} has been created.",
+            '/borrowings'
+        ));
+
+        $adminRecipients = User::query()->where('role', 'ADMIN')->get();
+        if ($adminRecipients->isNotEmpty()) {
+            Notification::send($adminRecipients, new InAppSystemNotification(
+                'info',
+                'New borrowing activity',
+                "{$allocation->user?->name} borrowed {$toolName}.",
+                '/admin/allocation-history'
+            ));
+        }
 
         return response()->json([
             'message' => 'Tool allocation created successfully.',
@@ -252,8 +287,15 @@ class ToolAllocationController extends Controller
      *   }
      * }
      */
-    public function show(ToolAllocation $toolAllocation): JsonResponse
+    public function show(Request $request, ToolAllocation $toolAllocation): JsonResponse
     {
+        $actor = $request->user();
+        if ($actor && ! $actor->isAdmin() && $toolAllocation->user_id !== $actor->id) {
+            return response()->json([
+                'message' => 'Tool allocation not found.',
+            ], 404);
+        }
+
         $toolAllocation->load(['tool', 'user']);
 
         return response()->json([
@@ -306,13 +348,40 @@ class ToolAllocationController extends Controller
     public function update(UpdateToolAllocationRequest $request, ToolAllocation $toolAllocation): JsonResponse
     {
         $actor = $request->user();
-        if (! $actor || ! $actor->isAdmin()) {
+        if (! $actor) {
             return response()->json([
-                'message' => "We've received your return request. An admin will confirm the tool's condition and complete the process.",
-            ], 403);
+                'message' => 'Unauthorized.',
+            ], 401);
+        }
+
+        if (! $actor->isAdmin()) {
+            if ($toolAllocation->user_id !== $actor->id) {
+                return response()->json([
+                    'message' => 'You can only update your own borrowings.',
+                ], 403);
+            }
+
+            if (($request->input('status') ?? null) !== 'RETURNED') {
+                return response()->json([
+                    'message' => 'Users can only mark borrowings as returned.',
+                ], 403);
+            }
         }
 
         $validated = $request->validated();
+        if (! $actor->isAdmin()) {
+            $validated = [
+                'status' => 'RETURNED',
+                'actual_return_date' => now(),
+            ];
+        }
+
+        if ($toolAllocation->status === 'RETURNED') {
+            return response()->json([
+                'message' => 'This tool has already been marked as returned.',
+                'data' => $toolAllocation->load(['tool', 'user']),
+            ]);
+        }
 
         $oldAllocationStatus = $toolAllocation->status;
 
@@ -361,6 +430,27 @@ class ToolAllocationController extends Controller
 
         $toolAllocation->load(['tool', 'user']);
 
+        if ($oldAllocationStatus === 'BORROWED' && $toolAllocation->status === 'RETURNED') {
+            $toolName = $toolAllocation->tool?->name ?? "Tool #{$toolAllocation->tool_id}";
+
+            $toolAllocation->user?->notify(new InAppSystemNotification(
+                'success',
+                'Return completed',
+                "Your return for {$toolName} was recorded successfully.",
+                '/borrowings'
+            ));
+
+            $adminRecipients = User::query()->where('role', 'ADMIN')->get();
+            if ($adminRecipients->isNotEmpty()) {
+                Notification::send($adminRecipients, new InAppSystemNotification(
+                    'info',
+                    'Tool returned',
+                    "{$toolAllocation->user?->name} returned {$toolName}.",
+                    '/admin/allocation-history'
+                ));
+            }
+        }
+
         return response()->json([
             'message' => 'Tool allocation updated successfully.',
             'data' => $toolAllocation,
@@ -380,6 +470,13 @@ class ToolAllocationController extends Controller
      */
     public function destroy(ToolAllocation $toolAllocation): JsonResponse
     {
+        $user = request()->user();
+        if (! $user || ! $user->isAdmin()) {
+            return response()->json([
+                'message' => 'Only admins can delete tool allocations.',
+            ], 403);
+        }
+
         $toolAllocation->delete();
 
         return response()->json([

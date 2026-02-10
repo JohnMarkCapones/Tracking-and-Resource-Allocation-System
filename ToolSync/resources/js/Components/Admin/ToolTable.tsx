@@ -8,6 +8,7 @@ export type Tool = {
     toolId: string;
     category: string;
     status: ToolStatus;
+    quantity: number;
     condition: string;
     lastMaintenance: string;
     totalBorrowings: number;

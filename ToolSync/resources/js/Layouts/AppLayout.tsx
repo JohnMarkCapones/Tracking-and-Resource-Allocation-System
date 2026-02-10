@@ -1,9 +1,11 @@
 import { Link, router, usePage } from '@inertiajs/react';
 import type { PropsWithChildren, ReactNode } from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import ApplicationLogo from '@/Components/ApplicationLogo';
 import { LaserFlow } from '@/Components/LaserFlow';
 import { ThemeToggle } from '@/Components/ThemeToggle';
+import { toast } from '@/Components/Toast';
+import { apiRequest } from '@/lib/http';
 import { type SharedData, type User } from '@/types';
 import equipitLogo from '../assets/figma/logo.png';
 
@@ -29,43 +31,40 @@ type AppLayoutProps = PropsWithChildren<{
     variant?: 'user' | 'admin';
 }>;
 
-type NotificationKind = 'alert' | 'info' | 'maintenance';
+type NotificationKind = 'alert' | 'info' | 'success' | 'maintenance';
 
 type NotificationItem = {
-    id: number;
+    id: string;
     title: string;
     description: string;
     time: string;
     kind: NotificationKind;
+    read: boolean;
+    href: string | null;
 };
 
-const NOTIFICATIONS: NotificationItem[] = [
-    {
-        id: 1,
-        title: '2 tools overdue',
-        description: 'Review and remind owners of overdue borrowings.',
-        time: '5 min ago',
-        kind: 'alert',
-    },
-    {
-        id: 2,
-        title: 'Upcoming maintenance',
-        description: '4 tools require checks within the next 14 days.',
-        time: '1 hr ago',
-        kind: 'maintenance',
-    },
-    {
-        id: 3,
-        title: 'New borrowing request',
-        description: 'Jane Doe requested Laptop · LP-0009.',
-        time: 'Today',
-        kind: 'info',
-    },
-];
+type SharedNotification = {
+    id: string;
+    type: NotificationKind;
+    title: string;
+    message: string;
+    createdAt: string | null;
+    read: boolean;
+    href: string | null;
+};
+
+type LayoutSharedData = SharedData & {
+    notifications?: SharedNotification[];
+    notifications_unread_count?: number;
+};
 
 function notificationAccent(kind: NotificationKind): string {
     if (kind === 'alert') {
         return 'bg-rose-500';
+    }
+
+    if (kind === 'success') {
+        return 'bg-emerald-500';
     }
 
     if (kind === 'maintenance') {
@@ -76,13 +75,40 @@ function notificationAccent(kind: NotificationKind): string {
 }
 
 export default function AppLayout({ header, activeRoute = 'dashboard', variant = 'user', children }: AppLayoutProps) {
-    const { auth } = usePage<SharedData>().props;
+    const { auth, notifications: sharedNotifications = [], notifications_unread_count: sharedUnreadCount = 0 } = usePage<LayoutSharedData>().props;
     const user = auth.user as User | null;
     const displayName = user?.name ?? 'User';
     const displayEmail = user?.email ?? 'user@example.com';
     const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
     const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+    const [notifications, setNotifications] = useState<NotificationItem[]>(
+        sharedNotifications.map((n) => ({
+            id: n.id,
+            title: n.title,
+            description: n.message,
+            time: n.createdAt ?? 'Just now',
+            kind: n.type,
+            read: n.read,
+            href: n.href,
+        })),
+    );
+    const [unreadCount, setUnreadCount] = useState(sharedUnreadCount);
+
+    useEffect(() => {
+        setNotifications(
+            sharedNotifications.map((n) => ({
+                id: n.id,
+                title: n.title,
+                description: n.message,
+                time: n.createdAt ?? 'Just now',
+                kind: n.type,
+                read: n.read,
+                href: n.href,
+            })),
+        );
+        setUnreadCount(sharedUnreadCount);
+    }, [sharedNotifications, sharedUnreadCount]);
 
     const sidebarLinkBaseClasses = 'flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-colors';
 
@@ -101,12 +127,14 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
         ].join(' ');
 
     const isAdminLayout = variant === 'admin';
+    const logoHref = isAdminLayout ? '/admin/dashboard' : '/dashboard';
 
     type SidebarItemKey =
         | 'dashboard'
         | 'tools'
         | 'categories'
         | 'history'
+        | 'notifications'
         | 'users'
         | 'favorites'
         | 'reservations'
@@ -155,6 +183,12 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                   isActive: activeRoute === 'admin-users',
               },
               {
+                  key: 'notifications',
+                  href: '/notifications',
+                  label: 'Notifications',
+                  isActive: activeRoute === 'notifications',
+              },
+              {
                   key: 'history',
                   href: '/admin/allocation-history',
                   label: 'Allocation History',
@@ -199,6 +233,12 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                   isActive: activeRoute === 'borrowing-history' || activeRoute === 'borrowings',
               },
               {
+                  key: 'notifications',
+                  href: '/notifications',
+                  label: 'Notifications',
+                  isActive: activeRoute === 'notifications',
+              },
+              {
                   key: 'favorites',
                   href: '/favorites',
                   label: 'Favorites',
@@ -212,6 +252,42 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
               },
           ];
 
+    const handleMarkAllNotificationsAsRead = async () => {
+        if (unreadCount === 0) {
+            setIsNotificationsOpen(false);
+            return;
+        }
+
+        try {
+            await apiRequest<{ message: string }>('/api/notifications/read-all', {
+                method: 'POST',
+            });
+            setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+            setUnreadCount(0);
+            toast.success('All notifications marked as read');
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to mark notifications as read.';
+            toast.error(message);
+        }
+    };
+
+    const handleOpenNotification = async (notification: NotificationItem) => {
+        if (!notification.read) {
+            try {
+                await apiRequest<{ message: string }>(`/api/notifications/${notification.id}/read`, {
+                    method: 'POST',
+                });
+                setNotifications((prev) => prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n)));
+                setUnreadCount((prev) => Math.max(0, prev - 1));
+            } catch {
+                // If mark-read fails, still continue to destination page.
+            }
+        }
+
+        setIsNotificationsOpen(false);
+        router.visit(notification.href ?? '/notifications');
+    };
+
     return (
         <div className="relative min-h-screen bg-slate-900">
             {/* Full-screen laser/beam background; pointer-events-none so UI stays clickable */}
@@ -222,7 +298,7 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                 {/* Sidebar */}
                 <aside className="hidden w-64 flex-shrink-0 border-r bg-white px-4 pt-6 pb-6 shadow-sm lg:flex lg:flex-col dark:border-gray-700 dark:bg-gray-800">
                     <div className="flex items-center gap-2 px-2">
-                        <Link href="/">
+                        <Link href={logoHref}>
                             <img src={equipitLogo} alt="ToolSync" className="h-8 w-auto" />
                         </Link>
                         <span className="text-lg font-semibold tracking-wide text-[#060644] dark:text-white">ToolSync</span>
@@ -309,6 +385,16 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                                                     strokeLinecap="round"
                                                     strokeLinejoin="round"
                                                 />
+                                            </svg>
+                                        )}
+                                        {item.key === 'notifications' && (
+                                            <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                <path
+                                                    d="M10 3C7.8 3 6 4.8 6 7V8.1C6 8.7 5.8 9.2 5.4 9.6L4.4 10.8C3.7 11.4 4.2 12.5 5.1 12.5H14.9C15.8 12.5 16.3 11.4 15.6 10.8L14.6 9.6C14.2 9.2 14 8.7 14 8.1V7C14 4.8 12.2 3 10 3Z"
+                                                    stroke="currentColor"
+                                                    strokeWidth="1.4"
+                                                />
+                                                <path d="M8.5 14.5C8.8 15.1 9.3 15.6 10 15.6C10.7 15.6 11.2 15.1 11.5 14.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
                                             </svg>
                                         )}
                                         {item.key === 'users' && (
@@ -418,7 +504,7 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                         <aside className="relative flex w-64 flex-shrink-0 flex-col border-r bg-white px-4 pt-6 pb-6 shadow-xl">
                             <div className="flex items-center justify-between gap-2 px-2">
                                 <div className="flex items-center gap-2">
-                                    <Link href="/">
+                                    <Link href={logoHref}>
                                         <img src={equipitLogo} alt="ToolSync" className="h-8 w-auto" />
                                     </Link>
                                     <span className="text-lg font-semibold tracking-wide text-[#060644] dark:text-white">ToolSync</span>
@@ -490,18 +576,6 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                             </div>
 
                             <div className="flex items-center gap-4">
-                                <div className="hidden items-center rounded-full bg-white px-3 py-1.5 text-xs text-gray-500 shadow-sm sm:flex dark:bg-gray-800 dark:text-gray-400">
-                                    <svg className="mr-2 h-4 w-4 text-gray-400" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                        <circle cx="9" cy="9" r="4.5" stroke="currentColor" strokeWidth="1.6" />
-                                        <path d="M12.5 12.5L16 16" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-                                    </svg>
-                                    <input
-                                        type="search"
-                                        placeholder="Search tools or history"
-                                        className="w-44 border-none bg-transparent text-xs outline-none placeholder:text-gray-400 dark:placeholder:text-gray-500"
-                                    />
-                                </div>
-
                                 <ThemeToggle />
 
                                 <div className="relative">
@@ -525,7 +599,7 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                                                 strokeLinecap="round"
                                             />
                                         </svg>
-                                        <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-red-500" />
+                                        {unreadCount > 0 && <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-red-500" />}
                                     </button>
                                     {isNotificationsOpen && (
                                         <div className="absolute right-0 z-10 mt-2 w-72 rounded-2xl bg-white p-3 text-xs text-gray-800 shadow-xl dark:bg-gray-800 dark:text-gray-200">
@@ -534,29 +608,42 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                                                 <button
                                                     type="button"
                                                     className="text-[11px] font-medium text-[#060644] hover:text-[#050538]"
-                                                    onClick={() => setIsNotificationsOpen(false)}
+                                                    onClick={handleMarkAllNotificationsAsRead}
                                                 >
                                                     Mark all as read
                                                 </button>
                                             </div>
                                             <ul className="space-y-2">
-                                                {NOTIFICATIONS.map((notification) => (
-                                                    <li key={notification.id} className="flex items-start gap-2 rounded-xl bg-gray-50 px-2 py-2">
-                                                        <span className={`mt-1 h-2 w-2 rounded-full ${notificationAccent(notification.kind)}`} />
-                                                        <div className="flex-1">
-                                                            <p className="text-[11px] font-semibold text-gray-900">{notification.title}</p>
-                                                            <p className="mt-0.5 text-[11px] text-gray-600">{notification.description}</p>
-                                                            <p className="mt-0.5 text-[10px] text-gray-400">{notification.time}</p>
-                                                        </div>
+                                                {notifications.length === 0 ? (
+                                                    <li className="rounded-xl bg-gray-50 px-3 py-3 text-center text-[11px] text-gray-500">
+                                                        No notifications yet.
                                                     </li>
-                                                ))}
+                                                ) : (
+                                                    notifications.map((notification) => (
+                                                        <li key={notification.id}>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleOpenNotification(notification)}
+                                                                className={`flex w-full items-start gap-2 rounded-xl px-2 py-2 text-left hover:bg-gray-100 ${notification.read ? 'bg-gray-50' : 'bg-blue-50'}`}
+                                                            >
+                                                                <span className={`mt-1 h-2 w-2 rounded-full ${notificationAccent(notification.kind)}`} />
+                                                                <div className="flex-1">
+                                                                    <p className="text-[11px] font-semibold text-gray-900">{notification.title}</p>
+                                                                    <p className="mt-0.5 text-[11px] text-gray-600">{notification.description}</p>
+                                                                    <p className="mt-0.5 text-[10px] text-gray-400">{notification.time}</p>
+                                                                </div>
+                                                            </button>
+                                                        </li>
+                                                    ))
+                                                )}
                                             </ul>
-                                            <button
-                                                type="button"
-                                                className="mt-2 w-full rounded-full bg-gray-900 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-black"
+                                            <Link
+                                                href="/notifications"
+                                                onClick={() => setIsNotificationsOpen(false)}
+                                                className="mt-2 block w-full rounded-full bg-gray-900 px-3 py-1.5 text-center text-[11px] font-semibold text-white hover:bg-black"
                                             >
                                                 Open notifications center
-                                            </button>
+                                            </Link>
                                         </div>
                                     )}
                                 </div>

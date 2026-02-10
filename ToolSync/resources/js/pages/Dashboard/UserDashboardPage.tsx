@@ -47,6 +47,18 @@ function mapRecentToHistoryItem(
     };
 }
 
+function formatActivityDate(value?: string): string {
+    if (!value) return 'Date unavailable';
+    const normalized = value.length === 10 ? `${value}T12:00:00` : value;
+    const parsed = new Date(normalized);
+    if (Number.isNaN(parsed.getTime())) return 'Date unavailable';
+    return parsed.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+    });
+}
+
 export default function UserDashboardPage() {
     const { auth } = usePage<SharedProps>().props;
     const [userName] = useState(auth?.user?.name ?? 'User');
@@ -218,53 +230,66 @@ export default function UserDashboardPage() {
                             <section className="rounded-3xl bg-white p-6 shadow-sm">
                                 <header className="mb-4 flex items-center justify-between">
                                     <h3 className="text-sm font-semibold text-gray-900">Recent activity</h3>
-                                    <span className="text-[11px] text-gray-500">Today</span>
+                                    <span className="text-[11px] text-gray-500">Latest</span>
                                 </header>
                                 <ol className="space-y-4 text-xs text-gray-700">
-                                    <li className="flex items-start gap-3">
-                                        <span className="mt-1 h-2 w-2 rounded-full bg-emerald-500" />
-                                        <div>
-                                            <p className="font-medium">LP-0001 returned</p>
-                                            <p className="text-[11px] text-gray-500">You returned &quot;Design Laptop&quot; to the IT storage.</p>
-                                            <p className="mt-1 text-[10px] text-gray-400">10:24 AM</p>
-                                        </div>
-                                    </li>
-                                    <li className="flex items-start gap-3">
-                                        <span className="mt-1 h-2 w-2 rounded-full bg-sky-500" />
-                                        <div>
-                                            <p className="font-medium">PR-0011 borrowed</p>
-                                            <p className="text-[11px] text-gray-500">You borrowed &quot;Conference Projector&quot; for Room A.</p>
-                                            <p className="mt-1 text-[10px] text-gray-400">9:02 AM</p>
-                                        </div>
-                                    </li>
-                                    <li className="flex items-start gap-3">
-                                        <span className="mt-1 h-2 w-2 rounded-full bg-amber-500" />
-                                        <div>
-                                            <p className="font-medium">Maintenance scheduled</p>
-                                            <p className="text-[11px] text-gray-500">3 tools were scheduled for quarterly maintenance.</p>
-                                            <p className="mt-1 text-[10px] text-gray-400">8:30 AM</p>
-                                        </div>
-                                    </li>
+                                    {recentActivityRaw.length === 0 ? (
+                                        <li className="rounded-2xl bg-gray-50 px-3 py-4 text-center text-[11px] text-gray-500">
+                                            No recent activity yet.
+                                        </li>
+                                    ) : (
+                                        recentActivityRaw.slice(0, 5).map((activity) => {
+                                            const dotClass =
+                                                activity.status === 'RETURNED'
+                                                    ? 'bg-emerald-500'
+                                                    : activity.is_overdue
+                                                      ? 'bg-amber-500'
+                                                      : 'bg-sky-500';
+                                            const title =
+                                                activity.status === 'RETURNED'
+                                                    ? `${activity.tool_name ?? 'Tool'} returned`
+                                                    : activity.is_overdue
+                                                      ? `${activity.tool_name ?? 'Tool'} overdue`
+                                                      : `${activity.tool_name ?? 'Tool'} borrowed`;
+                                            const details =
+                                                activity.status === 'RETURNED'
+                                                    ? `${activity.user_name ?? 'A user'} returned this tool.`
+                                                    : `${activity.user_name ?? 'A user'} borrowed this tool.`;
+
+                                            return (
+                                                <li key={activity.id} className="flex items-start gap-3">
+                                                    <span className={`mt-1 h-2 w-2 rounded-full ${dotClass}`} />
+                                                    <div>
+                                                        <p className="font-medium">{title}</p>
+                                                        <p className="text-[11px] text-gray-500">{details}</p>
+                                                        <p className="mt-1 text-[10px] text-gray-400">
+                                                            {formatActivityDate(activity.borrow_date)}
+                                                        </p>
+                                                    </div>
+                                                </li>
+                                            );
+                                        })
+                                    )}
                                 </ol>
                             </section>
 
                             <section className="rounded-3xl bg-white p-6 shadow-sm">
                                 <h3 className="mb-4 text-sm font-semibold text-gray-900">Quick actions</h3>
                                 <div className="grid gap-3 text-xs text-gray-700 sm:grid-cols-2">
-                                    <button
-                                        type="button"
+                                    <Link
+                                        href="/tools"
                                         className="flex flex-col items-start rounded-2xl bg-blue-50 px-4 py-3 text-left hover:bg-blue-100"
                                     >
                                         <span className="mb-1 text-xs font-semibold text-blue-800">Request tool</span>
-                                        <span className="text-[11px] text-blue-900/80">Quickly submit a borrowing request to admins.</span>
-                                    </button>
-                                    <button
-                                        type="button"
+                                        <span className="text-[11px] text-blue-900/80">Browse available tools and submit a reservation.</span>
+                                    </Link>
+                                    <Link
+                                        href="/borrowings"
                                         className="flex flex-col items-start rounded-2xl bg-rose-50 px-4 py-3 text-left hover:bg-rose-100"
                                     >
-                                        <span className="mb-1 text-xs font-semibold text-rose-800">Report issue</span>
-                                        <span className="text-[11px] text-rose-900/80">Flag damaged or missing tools for review.</span>
-                                    </button>
+                                        <span className="mb-1 text-xs font-semibold text-rose-800">Manage borrowings</span>
+                                        <span className="text-[11px] text-rose-900/80">Return tools, track due dates, and review borrowing history.</span>
+                                    </Link>
                                 </div>
                             </section>
                         </div>

@@ -236,7 +236,7 @@ export default function AdminDashboardPage() {
                                 : data.status === 'Maintenance'
                                   ? 'MAINTENANCE'
                                   : 'AVAILABLE',
-                        quantity: 1,
+                        quantity: data.quantity,
                     },
                 });
                 setIsAddToolModalOpen(false);

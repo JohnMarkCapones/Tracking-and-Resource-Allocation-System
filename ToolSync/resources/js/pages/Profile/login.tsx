@@ -17,6 +17,7 @@ export default function Login() {
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
         post('/login', {
+            replace: true,
             onFinish: () => reset('password'),
         });
     };

@@ -1,5 +1,5 @@
 import { Head } from '@inertiajs/react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Breadcrumb } from '@/Components/Breadcrumb';
 import { toast } from '@/Components/Toast';
 import AppLayout from '@/Layouts/AppLayout';
@@ -50,6 +50,18 @@ const defaultBusinessHours: BusinessHours[] = DAY_ORDER.map((day) =>
         : { day, enabled: true, open: '08:00', close: '17:00' },
 );
 
+const parseNumberSetting = (value: string | undefined, fallback: number): number => {
+    const parsed = Number.parseInt(value ?? '', 10);
+    return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const parseBooleanSetting = (value: string | undefined, fallback: boolean): boolean => {
+    if (value === undefined) return fallback;
+    if (value === '1' || value.toLowerCase() === 'true') return true;
+    if (value === '0' || value.toLowerCase() === 'false') return false;
+    return fallback;
+};
+
 export default function IndexPage() {
     const [businessHours, setBusinessHours] = useState<BusinessHours[]>(defaultBusinessHours);
 
@@ -58,65 +70,68 @@ export default function IndexPage() {
     const [defaultDuration, setDefaultDuration] = useState(7);
     const [reminderDays, setReminderDays] = useState(2);
     const [overdueEscalationDays, setOverdueEscalationDays] = useState(3);
+    const [reminderEmailBeforeDue, setReminderEmailBeforeDue] = useState(true);
+    const [reminderEmailOnDue, setReminderEmailOnDue] = useState(true);
+    const [reminderEmailDailyOverdue, setReminderEmailDailyOverdue] = useState(true);
+    const [reminderEscalateToAdmin, setReminderEscalateToAdmin] = useState(true);
 
     const [holidays, setHolidays] = useState<HolidayRow[]>([]);
     const [newHolidayName, setNewHolidayName] = useState('');
     const [newHolidayDate, setNewHolidayDate] = useState('');
+    const localHolidayIdRef = useRef(-1);
 
     const [autoApprovalRules, setAutoApprovalRules] = useState<AutoApprovalRule[]>([]);
 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        let cancelled = false;
+    const loadSettings = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const res = await apiRequest<SettingsApiResponse>('/api/settings');
+            const d = res.data;
+            const g = d.general ?? {};
+            setMaxBorrowings(parseNumberSetting(g.max_borrowings, 3));
+            setMaxDuration(parseNumberSetting(g.max_duration, 14));
+            setDefaultDuration(parseNumberSetting(g.default_duration, 7));
+            setReminderDays(parseNumberSetting(g.reminder_days, 2));
+            setOverdueEscalationDays(parseNumberSetting(g.overdue_escalation_days, 3));
+            setReminderEmailBeforeDue(parseBooleanSetting(g.reminder_email_before_due, true));
+            setReminderEmailOnDue(parseBooleanSetting(g.reminder_email_on_due, true));
+            setReminderEmailDailyOverdue(parseBooleanSetting(g.reminder_email_daily_overdue, true));
+            setReminderEscalateToAdmin(parseBooleanSetting(g.reminder_escalate_to_admin, true));
 
-        async function load() {
-            setLoading(true);
-            setError(null);
-            try {
-                const res = await apiRequest<SettingsApiResponse>('/api/settings');
-                if (cancelled) return;
-                const d = res.data;
-                const g = d.general ?? {};
-                setMaxBorrowings(parseInt(g.max_borrowings ?? '3', 10));
-                setMaxDuration(parseInt(g.max_duration ?? '14', 10));
-                setDefaultDuration(parseInt(g.default_duration ?? '7', 10));
-                setReminderDays(parseInt(g.reminder_days ?? '2', 10));
-                setOverdueEscalationDays(parseInt(g.overdue_escalation_days ?? '3', 10));
+            const hours = (d.business_hours ?? []).slice().sort((a, b) => a.day_of_week - b.day_of_week);
+            const uiOrder = [1, 2, 3, 4, 5, 6, 0].map((dow) => hours.find((h) => h.day_of_week === dow));
+            setBusinessHours(
+                DAY_ORDER.map((day, i) => {
+                    const h = uiOrder[i];
+                    return h
+                        ? { day, enabled: h.enabled, open: h.open ?? '09:00', close: h.close ?? '17:00' }
+                        : { day, enabled: day !== 'saturday' && day !== 'sunday', open: '08:00', close: '17:00' };
+                }),
+            );
 
-                const hours = (d.business_hours ?? []).slice().sort((a, b) => a.day_of_week - b.day_of_week);
-                const uiOrder = [1, 2, 3, 4, 5, 6, 0].map((dow) => hours.find((h) => h.day_of_week === dow));
-                setBusinessHours(
-                    DAY_ORDER.map((day, i) => {
-                        const h = uiOrder[i];
-                        return h
-                            ? { day, enabled: h.enabled, open: h.open ?? '09:00', close: h.close ?? '17:00' }
-                            : { day, enabled: day !== 'saturday' && day !== 'sunday', open: '08:00', close: '17:00' };
-                    }),
-                );
-
-                setHolidays((d.holidays ?? []).map((h) => ({ id: h.id, name: h.name, date: h.date })));
-                setAutoApprovalRules(
-                    (d.auto_approval_rules ?? []).map((r) => ({
-                        id: r.id,
-                        name: r.name,
-                        condition: r.condition,
-                        enabled: r.enabled,
-                    })),
-                );
-            } catch (err) {
-                if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load settings');
-            } finally {
-                if (!cancelled) setLoading(false);
-            }
+            setHolidays((d.holidays ?? []).map((h) => ({ id: h.id, name: h.name, date: h.date })));
+            setAutoApprovalRules(
+                (d.auto_approval_rules ?? []).map((r) => ({
+                    id: r.id,
+                    name: r.name,
+                    condition: r.condition,
+                    enabled: r.enabled,
+                })),
+            );
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to load settings');
+        } finally {
+            setLoading(false);
         }
-
-        load();
-        return () => {
-            cancelled = true;
-        };
     }, []);
+
+    useEffect(() => {
+        loadSettings();
+    }, [loadSettings]);
 
     const [activeTab, setActiveTab] = useState<'general' | 'hours' | 'holidays' | 'automation'>('general');
     const [pendingConfirm, setPendingConfirm] = useState<ConfirmAction | null>(null);
@@ -131,7 +146,9 @@ export default function IndexPage() {
 
     const addHoliday = () => {
         if (!newHolidayName || !newHolidayDate) return;
-        setHolidays((prev) => [...prev, { id: 0, name: newHolidayName, date: newHolidayDate }]);
+        const localId = localHolidayIdRef.current;
+        localHolidayIdRef.current -= 1;
+        setHolidays((prev) => [...prev, { id: localId, name: newHolidayName, date: newHolidayDate }]);
         setNewHolidayName('');
         setNewHolidayDate('');
     };
@@ -171,6 +188,7 @@ export default function IndexPage() {
                             },
                         },
                     });
+                    await loadSettings();
                     toast.success('General settings saved successfully');
                     break;
                 case 'save-hours':
@@ -185,15 +203,23 @@ export default function IndexPage() {
                             })),
                         },
                     });
+                    await loadSettings();
                     toast.success('Business hours saved successfully');
                     break;
                 case 'save-automation':
                     await apiRequest('/api/settings', {
                         method: 'PUT',
                         body: {
+                            general: {
+                                reminder_email_before_due: reminderEmailBeforeDue,
+                                reminder_email_on_due: reminderEmailOnDue,
+                                reminder_email_daily_overdue: reminderEmailDailyOverdue,
+                                reminder_escalate_to_admin: reminderEscalateToAdmin,
+                            },
                             auto_approval_rules: autoApprovalRules.map((r) => ({ id: r.id, enabled: r.enabled })),
                         },
                     });
+                    await loadSettings();
                     toast.success('Automation settings saved successfully');
                     break;
                 case 'save-holidays':
@@ -205,6 +231,7 @@ export default function IndexPage() {
                             ),
                         },
                     });
+                    await loadSettings();
                     toast.success('Holiday calendar saved.');
                     break;
                 case 'remove-holiday': {
@@ -218,6 +245,7 @@ export default function IndexPage() {
                         },
                     });
                     setHolidays(nextHolidays);
+                    await loadSettings();
                     toast.success('Holiday removed from calendar.');
                     break;
                 }
@@ -232,6 +260,7 @@ export default function IndexPage() {
                         },
                     });
                     setAutoApprovalRules(nextRules);
+                    await loadSettings();
                     toast.success(
                         confirm.nextEnabled ? 'Auto-approval rule enabled.' : 'Auto-approval rule disabled.',
                     );
@@ -535,19 +564,39 @@ export default function IndexPage() {
                             <h3 className="mb-3 text-sm font-semibold text-gray-900 dark:text-white">Return Reminders</h3>
                             <div className="space-y-2">
                                 <label className="flex items-center gap-2">
-                                    <input type="checkbox" defaultChecked className="h-4 w-4 rounded border-gray-300 text-blue-600" />
+                                    <input
+                                        type="checkbox"
+                                        checked={reminderEmailBeforeDue}
+                                        onChange={(e) => setReminderEmailBeforeDue(e.target.checked)}
+                                        className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                                    />
                                     <span className="text-xs text-gray-700 dark:text-gray-300">Send email {reminderDays} days before due date</span>
                                 </label>
                                 <label className="flex items-center gap-2">
-                                    <input type="checkbox" defaultChecked className="h-4 w-4 rounded border-gray-300 text-blue-600" />
+                                    <input
+                                        type="checkbox"
+                                        checked={reminderEmailOnDue}
+                                        onChange={(e) => setReminderEmailOnDue(e.target.checked)}
+                                        className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                                    />
                                     <span className="text-xs text-gray-700 dark:text-gray-300">Send email on due date</span>
                                 </label>
                                 <label className="flex items-center gap-2">
-                                    <input type="checkbox" defaultChecked className="h-4 w-4 rounded border-gray-300 text-blue-600" />
+                                    <input
+                                        type="checkbox"
+                                        checked={reminderEmailDailyOverdue}
+                                        onChange={(e) => setReminderEmailDailyOverdue(e.target.checked)}
+                                        className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                                    />
                                     <span className="text-xs text-gray-700 dark:text-gray-300">Send daily reminder when overdue</span>
                                 </label>
                                 <label className="flex items-center gap-2">
-                                    <input type="checkbox" defaultChecked className="h-4 w-4 rounded border-gray-300 text-blue-600" />
+                                    <input
+                                        type="checkbox"
+                                        checked={reminderEscalateToAdmin}
+                                        onChange={(e) => setReminderEscalateToAdmin(e.target.checked)}
+                                        className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                                    />
                                     <span className="text-xs text-gray-700 dark:text-gray-300">
                                         Escalate to admin after {overdueEscalationDays} days overdue
                                     </span>

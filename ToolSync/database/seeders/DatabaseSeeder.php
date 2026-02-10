@@ -25,7 +25,7 @@ class DatabaseSeeder extends Seeder
         );
 
         // Admin account for managing the system (updateOrCreate so role stays ADMIN).
-        User::updateOrCreate(
+        $admin = User::updateOrCreate(
             ['email' => 'admin@example.com'],
             [
                 'name' => 'Admin',
@@ -33,6 +33,11 @@ class DatabaseSeeder extends Seeder
                 'password' => bcrypt('password'),
             ]
         );
+
+        // Ensure seeded admin can sign in without email verification flow.
+        $admin->forceFill([
+            'email_verified_at' => now(),
+        ])->save();
 
         // Set all tools to quantity 1 so one borrow flips status to BORROWED.
         $this->call(SetToolQuantitiesToOneSeeder::class);

@@ -15,18 +15,14 @@ class ToolSeeder extends Seeder
         Tool::truncate();
         \Schema::enableForeignKeyConstraints();
 
-        $printerCategory = ToolCategory::where('name', 'Printers')->first();
-        $projectorCategory = ToolCategory::where('name', 'Projectors')->first();
-        $laptopCategory = ToolCategory::where('name', 'Laptops')->first();
-        $keyboardCategory = ToolCategory::where('name', 'Keyboards')->first();
-        $headsetCategory = ToolCategory::where('name', 'Headsets')->first();
-        $cameraCategory = ToolCategory::where('name', 'Cameras')->first();
-        $mouseCategory = ToolCategory::where('name', 'Mice')->first();
+        $itEquipmentCategory = ToolCategory::where('name', 'IT Equipment')->first();
+        $officeEquipmentCategory = ToolCategory::where('name', 'Office Equipment')->first();
+        $multimediaCategory = ToolCategory::where('name', 'Multimedia')->first();
         
         $tools = [
             [
                 'name' => 'Printer',
-                'category_id' => $printerCategory->id,
+                'category_id' => $officeEquipmentCategory->id,
                 'description' => 'High-quality office printer',
                 'image_path' => 'images/tools/printer.png',
                 'status' => 'AVAILABLE',
@@ -34,7 +30,7 @@ class ToolSeeder extends Seeder
             ],
             [
                 'name' => 'Projector',
-                'category_id' => $projectorCategory->id,
+                'category_id' => $multimediaCategory->id,
                 'description' => 'Multimedia projector for presentations',
                 'image_path' => 'images/tools/projector-device.png',
                 'status' => 'AVAILABLE',
@@ -42,7 +38,7 @@ class ToolSeeder extends Seeder
             ],
             [
                 'name' => 'Projector Screen',
-                'category_id' => $projectorCategory->id,
+                'category_id' => $multimediaCategory->id,
                 'description' => 'Portable projector screen',
                 'image_path' => 'images/tools/projector-screen.png',
                 'status' => 'AVAILABLE',
@@ -50,7 +46,7 @@ class ToolSeeder extends Seeder
             ],
             [
                 'name' => 'Laptop',
-                'category_id' => $laptopCategory->id,
+                'category_id' => $itEquipmentCategory->id,
                 'description' => 'Business laptop for work',
                 'image_path' => 'images/tools/laptop.png',
                 'status' => 'AVAILABLE',
@@ -58,7 +54,7 @@ class ToolSeeder extends Seeder
             ],
             [
                 'name' => 'Keyboard',
-                'category_id' => $keyboardCategory->id,
+                'category_id' => $itEquipmentCategory->id,
                 'description' => 'Ergonomic office keyboard',
                 'image_path' => 'images/tools/keyboard.png',
                 'status' => 'AVAILABLE',
@@ -66,7 +62,7 @@ class ToolSeeder extends Seeder
             ],
             [
                 'name' => 'Headset',
-                'category_id' => $headsetCategory->id,
+                'category_id' => $multimediaCategory->id,
                 'description' => 'Wireless headset for calls',
                 'image_path' => 'images/tools/headset.png',
                 'status' => 'AVAILABLE',
@@ -74,7 +70,7 @@ class ToolSeeder extends Seeder
             ],
             [
                 'name' => 'Camera',
-                'category_id' => $cameraCategory->id,
+                'category_id' => $multimediaCategory->id,
                 'description' => 'Digital camera for photography',
                 'image_path' => 'images/tools/camera.png',
                 'status' => 'AVAILABLE',
@@ -82,7 +78,7 @@ class ToolSeeder extends Seeder
             ],
             [
                 'name' => 'Mouse',
-                'category_id' => $mouseCategory->id,
+                'category_id' => $itEquipmentCategory->id,
                 'description' => 'Wireless optical mouse',
                 'image_path' => 'images/tools/mouse.png',
                 'status' => 'AVAILABLE',

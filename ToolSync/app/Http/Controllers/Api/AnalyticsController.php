@@ -60,7 +60,10 @@ class AnalyticsController extends Controller
      */
     public function overview(Request $request): JsonResponse
     {
-        $userId = $request->filled('user_id') ? (int) $request->input('user_id') : null;
+        $actor = $request->user();
+        $userId = ($actor && ! $actor->isAdmin())
+            ? $actor->id
+            : ($request->filled('user_id') ? (int) $request->input('user_id') : null);
 
         $from = $request->filled('from') ? Carbon::parse($request->input('from')) : now()->subDays(30)->startOfDay();
         $to = $request->filled('to') ? Carbon::parse($request->input('to')) : now()->endOfDay();
@@ -196,7 +199,10 @@ class AnalyticsController extends Controller
      */
     public function export(Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
     {
-        $userId = $request->filled('user_id') ? (int) $request->input('user_id') : null;
+        $actor = $request->user();
+        $userId = ($actor && ! $actor->isAdmin())
+            ? $actor->id
+            : ($request->filled('user_id') ? (int) $request->input('user_id') : null);
         $from = $request->filled('from') ? Carbon::parse($request->input('from')) : now()->subDays(30)->startOfDay();
         $to = $request->filled('to') ? Carbon::parse($request->input('to')) : now()->endOfDay();
 

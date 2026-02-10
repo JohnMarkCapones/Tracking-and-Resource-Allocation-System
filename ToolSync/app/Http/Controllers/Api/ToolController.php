@@ -51,7 +51,13 @@ class ToolController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = Tool::with('category')->withCount('allocations');
+        $query = Tool::with('category')
+            ->withCount('allocations')
+            ->withCount([
+                'allocations as borrowed_count' => function ($q) {
+                    $q->where('status', 'BORROWED');
+                },
+            ]);
 
         if ($request->has('status')) {
             $query->where('status', $request->input('status'));

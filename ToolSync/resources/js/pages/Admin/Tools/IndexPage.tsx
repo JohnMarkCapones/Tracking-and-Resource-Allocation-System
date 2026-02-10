@@ -16,6 +16,7 @@ function mapDtoToTool(dto: ToolDto): Tool {
         toolId: 'TL-' + dto.id,
         category: dto.category?.name ?? 'Other',
         status: mapToolStatusToUi(dto.status),
+        quantity: dto.quantity,
         condition: 'Good',
         lastMaintenance: 'N/A',
         totalBorrowings: dto.allocations_count ?? 0,
@@ -90,7 +91,7 @@ export default function IndexPage() {
             description: data.description || null,
             category_id: categoryId,
             status: statusToApi(data.status),
-            quantity: 1,
+            quantity: data.quantity,
         };
         setSaving(true);
         try {

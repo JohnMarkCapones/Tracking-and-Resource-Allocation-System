@@ -5,19 +5,22 @@ import type { ReactNode } from 'react';
 import { EmptyState } from '@/Components/EmptyState';
 import { toast } from '@/Components/Toast';
 import AppLayout from '@/Layouts/AppLayout';
+import { apiRequest } from '@/lib/http';
 
 type NotificationType = 'alert' | 'info' | 'success' | 'maintenance';
 
 type Notification = {
-    id: number;
+    id: string;
     type: NotificationType;
     title: string;
     message: string;
-    createdAt: string;
+    createdAt: string | null;
+    href?: string | null;
     read: boolean;
 };
 
 type NotificationsPageProps = {
+    auth?: { user?: { role?: string } };
     notifications: Notification[];
 };
 
@@ -73,7 +76,9 @@ function typeBgClass(type: NotificationType, read: boolean): string {
 type FilterType = 'all' | 'unread' | NotificationType;
 
 export default function IndexPage() {
-    const { notifications: initialNotifications } = usePage<NotificationsPageProps>().props;
+    const page = usePage<NotificationsPageProps>();
+    const { notifications: initialNotifications } = page.props;
+    const isAdmin = page.props.auth?.user?.role === 'ADMIN';
 
     const [notifications, setNotifications] = useState<Notification[]>(initialNotifications);
     const [filterType, setFilterType] = useState<FilterType>('all');
@@ -86,28 +91,61 @@ export default function IndexPage() {
 
     const unreadCount = notifications.filter((n) => !n.read).length;
 
-    const handleMarkAsRead = (id: number) => {
-        setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    const handleMarkAsRead = async (id: string) => {
+        try {
+            await apiRequest<{ message: string }>(`/api/notifications/${id}/read`, {
+                method: 'POST',
+            });
+            setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to mark notification as read.';
+            toast.error(message);
+        }
     };
 
-    const handleMarkAllAsRead = () => {
-        setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-        toast.success('All notifications marked as read');
+    const handleMarkAllAsRead = async () => {
+        try {
+            await apiRequest<{ message: string }>('/api/notifications/read-all', {
+                method: 'POST',
+            });
+            setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+            toast.success('All notifications marked as read');
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to mark notifications as read.';
+            toast.error(message);
+        }
     };
 
-    const handleDelete = (id: number) => {
-        setNotifications((prev) => prev.filter((n) => n.id !== id));
-        toast('Notification deleted');
+    const handleDelete = async (id: string) => {
+        try {
+            await apiRequest<{ message: string }>(`/api/notifications/${id}`, {
+                method: 'DELETE',
+            });
+            setNotifications((prev) => prev.filter((n) => n.id !== id));
+            toast('Notification deleted');
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to delete notification.';
+            toast.error(message);
+        }
     };
 
-    const handleClearAll = () => {
-        setNotifications([]);
-        toast('All notifications cleared');
+    const handleClearAll = async () => {
+        try {
+            await apiRequest<{ message: string }>('/api/notifications', {
+                method: 'DELETE',
+            });
+            setNotifications([]);
+            toast('All notifications cleared');
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to clear notifications.';
+            toast.error(message);
+        }
     };
 
     return (
         <AppLayout
             activeRoute="notifications"
+            variant={isAdmin ? 'admin' : 'user'}
             header={
                 <>
                     <p className="text-xs font-medium tracking-[0.18em] text-gray-500 uppercase">Notifications</p>

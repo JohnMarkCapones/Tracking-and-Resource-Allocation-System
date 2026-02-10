@@ -6,14 +6,14 @@ type ApiRequestOptions = {
     signal?: AbortSignal;
 };
 
-/** Error with status and payload for API callers (e.g. 401 → redirect to login). */
+/** Error with status and payload for API callers (e.g. 401 -> redirect to login). */
 export type ApiError = Error & { status?: number; payload?: unknown };
 
 function isApiError(err: unknown): err is ApiError {
     return err instanceof Error && 'status' in err;
 }
 
-/** 401 Unauthorized – caller can redirect to login when this is thrown. */
+/** 401 Unauthorized -> caller can redirect to login when this is thrown. */
 export function isUnauthorized(err: unknown): boolean {
     return isApiError(err) && err.status === 401;
 }
@@ -83,7 +83,7 @@ export async function apiRequest<T>(url: string, options: ApiRequestOptions = {}
         return await handleResponse<T>(response);
     } catch (err) {
         if (isUnauthorized(err)) {
-            window.location.href = '/profile/login';
+            window.location.href = '/login';
         }
         throw err;
     }

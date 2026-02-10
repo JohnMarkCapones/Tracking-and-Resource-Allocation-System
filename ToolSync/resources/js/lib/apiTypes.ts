@@ -20,6 +20,8 @@ export type ToolDto = {
     category?: ToolCategoryDto;
     /** Number of times this tool has been allocated (borrowed). */
     allocations_count?: number;
+    /** Number of currently borrowed allocations for this tool. */
+    borrowed_count?: number;
 };
 
 export type ToolCardData = {
@@ -105,9 +107,12 @@ export function mapAllocationStatusToUi(allocation: AllocationDto, now: Date = n
         return 'Returned';
     }
 
-    const expected = new Date(allocation.expected_return_date);
+    // Parse the due date as a local calendar date (Y-m-d) and set to end-of-day (23:59:59)
+    // so a tool due on Feb 11 is only overdue starting Feb 12, not during Feb 11.
+    const dueYmd = allocation.expected_return_date.slice(0, 10);
+    const endOfDueDay = new Date(`${dueYmd}T23:59:59`);
 
-    if (expected < now) {
+    if (endOfDueDay < now) {
         return 'Overdue';
     }
 
@@ -298,4 +303,20 @@ export type FavoriteApiItem = {
     name: string;
     toolId: string;
     category: string;
+    imageUrl?: string | null;
+};
+
+export type ReportType = 'borrowing_summary' | 'tool_utilization' | 'user_activity' | 'overdue_report' | 'maintenance_log' | 'custom';
+
+export type ReportRow = Record<string, string | number>;
+
+export type ReportDataApiResponse = {
+    data: ReportRow[];
+    meta: {
+        report_type: ReportType;
+        columns: string[];
+        from: string;
+        to: string;
+        count: number;
+    };
 };
