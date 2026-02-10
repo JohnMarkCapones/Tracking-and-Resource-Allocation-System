@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import type { Tool, ToolStatus } from '@/Components/Admin/ToolTable';
 import Modal from '@/Components/Modal';
 
-const DEFAULT_CATEGORIES = ['Laptops', 'Projectors', 'Cameras', 'Printers', 'Tablets', 'Audio Equipment', 'Other'];
+const DEFAULT_CATEGORIES = ['IT Equipment', 'Office Equipment', 'Multimedia'];
 
 type CreateEditModalProps = {
     show: boolean;
@@ -17,6 +17,7 @@ export type ToolFormData = {
     toolId: string;
     category: string;
     status: ToolStatus;
+    quantity: number;
     condition: string;
     description: string;
     specifications: Record<string, string>;
@@ -41,6 +42,7 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
         toolId: '',
         category: categories[0] ?? DEFAULT_CATEGORIES[0],
         status: 'Available',
+        quantity: 1,
         condition: 'Good',
         description: '',
         specifications: {},
@@ -58,6 +60,7 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
                 toolId: tool.toolId,
                 category: tool.category,
                 status: tool.status,
+                quantity: tool.quantity,
                 condition: tool.condition,
                 description: tool.description ?? '',
                 specifications: tool.specifications ?? {},
@@ -74,6 +77,7 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
                 toolId: '',
                 category: categories[0] ?? DEFAULT_CATEGORIES[0],
                 status: 'Available',
+                quantity: 1,
                 condition: 'Good',
                 description: '',
                 specifications: {},
@@ -92,6 +96,9 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
 
         if (!formData.toolId.trim()) {
             newErrors.toolId = 'Tool ID is required';
+        }
+        if (!Number.isInteger(formData.quantity) || formData.quantity < 1) {
+            newErrors.quantity = 'Quantity must be at least 1';
         }
 
         setErrors(newErrors);
@@ -179,7 +186,7 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
                             {errors.toolId && <p className="mt-1 text-[11px] text-rose-600">{errors.toolId}</p>}
                         </div>
 
-                        <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="grid gap-4 sm:grid-cols-3">
                             <div>
                                 <label htmlFor="category" className="mb-1 block text-[11px] font-semibold tracking-wide text-gray-500 uppercase">
                                     Category
@@ -224,6 +231,29 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
                                         </option>
                                     ))}
                                 </select>
+                            </div>
+
+                            <div>
+                                <label htmlFor="quantity" className="mb-1 block text-[11px] font-semibold tracking-wide text-gray-500 uppercase">
+                                    Quantity
+                                </label>
+                                <input
+                                    type="number"
+                                    id="quantity"
+                                    min={1}
+                                    value={formData.quantity}
+                                    onChange={(e) =>
+                                        setFormData((prev) => ({
+                                            ...prev,
+                                            quantity: Math.max(1, Number.parseInt(e.target.value || '1', 10) || 1),
+                                        }))
+                                    }
+                                    className={`w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 ${
+                                        errors.quantity ? 'border-rose-300 bg-rose-50' : 'border-gray-200 bg-gray-50'
+                                    }`}
+                                    placeholder="e.g., 10"
+                                />
+                                {errors.quantity && <p className="mt-1 text-[11px] text-rose-600">{errors.quantity}</p>}
                             </div>
                         </div>
 

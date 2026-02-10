@@ -7,11 +7,16 @@ use App\Models\ToolDeprecation;
 use App\Services\ActivityLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 class ToolDeprecationController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
+        if (! Schema::hasTable('tool_deprecations')) {
+            return response()->json(['data' => []]);
+        }
+
         $deprecations = ToolDeprecation::query()
             ->with(['tool', 'replacementTool'])
             ->orderBy('retire_date')

@@ -77,12 +77,14 @@ const TYPE_STYLES: Record<string, string> = {
     calibration: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
 };
 
-type SchedulesResponse = { data: MaintenanceScheduleApiItem[] };
+type SchedulesResponse = { data: MaintenanceScheduleApiItem[]; meta?: { table_missing?: string } };
 type DeprecationsResponse = { data: ToolDeprecationApiItem[] };
 
-async function loadSchedules(): Promise<MaintenanceRecord[]> {
+async function loadSchedules(): Promise<{ records: MaintenanceRecord[]; tableMissing: boolean }> {
     const res = await apiRequest<SchedulesResponse>('/api/maintenance-schedules');
-    return (res.data ?? []).map(mapScheduleToRecord);
+    const records = (res.data ?? []).map(mapScheduleToRecord);
+    const tableMissing = res.meta?.table_missing === 'maintenance_schedules';
+    return { records, tableMissing };
 }
 
 async function loadDeprecations(): Promise<DeprecationItem[]> {
@@ -97,6 +99,7 @@ export default function IndexPage() {
     const [deprecations, setDeprecations] = useState<DeprecationItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [maintenanceTableMissing, setMaintenanceTableMissing] = useState(false);
     const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
 
     const [scheduleToolName, setScheduleToolName] = useState('');
@@ -113,9 +116,10 @@ export default function IndexPage() {
             setLoading(true);
             setError(null);
             try {
-                const [schedules, deps] = await Promise.all([loadSchedules(), loadDeprecations()]);
+                const [schedulesResult, deps] = await Promise.all([loadSchedules(), loadDeprecations()]);
                 if (cancelled) return;
-                setMaintenanceRecords(schedules);
+                setMaintenanceRecords(schedulesResult.records);
+                setMaintenanceTableMissing(schedulesResult.tableMissing);
                 setDeprecations(deps);
             } catch (err) {
                 if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load maintenance data');
@@ -183,8 +187,8 @@ export default function IndexPage() {
                     notes: scheduleNotes.trim() || null,
                 },
             });
-            const schedules = await loadSchedules();
-            setMaintenanceRecords(schedules);
+            const { records } = await loadSchedules();
+            setMaintenanceRecords(records);
             setIsScheduleModalOpen(false);
             toast.success('Maintenance scheduled.');
         } catch (err) {
@@ -220,6 +224,14 @@ export default function IndexPage() {
             )}
             {!loading && !error && (
             <div className="space-y-6">
+                {maintenanceTableMissing && (
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+                        <p className="font-medium">Maintenance scheduling is not set up yet.</p>
+                        <p className="mt-1 text-[12px]">
+                            The database table for maintenance schedules is missing. Run <code className="rounded bg-amber-100 px-1 dark:bg-amber-900/40">php artisan migrate</code> to create it and enable scheduling.
+                        </p>
+                    </div>
+                )}
                 {/* Tabs */}
                 <div className="flex items-center justify-between">
                     <div className="inline-flex items-center gap-1 rounded-full bg-white px-1 py-1 text-[11px] shadow-sm dark:bg-gray-800">

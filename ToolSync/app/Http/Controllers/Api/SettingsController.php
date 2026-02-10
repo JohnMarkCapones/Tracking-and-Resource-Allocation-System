@@ -20,6 +20,10 @@ class SettingsController extends Controller
         'default_duration',
         'reminder_days',
         'overdue_escalation_days',
+        'reminder_email_before_due',
+        'reminder_email_on_due',
+        'reminder_email_daily_overdue',
+        'reminder_escalate_to_admin',
     ];
 
     public function index(): JsonResponse
@@ -80,6 +84,10 @@ class SettingsController extends Controller
             'general.default_duration' => ['sometimes', 'integer', 'min:1'],
             'general.reminder_days' => ['sometimes', 'integer', 'min:1', 'max:7'],
             'general.overdue_escalation_days' => ['sometimes', 'integer', 'min:1', 'max:14'],
+            'general.reminder_email_before_due' => ['sometimes', 'boolean'],
+            'general.reminder_email_on_due' => ['sometimes', 'boolean'],
+            'general.reminder_email_daily_overdue' => ['sometimes', 'boolean'],
+            'general.reminder_escalate_to_admin' => ['sometimes', 'boolean'],
             'business_hours' => ['sometimes', 'array'],
             'business_hours.*.day_of_week' => ['required_with:business_hours', 'integer', 'min:0', 'max:6'],
             'business_hours.*.enabled' => ['sometimes', 'boolean'],
@@ -94,13 +102,23 @@ class SettingsController extends Controller
             'auto_approval_rules.*.enabled' => ['sometimes', 'boolean'],
         ]);
 
+        if (isset($validated['general']['default_duration'], $validated['general']['max_duration'])
+            && (int) $validated['general']['default_duration'] > (int) $validated['general']['max_duration']) {
+            return response()->json([
+                'message' => 'Default borrowing duration cannot exceed max borrowing duration.',
+                'errors' => [
+                    'general.default_duration' => ['Default borrowing duration cannot exceed max borrowing duration.'],
+                ],
+            ], 422);
+        }
+
         DB::transaction(function () use ($validated) {
             if (isset($validated['general'])) {
                 foreach ($validated['general'] as $key => $value) {
                     if (in_array($key, self::GENERAL_KEYS, true)) {
                         SystemSetting::query()->updateOrInsert(
                             ['key' => $key],
-                            ['value' => (string) $value, 'updated_at' => now()]
+                            ['value' => is_bool($value) ? ($value ? '1' : '0') : (string) $value, 'updated_at' => now()]
                         );
                     }
                 }
@@ -168,6 +186,10 @@ class SettingsController extends Controller
             'default_duration' => '7',
             'reminder_days' => '2',
             'overdue_escalation_days' => '3',
+            'reminder_email_before_due' => '1',
+            'reminder_email_on_due' => '1',
+            'reminder_email_daily_overdue' => '1',
+            'reminder_escalate_to_admin' => '1',
             default => '0',
         };
     }

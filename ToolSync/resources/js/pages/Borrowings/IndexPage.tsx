@@ -14,11 +14,14 @@ type FilterStatus = 'all' | 'Active' | 'Overdue' | 'Returned';
 
 function allocationToBorrowing(a: AllocationDto): Borrowing {
     const status = mapAllocationStatusToUi(a);
-    const borrowDate = new Date(a.borrow_date).toLocaleDateString('en-US', {
+    // Treat API dates as date-only (YYYY-MM-DD) to avoid timezone shifting; parse in local time.
+    const borrowYmd = a.borrow_date.slice(0, 10);
+    const borrowDate = new Date(`${borrowYmd}T00:00:00`).toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
     });
+    // API returns date-only (Y-m-d) for expected_return_date; use as-is so display matches request (e.g. Feb 10–12).
     const dueDate = a.expected_return_date;
     const returnDate =
         a.actual_return_date != null
@@ -53,6 +56,7 @@ export default function IndexPage() {
     const [error, setError] = useState<string | null>(null);
     const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
     const [returnModalBorrowing, setReturnModalBorrowing] = useState<Borrowing | null>(null);
+    const [returnRequestedIds, setReturnRequestedIds] = useState<Set<number>>(new Set());
 
     useEffect(() => {
         if (userId == null) {
@@ -83,50 +87,12 @@ export default function IndexPage() {
         setReturnModalBorrowing(borrowing);
     };
 
-    const handleReturnSubmit = async () => {
+    const handleReturnSubmit = () => {
         if (!returnModalBorrowing) return;
 
-        try {
-            const response = await apiRequest<{ message: string; data: AllocationDto }>(
-                `/api/tool-allocations/${returnModalBorrowing.id}`,
-                {
-                    method: 'PUT',
-                    body: {
-                        status: 'RETURNED',
-                    },
-                },
-            );
-
-            const updated = response.data;
-
-            const formattedReturnDate =
-                updated.actual_return_date !== null
-                    ? new Date(updated.actual_return_date).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                      })
-                    : undefined;
-
-            setBorrowings((prev) =>
-                prev.map((borrowing) =>
-                    borrowing.id === returnModalBorrowing.id
-                        ? {
-                              ...borrowing,
-                              status: 'Returned' as const,
-                              returnDate: formattedReturnDate,
-                          }
-                        : borrowing,
-                ),
-            );
-
-            toast.success(`${returnModalBorrowing.tool.name} has been returned successfully!`);
-        } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to mark tool as returned.';
-            toast.error(message);
-        } finally {
-            setReturnModalBorrowing(null);
-        }
+        setReturnRequestedIds((prev) => new Set(prev).add(returnModalBorrowing.id));
+        toast(`${returnModalBorrowing.tool.name} return is pending admin verification.`, { icon: 'ℹ️', duration: 6000 });
+        setReturnModalBorrowing(null);
     };
 
     return (
@@ -231,7 +197,12 @@ export default function IndexPage() {
                 ) : (
                     <div className="space-y-3">
                         {filteredBorrowings.map((borrowing) => (
-                            <BorrowingCard key={borrowing.id} borrowing={borrowing} onReturn={handleReturn} />
+                            <BorrowingCard
+                                key={borrowing.id}
+                                borrowing={borrowing}
+                                onReturn={handleReturn}
+                                returnRequested={returnRequestedIds.has(borrowing.id)}
+                            />
                         ))}
                     </div>
                 )}

@@ -3,6 +3,8 @@
 namespace App\Http\Middleware;
 
 use Illuminate\Http\Request;
+use Illuminate\Notifications\DatabaseNotification;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -35,13 +37,46 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        $user = $request->user();
+        $notifications = [];
+        $unreadCount = 0;
+
+        if ($user && Schema::hasTable('notifications')) {
+            $notifications = $user->notifications()
+                ->latest()
+                ->take(6)
+                ->get()
+                ->map(function (DatabaseNotification $notification): array {
+                    $data = is_array($notification->data) ? $notification->data : [];
+                    $kind = (string) ($data['kind'] ?? 'info');
+                    if (! in_array($kind, ['alert', 'info', 'success', 'maintenance'], true)) {
+                        $kind = 'info';
+                    }
+
+                    return [
+                        'id' => $notification->id,
+                        'type' => $kind,
+                        'title' => (string) ($data['title'] ?? 'Notification'),
+                        'message' => (string) ($data['message'] ?? ''),
+                        'href' => isset($data['href']) ? (string) $data['href'] : null,
+                        'createdAt' => $notification->created_at?->diffForHumans(),
+                        'read' => $notification->read_at !== null,
+                    ];
+                })
+                ->values()
+                ->all();
+            $unreadCount = (int) $user->unreadNotifications()->count();
+        }
+
         return [
             ...parent::share($request),
             'name' => config('app.name'),
             'auth' => [
-                'user' => $request->user(),
-                'has_password' => $request->user()?->hasPassword(),
+                'user' => $user,
+                'has_password' => $user?->hasPassword(),
             ],
+            'notifications' => $notifications,
+            'notifications_unread_count' => $unreadCount,
         ];
     }
 }

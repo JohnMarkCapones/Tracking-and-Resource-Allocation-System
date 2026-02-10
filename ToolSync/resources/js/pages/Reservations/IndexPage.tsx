@@ -141,7 +141,6 @@ export default function IndexPage() {
             header={
                 <>
                     <Breadcrumb className="mb-2">
-                        <Breadcrumb.Home />
                         <Breadcrumb.Item isCurrent>Reservations</Breadcrumb.Item>
                     </Breadcrumb>
                     <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">My Reservations</h1>

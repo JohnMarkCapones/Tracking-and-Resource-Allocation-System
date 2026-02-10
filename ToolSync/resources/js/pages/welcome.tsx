@@ -1,59 +1,116 @@
-import { Head, Link, useForm } from '@inertiajs/react';
-import { useState, useMemo } from 'react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import type { FormEventHandler } from 'react';
+import { useEffect, useState } from 'react';
 
 import equipitLogo from '../assets/figma/logo.png';
 import signupGroup72 from '../assets/figma/signup/Group 72.png';
 import signupGroup77 from '../assets/figma/signup/Group 77.png';
 
-type PasswordStrength = 'weak' | 'medium' | 'strong';
-
-function getPasswordStrength(password: string): PasswordStrength {
-    if (!password.length) return 'weak';
-    const hasLower = /[a-z]/.test(password);
-    const hasUpper = /[A-Z]/.test(password);
-    const hasNumber = /\d/.test(password);
-    const hasSpecial = /[^A-Za-z0-9]/.test(password);
-    const types = [hasLower, hasUpper, hasNumber, hasSpecial].filter(Boolean).length;
-    if (password.length >= 8 && types >= 3 && hasLower && hasUpper && (hasNumber || hasSpecial)) return 'strong';
-    if (password.length >= 6 && types >= 2) return 'medium';
-    return 'weak';
-}
-
-const PASSWORD_RULES = [
-    { id: 'length', label: 'Minimum 8 characters in length', test: (p: string) => p.length >= 8 },
-    { id: 'upper', label: 'At least one uppercase letter', test: (p: string) => /[A-Z]/.test(p) },
-    { id: 'lower', label: 'At least one lowercase letter', test: (p: string) => /[a-z]/.test(p) },
-    { id: 'number', label: 'At least one number', test: (p: string) => /\d/.test(p) },
-    { id: 'special', label: 'At least one special character', test: (p: string) => /[^A-Za-z0-9]/.test(p) },
-];
-
 export default function Welcome() {
-    const { data, setData, post, processing, errors, transform } = useForm({
+    const { status, verification_email } = usePage<{ status?: string; verification_email?: string }>().props;
+    const [showVerificationModal, setShowVerificationModal] = useState(false);
+    const { data, setData, post, processing, errors, transform, setError, clearErrors, reset } = useForm({
         first_name: '',
         last_name: '',
         email: '',
         password: '',
         password_confirmation: '',
     });
-    const [showPassword, setShowPassword] = useState(false);
-    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const { post: postVerificationNotification, processing: resendingVerification } = useForm({});
 
-    const strength = useMemo(() => getPasswordStrength(data.password), [data.password]);
-    const ruleResults = useMemo(
-        () => PASSWORD_RULES.map((r) => ({ ...r, met: r.test(data.password) })),
-        [data.password],
-    );
+    const shouldShowVerificationModal = showVerificationModal;
+
+    useEffect(() => {
+        if (status === 'verification-link-sent') {
+            setShowVerificationModal(true);
+        }
+    }, [status]);
+
+    useEffect(() => {
+        if (!shouldShowVerificationModal) {
+            return;
+        }
+
+        const checkVerificationStatus = async () => {
+            try {
+                const response = await fetch('/api/user', {
+                    method: 'GET',
+                    headers: { Accept: 'application/json' },
+                    credentials: 'same-origin',
+                });
+
+                if (!response.ok) {
+                    return;
+                }
+
+                const user = (await response.json()) as { email_verified_at?: string | null };
+                if (user?.email_verified_at) {
+                    window.location.href = '/dashboard';
+                }
+            } catch {
+                // Ignore transient network errors while polling.
+            }
+        };
+
+        void checkVerificationStatus();
+        const intervalId = window.setInterval(() => {
+            void checkVerificationStatus();
+        }, 3000);
+
+        return () => window.clearInterval(intervalId);
+    }, [shouldShowVerificationModal]);
+
+    const passwordChecks = {
+        minLength: data.password.length >= 8,
+        uppercase: /[A-Z]/.test(data.password),
+        lowercase: /[a-z]/.test(data.password),
+        number: /\d/.test(data.password),
+        special: /[^A-Za-z0-9]/.test(data.password),
+    };
+    const characterTypeCount = [passwordChecks.uppercase, passwordChecks.lowercase, passwordChecks.number, passwordChecks.special].filter(
+        Boolean,
+    ).length;
+    const strengthLevel = passwordChecks.minLength && characterTypeCount === 4 ? 'Strong' : passwordChecks.minLength && characterTypeCount >= 3 ? 'Medium' : 'Weak';
+    const strengthBarClass =
+        strengthLevel === 'Strong' ? 'w-full bg-green-600' : strengthLevel === 'Medium' ? 'w-4/5 bg-amber-500' : 'w-1/3 bg-red-500';
+    const strengthTextClass =
+        strengthLevel === 'Strong'
+            ? 'text-green-700'
+            : strengthLevel === 'Medium'
+              ? 'text-amber-700'
+              : 'text-red-600';
+    const isAcceptablePassword = strengthLevel !== 'Weak';
+    const nameError = (errors as Record<string, string | undefined>).name ?? errors.first_name ?? errors.last_name;
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
+
+        clearErrors('password');
+        if (!isAcceptablePassword) {
+            setError('password', 'Weak password will not be accepted. Please improve your password.');
+            return;
+        }
+
         transform((d) => ({
             name: [d.first_name, d.last_name].map((s) => s.trim()).filter(Boolean).join(' ') || 'User',
             email: d.email,
             password: d.password,
             password_confirmation: d.password_confirmation,
         }));
-        post('/register');
+        post('/register', { replace: true });
+    };
+
+    const resendVerificationEmail = () => {
+        postVerificationNotification('/register/resend-verification', {
+            preserveScroll: true,
+            onSuccess: () => setShowVerificationModal(true),
+        });
+    };
+
+    const closeVerificationModal = () => {
+        setShowVerificationModal(false);
+        reset();
+        clearErrors();
     };
 
     return (
@@ -83,7 +140,8 @@ export default function Welcome() {
                     <div className="flex items-center gap-3 font-['Inter'] text-sm leading-5 tracking-[-0.02em] text-[#545F71]">
                         <span className="hidden sm:inline">Already have an account?</span>
                         <Link
-                            href="/profile/login"
+                            href="/login"
+                            replace
                             className="inline-flex h-9 items-center justify-center rounded-lg bg-[#FAB95B] px-6 font-semibold text-[#ffffff] shadow-sm ring-1 ring-black/5"
                         >
                             Login
@@ -150,11 +208,7 @@ export default function Welcome() {
                                         />
                                     </div>
                                 </div>
-                                {((errors as Record<string, string | undefined>)['name'] ?? errors.first_name ?? errors.last_name) && (
-                                    <p className="text-xs text-red-600">
-                                        {(errors as Record<string, string | undefined>)['name'] ?? errors.first_name ?? errors.last_name}
-                                    </p>
-                                )}
+                                {nameError && <p className="text-xs text-red-600">{nameError}</p>}
 
                                 <div>
                                     <label className="font-['Inter'] text-sm font-medium text-[#444444]" htmlFor="email">
@@ -170,117 +224,77 @@ export default function Welcome() {
                                         type="email"
                                         required
                                     />
-                                    {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email}</p>}
+                                    {errors.email && (
+                                        <p className="mt-1 text-xs text-red-600">{errors.email}</p>
+                                    )}
                                 </div>
 
                                 <div>
                                     <label className="font-['Inter'] text-sm font-medium text-[#444444]" htmlFor="password">
                                         Password
                                     </label>
-                                    <div className="relative mt-2">
-                                        <input
-                                            id="password"
-                                            name="password"
-                                            autoComplete="new-password"
-                                            value={data.password}
-                                            onChange={(e) => setData('password', e.target.value)}
-                                            className="w-full rounded-xl bg-[#F9F7F4] px-4 py-3 pr-11 font-['Inter'] text-sm font-medium text-[#444444] ring-1 ring-black/10 outline-none focus:ring-2 focus:ring-[#060644]"
-                                            type={showPassword ? 'text' : 'password'}
-                                            required
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowPassword((v) => !v)}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 text-[#545F71] hover:bg-black/5 hover:text-[#060644]"
-                                            aria-label={showPassword ? 'Hide password' : 'Show password'}
-                                        >
-                                            {showPassword ? (
-                                                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
-                                                </svg>
-                                            ) : (
-                                                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                </svg>
-                                            )}
-                                        </button>
-                                    </div>
-                                    {data.password.length > 0 && (
-                                        <div className="mt-2 flex items-center gap-2">
-                                            <div className="flex flex-1 gap-0.5">
-                                                <span
-                                                    className={`h-1 flex-1 rounded-full ${
-                                                        strength === 'weak' ? 'bg-red-400' : strength === 'medium' ? 'bg-amber-400' : 'bg-emerald-500'
-                                                    }`}
-                                                />
-                                                <span
-                                                    className={`h-1 flex-1 rounded-full ${
-                                                        strength === 'medium' || strength === 'strong' ? (strength === 'strong' ? 'bg-emerald-500' : 'bg-amber-400') : 'bg-gray-200'
-                                                    }`}
-                                                />
-                                                <span
-                                                    className={`h-1 flex-1 rounded-full ${strength === 'strong' ? 'bg-emerald-500' : 'bg-gray-200'}`}
-                                                />
-                                            </div>
-                                            <span
-                                                className={`text-[11px] font-semibold ${
-                                                    strength === 'weak' ? 'text-red-600' : strength === 'medium' ? 'text-amber-600' : 'text-emerald-600'
-                                                }`}
-                                            >
-                                                {strength.charAt(0).toUpperCase() + strength.slice(1)}
-                                            </span>
-                                        </div>
+                                    <input
+                                        id="password"
+                                        name="password"
+                                        autoComplete="new-password"
+                                        value={data.password}
+                                        onChange={(e) => {
+                                            setData('password', e.target.value);
+                                            clearErrors('password');
+                                        }}
+                                        className="mt-2 w-full rounded-xl bg-[#F9F7F4] px-4 py-3 font-['Inter'] text-sm font-medium text-[#444444] ring-1 ring-black/10 outline-none focus:ring-2 focus:ring-[#060644]"
+                                        type="password"
+                                        required
+                                    />
+                                    {errors.password && (
+                                        <p className="mt-1 text-xs text-red-600">{errors.password}</p>
                                     )}
-                                    <p className="mt-2 text-[11px] font-medium text-[#444444]">Password requirements:</p>
-                                    <ul className="mt-1 space-y-1">
-                                        {ruleResults.map((r) => (
-                                            <li key={r.id} className="flex items-center gap-2 text-[11px] text-[#444444]">
-                                                {r.met ? (
-                                                    <span className="text-emerald-600" aria-hidden>✓</span>
-                                                ) : (
-                                                    <span className="text-gray-300" aria-hidden>○</span>
-                                                )}
-                                                <span className={r.met ? 'text-[#333]' : ''}>{r.label}</span>
+                                    <div className="mt-2 rounded-md bg-[#F9F7F4] p-2 text-[10px] leading-4 text-[#555555] ring-1 ring-black/5">
+                                        <div className="flex items-center justify-between">
+                                            <p className="font-medium text-[#3A4656]">Password requirements: </p>
+                                            {data.password.length > 0 && (
+                                                <span className={`text-[10px] font-medium ${strengthTextClass}`}>Strength: {strengthLevel}</span>
+                                            )}
+                                        </div>
+                                        {data.password.length > 0 && (
+                                            <div className="mt-1.5 h-1.5 w-full rounded-full bg-[#E2E8F0]">
+                                                <div className={`h-1.5 rounded-full transition-all duration-200 ${strengthBarClass}`} />
+                                            </div>
+                                        )}
+                                        <ul className="mt-1.5 space-y-0.5">
+                                            <li className={passwordChecks.minLength ? 'text-green-700' : 'text-[#444444]'}>
+                                                {passwordChecks.minLength ? 'Met: ' : 'Missing: '}At least 8 characters
                                             </li>
-                                        ))}
-                                    </ul>
-                                    {errors.password && <p className="mt-1 text-xs text-red-600">{errors.password}</p>}
+                                            <li className={passwordChecks.uppercase ? 'text-green-700' : 'text-[#444444]'}>
+                                                {passwordChecks.uppercase ? 'Met: ' : 'Missing: '}At least one uppercase letter (A-Z)
+                                            </li>
+                                            <li className={passwordChecks.lowercase ? 'text-green-700' : 'text-[#444444]'}>
+                                                {passwordChecks.lowercase ? 'Met: ' : 'Missing: '}At least one lowercase letter (a-z)
+                                            </li>
+                                            <li className={passwordChecks.number ? 'text-green-700' : 'text-[#444444]'}>
+                                                {passwordChecks.number ? 'Met: ' : 'Missing: '}At least one number (0-9)
+                                            </li>
+                                            <li className={passwordChecks.special ? 'text-green-700' : 'text-[#444444]'}>
+                                                {passwordChecks.special ? 'Met: ' : 'Missing: '}At least one special character (example: ! @ # $ %)
+                                            </li>
+                                        </ul>
+                                    </div>
                                 </div>
 
                                 <div>
                                     <label className="font-['Inter'] text-sm font-medium text-[#444444]" htmlFor="confirm_password">
                                         Confirm Password
                                     </label>
-                                    <div className="relative mt-2">
-                                        <input
-                                            id="confirm_password"
-                                            name="password_confirmation"
-                                            autoComplete="new-password"
-                                            value={data.password_confirmation}
-                                            onChange={(e) => setData('password_confirmation', e.target.value)}
-                                            className="w-full rounded-xl bg-[#F9F7F4] px-4 py-3 pr-11 font-['Inter'] text-sm font-medium text-[#444444] ring-1 ring-black/10 outline-none focus:ring-2 focus:ring-[#060644]"
-                                            type={showConfirmPassword ? 'text' : 'password'}
-                                            required
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowConfirmPassword((v) => !v)}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 text-[#545F71] hover:bg-black/5 hover:text-[#060644]"
-                                            aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
-                                        >
-                                            {showConfirmPassword ? (
-                                                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
-                                                </svg>
-                                            ) : (
-                                                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                </svg>
-                                            )}
-                                        </button>
-                                    </div>
+                                    <input
+                                        id="confirm_password"
+                                        name="password_confirmation"
+                                        autoComplete="new-password"
+                                        value={data.password_confirmation}
+                                        onChange={(e) => setData('password_confirmation', e.target.value)}
+                                        className="mt-2 w-full rounded-xl bg-[#F9F7F4] px-4 py-3 font-['Inter'] text-sm font-medium text-[#444444] ring-1 ring-black/10 outline-none focus:ring-2 focus:ring-[#060644]"
+                                        type="password"
+                                        required
+                                    />
                                     {errors.password_confirmation && (
                                         <p className="mt-1 text-xs text-red-600">{errors.password_confirmation}</p>
                                     )}
@@ -297,6 +311,39 @@ export default function Welcome() {
                         </div>
                     </section>
                 </main>
+
+                {shouldShowVerificationModal && (
+                    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/35 px-4">
+                        <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-black/10">
+                            <h3 className="font-['Poppins'] text-xl font-black tracking-[-0.02em] text-[#060644]">
+                                Verify Your Email
+                            </h3>
+                            <p className="mt-3 font-['Inter'] text-sm leading-6 text-[#545F71]">
+                                We sent a verification link to{' '}
+                                <span className="font-semibold text-[#060644]">{verification_email ?? data.email}</span>.
+                                Please verify your account to continue to your dashboard.
+                            </p>
+
+                            <div className="mt-6 flex items-center justify-end gap-3">
+                                <button
+                                    type="button"
+                                    onClick={closeVerificationModal}
+                                    className="inline-flex h-10 items-center justify-center rounded-lg border border-[#D1D5DB] px-4 font-['Inter'] text-sm font-semibold text-[#4B5563] hover:bg-[#F3F4F6]"
+                                >
+                                    Close
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={resendVerificationEmail}
+                                    disabled={resendingVerification}
+                                    className="inline-flex h-10 items-center justify-center rounded-lg bg-[#547792] px-4 font-['Inter'] text-sm font-semibold text-white hover:bg-[#4c6f87] disabled:cursor-not-allowed disabled:opacity-70"
+                                >
+                                    {resendingVerification ? 'Resending...' : 'Resend Email'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </>
     );

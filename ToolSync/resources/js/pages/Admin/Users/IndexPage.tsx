@@ -4,7 +4,9 @@ import { UserTable, type User } from '@/Components/Admin/UserTable';
 import { EmptyState } from '@/Components/EmptyState';
 import { toast } from '@/Components/Toast';
 import AppLayout from '@/Layouts/AppLayout';
+import type { DepartmentApiItem } from '@/lib/apiTypes';
 import { apiRequest } from '@/lib/http';
+import { UserFormModal, type UserDepartmentOption, type UserFormData } from './UserFormModal';
 
 type AdminUsersPageProps = {
     users: User[];
@@ -14,7 +16,11 @@ export default function IndexPage() {
     const { users: initialUsers } = usePage<AdminUsersPageProps>().props;
 
     const [users, setUsers] = useState<User[]>(initialUsers);
+    const [departments, setDepartments] = useState<UserDepartmentOption[]>([]);
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingUser, setEditingUser] = useState<User | null>(null);
+    const [saving, setSaving] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
@@ -34,8 +40,37 @@ export default function IndexPage() {
         };
     }, []);
 
+    useEffect(() => {
+        let cancelled = false;
+
+        apiRequest<{ data: DepartmentApiItem[] }>('/api/departments')
+            .then((response) => {
+                if (cancelled) return;
+
+                setDepartments(
+                    (response.data ?? []).map((department) => ({
+                        id: department.id,
+                        name: department.name,
+                    })),
+                );
+            })
+            .catch(() => {
+                if (!cancelled) setDepartments([]);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
     const handleEdit = (user: User) => {
-        toast(`Edit user: ${user.name}`, { icon: '✏️' });
+        setEditingUser(user);
+        setIsModalOpen(true);
+    };
+
+    const handleInviteUser = () => {
+        setEditingUser(null);
+        setIsModalOpen(true);
     };
 
     const handleToggleStatus = async (user: User) => {
@@ -44,12 +79,14 @@ export default function IndexPage() {
         try {
             setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, status: newStatus } : u)));
 
-            await apiRequest<{ message: string }>(`/api/admin/users/${user.id}`, {
+            const response = await apiRequest<{ message: string; data: User }>(`/api/admin/users/${user.id}`, {
                 method: 'PUT',
                 body: {
                     status: newStatus === 'Active' ? 'ACTIVE' : 'INACTIVE',
                 },
             });
+
+            setUsers((prev) => prev.map((u) => (u.id === user.id ? response.data : u)));
 
             if (newStatus === 'Active') {
                 toast.success(`${user.name} has been activated`);
@@ -60,6 +97,44 @@ export default function IndexPage() {
             setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, status: user.status } : u)));
             const message = error instanceof Error ? error.message : 'Failed to update user status.';
             toast.error(message);
+        }
+    };
+
+    const handleSaveUser = async (data: UserFormData) => {
+        const payload = {
+            name: data.name,
+            email: data.email,
+            role: data.role === 'Admin' ? 'ADMIN' : 'USER',
+            status: data.status === 'Active' ? 'ACTIVE' : 'INACTIVE',
+            department_id: data.departmentId,
+            ...(data.password ? { password: data.password } : {}),
+        };
+
+        setSaving(true);
+        try {
+            if (editingUser) {
+                const response = await apiRequest<{ message: string; data: User }>(`/api/admin/users/${editingUser.id}`, {
+                    method: 'PUT',
+                    body: payload,
+                });
+                setUsers((prev) => prev.map((user) => (user.id === editingUser.id ? response.data : user)));
+                toast.success(`${response.data.name} has been updated`);
+            } else {
+                const response = await apiRequest<{ message: string; data: User }>('/api/admin/users', {
+                    method: 'POST',
+                    body: payload,
+                });
+                setUsers((prev) => [response.data, ...prev]);
+                toast.success(`${response.data.name} has been created`);
+            }
+
+            setIsModalOpen(false);
+            setEditingUser(null);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to save user.';
+            toast.error(message);
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -139,11 +214,7 @@ export default function IndexPage() {
                     <div className="flex flex-wrap gap-2">
                         <button
                             type="button"
-                            onClick={() =>
-                                toast('Invite user feature coming soon!', {
-                                    icon: '📧',
-                                })
-                            }
+                            onClick={handleInviteUser}
                             className="inline-flex items-center gap-1 rounded-full bg-blue-600 px-4 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-blue-700"
                         >
                             <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -202,10 +273,7 @@ export default function IndexPage() {
                         description="Get started by inviting your first user to the system."
                         action={{
                             label: 'Invite First User',
-                            onClick: () =>
-                                toast('Invite user feature coming soon!', {
-                                    icon: '📧',
-                                }),
+                            onClick: handleInviteUser,
                         }}
                     />
                 ) : (
@@ -218,6 +286,21 @@ export default function IndexPage() {
                     />
                 )}
             </div>
+
+            <UserFormModal
+                show={isModalOpen}
+                user={editingUser}
+                departments={departments}
+                saving={saving}
+                onClose={() => {
+                    if (saving) return;
+                    setIsModalOpen(false);
+                    setEditingUser(null);
+                }}
+                onSave={(formData) => {
+                    void handleSaveUser(formData);
+                }}
+            />
         </AppLayout>
     );
 }

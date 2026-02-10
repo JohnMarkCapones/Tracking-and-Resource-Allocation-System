@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -177,64 +178,31 @@ class AdminDashboardController extends Controller
 
     public function users(): Response
     {
-        // Static mock data for user management.
-        $users = [
-            [
-                'id' => 1,
-                'name' => 'John Miller',
-                'email' => 'john.miller@company.com',
-                'department' => 'Engineering',
-                'role' => 'Employee',
-                'status' => 'Active',
-                'activeBorrowings' => 2,
-                'totalBorrowings' => 15,
-                'joinedAt' => 'Jan 10, 2025',
-            ],
-            [
-                'id' => 2,
-                'name' => 'Jane Doe',
-                'email' => 'jane.doe@company.com',
-                'department' => 'Design',
-                'role' => 'Employee',
-                'status' => 'Active',
-                'activeBorrowings' => 1,
-                'totalBorrowings' => 8,
-                'joinedAt' => 'Mar 15, 2025',
-            ],
-            [
-                'id' => 3,
-                'name' => 'Mark Lee',
-                'email' => 'mark.lee@company.com',
-                'department' => 'Marketing',
-                'role' => 'Manager',
-                'status' => 'Active',
-                'activeBorrowings' => 0,
-                'totalBorrowings' => 22,
-                'joinedAt' => 'Sep 1, 2024',
-            ],
-            [
-                'id' => 4,
-                'name' => 'Sarah Wilson',
-                'email' => 'sarah.wilson@company.com',
-                'department' => 'Operations',
-                'role' => 'Employee',
-                'status' => 'Inactive',
-                'activeBorrowings' => 0,
-                'totalBorrowings' => 5,
-                'joinedAt' => 'Jun 20, 2025',
-            ],
-            [
-                'id' => 5,
-                'name' => 'Admin User',
-                'email' => 'admin@company.com',
-                'department' => 'IT',
-                'role' => 'Admin',
-                'status' => 'Active',
-                'activeBorrowings' => 3,
-                'totalBorrowings' => 45,
-                'joinedAt' => 'Jan 1, 2024',
-            ],
-        ];
+        $users = User::query()
+            ->with('department:id,name')
+            ->withCount('toolAllocations')
+            ->withCount([
+                'toolAllocations as active_borrowings_count' => function ($q) {
+                    $q->where('status', 'BORROWED');
+                },
+            ])
+            ->orderBy('name')
+            ->get()
+            ->map(function (User $user): array {
+                return [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'department' => $user->department?->name ?? 'Unassigned',
+                    'departmentId' => $user->department_id,
+                    'role' => $user->role === 'ADMIN' ? 'Admin' : 'User',
+                    'status' => $user->status === 'ACTIVE' ? 'Active' : 'Inactive',
+                    'activeBorrowings' => (int) ($user->active_borrowings_count ?? 0),
+                    'totalBorrowings' => (int) ($user->tool_allocations_count ?? 0),
+                    'joinedAt' => $user->created_at?->toDateString(),
+                ];
+            })
+            ->values();
 
         return Inertia::render('Admin/Users/IndexPage', [
             'users' => $users,

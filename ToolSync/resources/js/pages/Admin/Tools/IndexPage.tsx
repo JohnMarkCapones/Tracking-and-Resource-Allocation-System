@@ -16,9 +16,10 @@ function mapDtoToTool(dto: ToolDto): Tool {
         toolId: 'TL-' + dto.id,
         category: dto.category?.name ?? 'Other',
         status: mapToolStatusToUi(dto.status),
+        quantity: dto.quantity,
         condition: 'Good',
         lastMaintenance: 'N/A',
-        totalBorrowings: 0,
+        totalBorrowings: dto.allocations_count ?? 0,
         description: dto.description ?? undefined,
         specifications: {},
     };
@@ -90,7 +91,7 @@ export default function IndexPage() {
             description: data.description || null,
             category_id: categoryId,
             status: statusToApi(data.status),
-            quantity: 1,
+            quantity: data.quantity,
         };
         setSaving(true);
         try {
@@ -277,6 +278,7 @@ export default function IndexPage() {
                         onDelete={handleDelete}
                         selectedIds={selectedIds}
                         onSelectionChange={setSelectedIds}
+                        initialSearch={typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('search') ?? '' : ''}
                     />
                 )}
                 </>
@@ -312,9 +314,10 @@ export default function IndexPage() {
                             <button
                                 type="button"
                                 onClick={confirmDelete}
-                                className="rounded-full bg-rose-600 px-4 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-rose-700"
+                                disabled={saving}
+                                className="rounded-full bg-rose-600 px-4 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-rose-700 disabled:opacity-60"
                             >
-                                Delete Tool
+                                {saving ? 'Deleting…' : 'Delete Tool'}
                             </button>
                         </div>
                     </div>

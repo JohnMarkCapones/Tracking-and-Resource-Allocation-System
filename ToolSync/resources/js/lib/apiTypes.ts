@@ -18,6 +18,10 @@ export type ToolDto = {
     created_at: string;
     updated_at: string;
     category?: ToolCategoryDto;
+    /** Number of times this tool has been allocated (borrowed). */
+    allocations_count?: number;
+    /** Number of currently borrowed allocations for this tool. */
+    borrowed_count?: number;
 };
 
 export type ToolCardData = {
@@ -103,9 +107,12 @@ export function mapAllocationStatusToUi(allocation: AllocationDto, now: Date = n
         return 'Returned';
     }
 
-    const expected = new Date(allocation.expected_return_date);
+    // Parse the due date as a local calendar date (Y-m-d) and set to end-of-day (23:59:59)
+    // so a tool due on Feb 11 is only overdue starting Feb 12, not during Feb 11.
+    const dueYmd = allocation.expected_return_date.slice(0, 10);
+    const endOfDueDay = new Date(`${dueYmd}T23:59:59`);
 
-    if (expected < now) {
+    if (endOfDueDay < now) {
         return 'Overdue';
     }
 
@@ -127,6 +134,7 @@ export type DashboardRecentActivityItem = {
     tool_name: string | null;
     user_id: number;
     user_name: string | null;
+    borrow_date?: string;
     expected_return_date: string;
     status: string;
     status_display: string;
@@ -141,10 +149,24 @@ export type DashboardSummary = {
     range_days: number;
 };
 
+export type DashboardPendingApproval = {
+    id: number;
+    tool_id: number;
+    tool_name: string;
+    user_name: string;
+    user_email: string | null;
+    start_date: string | null;
+    end_date: string | null;
+};
+
 export type DashboardApiResponse = {
     data: {
         scope: { user_id: number | null };
         counts: DashboardCounts;
+        total_users?: number;
+        pending_approvals_count?: number;
+        pending_approvals?: DashboardPendingApproval[];
+        maintenance_due_count?: number;
         recent_activity: DashboardRecentActivityItem[];
         summary: DashboardSummary;
     };
@@ -157,6 +179,15 @@ export type AllocationHistoryPaginated = {
     data: AllocationHistoryItem[];
     per_page: number;
     total: number;
+};
+
+export type AllocationHistorySummary = {
+    data: {
+        total: number;
+        returned: number;
+        active: number;
+        overdue: number;
+    };
 };
 
 export type ReservationApiItem = {
@@ -249,6 +280,11 @@ export type AnalyticsOverviewApiResponse = {
         };
         top_tools: Array<{ tool_id: number; tool_name: string; borrow_count: number }>;
         status_breakdown: { borrowed: number; returned: number; overdue: number };
+        tool_utilization?: Array<{ tool_id: number; tool_name: string; days_used: number }>;
+        category_distribution?: Array<{ name: string; value: number }>;
+        top_users?: Array<{ user_id: number; user_name: string; department: string | null; borrow_count: number }>;
+        avg_return_days?: number | null;
+        new_users_count?: number;
     };
 };
 
@@ -267,4 +303,20 @@ export type FavoriteApiItem = {
     name: string;
     toolId: string;
     category: string;
+    imageUrl?: string | null;
+};
+
+export type ReportType = 'borrowing_summary' | 'tool_utilization' | 'user_activity' | 'overdue_report' | 'maintenance_log' | 'custom';
+
+export type ReportRow = Record<string, string | number>;
+
+export type ReportDataApiResponse = {
+    data: ReportRow[];
+    meta: {
+        report_type: ReportType;
+        columns: string[];
+        from: string;
+        to: string;
+        count: number;
+    };
 };

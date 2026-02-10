@@ -60,13 +60,16 @@ class ToolAllocationHistoryController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        $actor = $request->user();
         $query = ToolAllocation::query()->with(['tool', 'user'])->orderByDesc('borrow_date');
 
         if ($request->filled('tool_id')) {
             $query->where('tool_id', (int) $request->input('tool_id'));
         }
 
-        if ($request->filled('user_id')) {
+        if ($actor && ! $actor->isAdmin()) {
+            $query->where('user_id', $actor->id);
+        } elseif ($request->filled('user_id')) {
             $query->where('user_id', (int) $request->input('user_id'));
         }
 
@@ -94,10 +97,10 @@ class ToolAllocationHistoryController extends Controller
         $paginator = $query->paginate($perPage);
 
         $paginator->getCollection()->transform(function (ToolAllocation $a) {
-            $expected = $a->expected_return_date;
+            $rawExpected = $a->getRawOriginal('expected_return_date');
             $isOverdue = $a->status === 'BORROWED'
-                && ! empty($expected)
-                && Carbon::parse($expected)->isPast();
+                && ! empty($rawExpected)
+                && Carbon::parse(substr((string) $rawExpected, 0, 10))->endOfDay()->isPast();
 
             $a->setAttribute('is_overdue', $isOverdue);
             $a->setAttribute('status_display', $isOverdue ? 'OVERDUE' : $a->status);
@@ -113,9 +116,10 @@ class ToolAllocationHistoryController extends Controller
      */
     public function export(Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
     {
+        $actor = $request->user();
         $filename = 'tool_allocations_'.now()->format('Ymd_His').'.csv';
 
-        $callback = function () use ($request): void {
+        $callback = function () use ($request, $actor): void {
             $handle = fopen('php://output', 'wb');
 
             fputcsv($handle, [
@@ -135,7 +139,9 @@ class ToolAllocationHistoryController extends Controller
                 $query->where('tool_id', (int) $request->input('tool_id'));
             }
 
-            if ($request->filled('user_id')) {
+            if ($actor && ! $actor->isAdmin()) {
+                $query->where('user_id', $actor->id);
+            } elseif ($request->filled('user_id')) {
                 $query->where('user_id', (int) $request->input('user_id'));
             }
 
@@ -149,6 +155,12 @@ class ToolAllocationHistoryController extends Controller
 
             if ($request->filled('to')) {
                 $query->where('borrow_date', '<=', Carbon::parse($request->input('to')));
+            }
+
+            if ($request->boolean('overdue')) {
+                $query
+                    ->where('status', 'BORROWED')
+                    ->where('expected_return_date', '<', now());
             }
 
             foreach ($query->cursor() as $allocation) {
@@ -170,6 +182,47 @@ class ToolAllocationHistoryController extends Controller
 
         return response()->streamDownload($callback, $filename, [
             'Content-Type' => 'text/csv',
+        ]);
+    }
+
+    /**
+     * Get allocation history summary counts (total, returned, active, overdue).
+     */
+    public function summary(Request $request): JsonResponse
+    {
+        $actor = $request->user();
+        $base = ToolAllocation::query();
+
+        if ($request->filled('tool_id')) {
+            $base->where('tool_id', (int) $request->input('tool_id'));
+        }
+        if ($actor && ! $actor->isAdmin()) {
+            $base->where('user_id', $actor->id);
+        } elseif ($request->filled('user_id')) {
+            $base->where('user_id', (int) $request->input('user_id'));
+        }
+        if ($request->filled('from')) {
+            $base->where('borrow_date', '>=', Carbon::parse($request->input('from')));
+        }
+        if ($request->filled('to')) {
+            $base->where('borrow_date', '<=', Carbon::parse($request->input('to')));
+        }
+
+        $total = (int) (clone $base)->count();
+        $returned = (int) (clone $base)->where('status', 'RETURNED')->count();
+        $borrowed = (int) (clone $base)->where('status', 'BORROWED')->count();
+        $overdue = (int) (clone $base)
+            ->where('status', 'BORROWED')
+            ->where('expected_return_date', '<', now())
+            ->count();
+
+        return response()->json([
+            'data' => [
+                'total' => $total,
+                'returned' => $returned,
+                'active' => $borrowed,
+                'overdue' => $overdue,
+            ],
         ]);
     }
 }

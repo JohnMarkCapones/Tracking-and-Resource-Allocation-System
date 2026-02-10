@@ -3,11 +3,14 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Tool;
 use App\Models\ToolAllocation;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * @group Analytics
@@ -57,7 +60,10 @@ class AnalyticsController extends Controller
      */
     public function overview(Request $request): JsonResponse
     {
-        $userId = $request->filled('user_id') ? (int) $request->input('user_id') : null;
+        $actor = $request->user();
+        $userId = ($actor && ! $actor->isAdmin())
+            ? $actor->id
+            : ($request->filled('user_id') ? (int) $request->input('user_id') : null);
 
         $from = $request->filled('from') ? Carbon::parse($request->input('from')) : now()->subDays(30)->startOfDay();
         $to = $request->filled('to') ? Carbon::parse($request->input('to')) : now()->endOfDay();
@@ -98,6 +104,68 @@ class AnalyticsController extends Controller
             ->where('expected_return_date', '<', now())
             ->count();
 
+        $from60 = now()->subDays(60)->startOfDay();
+        $to60 = now()->endOfDay();
+        $utilBase = ToolAllocation::query()
+            ->where('borrow_date', '<=', $to60)
+            ->where(function ($q) use ($from60): void {
+                $q->whereNull('actual_return_date')
+                    ->orWhere('actual_return_date', '>=', $from60);
+            });
+        if ($userId !== null) {
+            $utilBase->where('user_id', $userId);
+        }
+        $toolUtilization = (clone $utilBase)
+            ->join('tools', 'tool_allocations.tool_id', '=', 'tools.id')
+            ->selectRaw('tools.id as tool_id, tools.name as tool_name,
+                SUM(GREATEST(0, DATEDIFF(LEAST(COALESCE(actual_return_date, ?), ?), GREATEST(borrow_date, ?)) + 1)) as days_used',
+                [$to60, $to60, $from60])
+            ->groupBy('tools.id', 'tools.name')
+            ->orderByDesc('days_used')
+            ->limit(10)
+            ->get()
+            ->map(fn ($r) => ['tool_id' => (int) $r->tool_id, 'tool_name' => $r->tool_name, 'days_used' => (int) round((float) $r->days_used)]);
+
+        $categoryDistribution = [];
+        if (Schema::hasTable('tool_categories')) {
+            $categoryDistribution = Tool::query()
+                ->join('tool_categories', 'tools.category_id', '=', 'tool_categories.id')
+                ->selectRaw('tool_categories.name as name, COUNT(*) as value')
+                ->groupBy('tool_categories.id', 'tool_categories.name')
+                ->get()
+                ->map(fn ($r) => ['name' => $r->name, 'value' => (int) $r->value]);
+        }
+
+        $topUsersQuery = (clone $base)
+            ->join('users', 'tool_allocations.user_id', '=', 'users.id');
+        if (Schema::hasTable('departments')) {
+            $topUsersQuery->leftJoin('departments', 'users.department_id', '=', 'departments.id')
+                ->selectRaw('users.id as user_id, users.name as user_name, departments.name as department_name, COUNT(*) as borrow_count')
+                ->groupBy('users.id', 'users.name', 'departments.name');
+        } else {
+            $topUsersQuery->selectRaw('users.id as user_id, users.name as user_name, NULL as department_name, COUNT(*) as borrow_count')
+                ->groupBy('users.id', 'users.name');
+        }
+        $topUsers = $topUsersQuery
+            ->orderByDesc('borrow_count')
+            ->limit(10)
+            ->get()
+            ->map(fn ($r) => [
+                'user_id' => (int) $r->user_id,
+                'user_name' => $r->user_name,
+                'department' => $r->department_name ?? null,
+                'borrow_count' => (int) $r->borrow_count,
+            ]);
+
+        $avgReturnDays = (clone $base)
+            ->where('status', 'RETURNED')
+            ->whereNotNull('actual_return_date')
+            ->selectRaw('AVG(DATEDIFF(actual_return_date, borrow_date)) as avg_days')
+            ->value('avg_days');
+        $avgReturnDays = $avgReturnDays !== null ? round((float) $avgReturnDays, 1) : null;
+
+        $newUsersCount = (int) User::query()->whereBetween('created_at', [$from, $to])->count();
+
         return response()->json([
             'data' => [
                 'scope' => [
@@ -117,6 +185,11 @@ class AnalyticsController extends Controller
                     'returned' => $returnedCount,
                     'overdue' => $overdueCount,
                 ],
+                'tool_utilization' => $toolUtilization,
+                'category_distribution' => $categoryDistribution,
+                'top_users' => $topUsers,
+                'avg_return_days' => $avgReturnDays,
+                'new_users_count' => $newUsersCount,
             ],
         ]);
     }
@@ -126,7 +199,10 @@ class AnalyticsController extends Controller
      */
     public function export(Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
     {
-        $userId = $request->filled('user_id') ? (int) $request->input('user_id') : null;
+        $actor = $request->user();
+        $userId = ($actor && ! $actor->isAdmin())
+            ? $actor->id
+            : ($request->filled('user_id') ? (int) $request->input('user_id') : null);
         $from = $request->filled('from') ? Carbon::parse($request->input('from')) : now()->subDays(30)->startOfDay();
         $to = $request->filled('to') ? Carbon::parse($request->input('to')) : now()->endOfDay();
 

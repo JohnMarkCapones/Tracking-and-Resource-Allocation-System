@@ -1,11 +1,11 @@
 import { Head } from '@inertiajs/react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Breadcrumb } from '@/Components/Breadcrumb';
 import { toast } from '@/Components/Toast';
 import AppLayout from '@/Layouts/AppLayout';
 import { exportToCSV, exportToPDF } from '@/utils/exportUtils';
-
-type ReportType = 'borrowing_summary' | 'tool_utilization' | 'user_activity' | 'overdue_report' | 'maintenance_log' | 'custom';
+import { apiRequest } from '@/lib/http';
+import type { ReportDataApiResponse, ReportType } from '@/lib/apiTypes';
 
 type SavedReport = {
     id: number;
@@ -76,77 +76,155 @@ const PRESET_REPORTS: SavedReport[] = [
     },
 ];
 
-const MOCK_REPORT_DATA = [
-    {
-        tool_name: 'MacBook Pro',
-        tool_id: 'LP-0001',
-        category: 'Laptops',
-        borrower_name: 'Jane Doe',
-        borrow_date: '2026-01-15',
-        return_date: '2026-01-22',
-        duration: '7',
-        borrow_status: 'Returned',
-        overdue_days: '0',
-        usage_count: '24',
-        utilization_rate: '80%',
-        condition: 'Excellent',
-    },
-    {
-        tool_name: 'Oscilloscope',
-        tool_id: 'EL-0003',
-        category: 'Electronics',
-        borrower_name: 'John Smith',
-        borrow_date: '2026-01-20',
-        return_date: '2026-02-01',
-        duration: '12',
-        borrow_status: 'Returned',
-        overdue_days: '2',
-        usage_count: '38',
-        utilization_rate: '63%',
-        condition: 'Good',
-    },
-    {
-        tool_name: 'Canon EOS R6',
-        tool_id: 'CM-0001',
-        category: 'Cameras',
-        borrower_name: 'Alice Johnson',
-        borrow_date: '2026-02-01',
-        return_date: '',
-        duration: '5',
-        borrow_status: 'Active',
-        overdue_days: '0',
-        usage_count: '15',
-        utilization_rate: '25%',
-        condition: 'Fair',
-    },
-];
+const SAVED_REPORTS_STORAGE_KEY = 'toolsync_saved_reports';
 
 export default function IndexPage() {
     const [activeTab, setActiveTab] = useState<'saved' | 'builder'>('saved');
+    const [savedReports, setSavedReports] = useState<SavedReport[]>(() => {
+        if (typeof window === 'undefined') {
+            return PRESET_REPORTS;
+        }
+
+        try {
+            const raw = localStorage.getItem(SAVED_REPORTS_STORAGE_KEY);
+            if (!raw) {
+                return PRESET_REPORTS;
+            }
+
+            const parsed = JSON.parse(raw) as SavedReport[];
+            if (!Array.isArray(parsed) || parsed.length === 0) {
+                return PRESET_REPORTS;
+            }
+
+            return parsed;
+        } catch {
+            return PRESET_REPORTS;
+        }
+    });
     const [selectedFields, setSelectedFields] = useState<string[]>(['tool_name', 'borrower_name', 'borrow_date', 'borrow_status']);
+    const [reportType, setReportType] = useState<ReportType>('borrowing_summary');
     const [reportName, setReportName] = useState('');
     const [schedule, setSchedule] = useState('none');
+    const [fromDate, setFromDate] = useState('');
+    const [toDate, setToDate] = useState('');
+    const [isExporting, setIsExporting] = useState(false);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+
+        localStorage.setItem(SAVED_REPORTS_STORAGE_KEY, JSON.stringify(savedReports));
+    }, [savedReports]);
 
     const toggleField = (key: string) => {
         setSelectedFields((prev) => (prev.includes(key) ? prev.filter((f) => f !== key) : [...prev, key]));
     };
 
-    const handleExportCSV = (columns: string[]) => {
-        const cols = columns.map((key) => {
+    const getColumnDefinitions = (columns: string[]) =>
+        columns.map((key) => {
             const field = AVAILABLE_FIELDS.find((f) => f.key === key);
             return { key, label: field?.label ?? key };
         });
-        exportToCSV(MOCK_REPORT_DATA, 'report', cols);
-        toast.success('CSV exported successfully');
+
+    const fetchReportData = async (type: ReportType, columns: string[]) => {
+        const response = await apiRequest<ReportDataApiResponse>('/api/reports/data', {
+            method: 'POST',
+            body: {
+                report_type: type,
+                columns,
+                from: fromDate || undefined,
+                to: toDate || undefined,
+                limit: 1000,
+            },
+        });
+
+        return response.data;
     };
 
-    const handleExportPDF = async (columns: string[]) => {
-        const cols = columns.map((key) => {
-            const field = AVAILABLE_FIELDS.find((f) => f.key === key);
-            return { key, label: field?.label ?? key };
-        });
-        await exportToPDF(MOCK_REPORT_DATA, 'report', 'ToolSync Report', cols);
-        toast.success('PDF exported successfully');
+    const sanitizeFileName = (name: string) => name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    const scheduleLabel = (value: string) => (value === 'none' ? undefined : value.charAt(0).toUpperCase() + value.slice(1));
+
+    const stampLastGenerated = (reportName: string) => {
+        const generatedAt = new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+        setSavedReports((prev) =>
+            prev.map((report) => (report.name === reportName ? { ...report, lastGenerated: generatedAt } : report)),
+        );
+    };
+
+    const handleSaveReportTemplate = () => {
+        if (!reportName.trim()) {
+            toast.error('Enter a report name before saving');
+            return;
+        }
+
+        if (selectedFields.length === 0) {
+            toast.error('Select at least one field before saving');
+            return;
+        }
+
+        const newReport: SavedReport = {
+            id: Date.now(),
+            name: reportName.trim(),
+            type: reportType,
+            schedule: scheduleLabel(schedule),
+            columns: selectedFields,
+            lastGenerated: undefined,
+        };
+
+        setSavedReports((prev) => [newReport, ...prev]);
+        setActiveTab('saved');
+        toast.success('Report template saved');
+    };
+
+    const handleExportCSV = async (columns: string[], type: ReportType, filenameBase: string) => {
+        if (columns.length === 0) {
+            toast.error('Select at least one field before exporting');
+            return;
+        }
+
+        setIsExporting(true);
+        try {
+            const data = await fetchReportData(type, columns);
+            if (data.length === 0) {
+                toast.error('No report data found for the selected filters');
+                return;
+            }
+
+            exportToCSV(data, sanitizeFileName(filenameBase) || 'report', getColumnDefinitions(columns));
+            toast.success('CSV exported successfully');
+            stampLastGenerated(filenameBase);
+        } catch (error) {
+            console.error(error);
+            toast.error('Failed to generate CSV report');
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
+    const handleExportPDF = async (columns: string[], type: ReportType, filenameBase: string, title: string) => {
+        if (columns.length === 0) {
+            toast.error('Select at least one field before exporting');
+            return;
+        }
+
+        setIsExporting(true);
+        try {
+            const data = await fetchReportData(type, columns);
+            if (data.length === 0) {
+                toast.error('No report data found for the selected filters');
+                return;
+            }
+
+            await exportToPDF(data, sanitizeFileName(filenameBase) || 'report', title, getColumnDefinitions(columns));
+            toast.success('PDF exported successfully');
+            stampLastGenerated(filenameBase);
+        } catch (error) {
+            console.error(error);
+            toast.error('Failed to generate PDF report');
+        } finally {
+            setIsExporting(false);
+        }
     };
 
     const categories = [...new Set(AVAILABLE_FIELDS.map((f) => f.category))];
@@ -187,13 +265,13 @@ export default function IndexPage() {
 
                 {activeTab === 'saved' && (
                     <div className="space-y-3">
-                        {PRESET_REPORTS.map((report) => (
+                        {savedReports.map((report) => (
                             <div key={report.id} className="rounded-2xl bg-white p-5 shadow-sm dark:bg-gray-800">
                                 <div className="flex items-start justify-between">
                                     <div>
                                         <p className="text-sm font-semibold text-gray-900 dark:text-white">{report.name}</p>
                                         <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                                            {report.columns.length} columns · Last generated: {report.lastGenerated}
+                                            {report.columns.length} columns · Last generated: {report.lastGenerated ?? 'Never'}
                                         </p>
                                         {report.schedule && (
                                             <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
@@ -208,14 +286,16 @@ export default function IndexPage() {
                                     <div className="flex gap-2">
                                         <button
                                             type="button"
-                                            onClick={() => handleExportCSV(report.columns)}
+                                            onClick={() => void handleExportCSV(report.columns, report.type, report.name)}
+                                            disabled={isExporting}
                                             className="rounded-full border border-gray-200 px-3 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300"
                                         >
                                             CSV
                                         </button>
                                         <button
                                             type="button"
-                                            onClick={() => handleExportPDF(report.columns)}
+                                            onClick={() => void handleExportPDF(report.columns, report.type, report.name, `${report.name} - ToolSync`)}
+                                            disabled={isExporting}
                                             className="rounded-full bg-blue-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-blue-700"
                                         >
                                             PDF
@@ -277,6 +357,40 @@ export default function IndexPage() {
                                     </div>
 
                                     <div>
+                                        <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Report Type</label>
+                                        <select
+                                            value={reportType}
+                                            onChange={(e) => setReportType(e.target.value as ReportType)}
+                                            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-xs dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                        >
+                                            <option value="borrowing_summary">Borrowing Summary</option>
+                                            <option value="tool_utilization">Tool Utilization</option>
+                                            <option value="user_activity">User Activity</option>
+                                            <option value="overdue_report">Overdue Report</option>
+                                            <option value="maintenance_log">Maintenance Log</option>
+                                            <option value="custom">Custom</option>
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Date Range</label>
+                                        <div className="mt-1 grid grid-cols-2 gap-2">
+                                            <input
+                                                type="date"
+                                                value={fromDate}
+                                                onChange={(e) => setFromDate(e.target.value)}
+                                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                            />
+                                            <input
+                                                type="date"
+                                                value={toDate}
+                                                onChange={(e) => setToDate(e.target.value)}
+                                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-xs dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div>
                                         <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Schedule</label>
                                         <select
                                             value={schedule}
@@ -321,21 +435,30 @@ export default function IndexPage() {
                             <div className="space-y-2">
                                 <button
                                     type="button"
-                                    onClick={() => handleExportCSV(selectedFields)}
+                                    onClick={() => void handleExportCSV(selectedFields, reportType, reportName || `${reportType}_report`)}
+                                    disabled={isExporting}
                                     className="w-full rounded-full bg-blue-600 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700"
                                 >
-                                    Generate CSV
+                                    {isExporting ? 'Generating...' : 'Generate CSV'}
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => handleExportPDF(selectedFields)}
+                                    onClick={() =>
+                                        void handleExportPDF(
+                                            selectedFields,
+                                            reportType,
+                                            reportName || `${reportType}_report`,
+                                            reportName || 'ToolSync Report',
+                                        )
+                                    }
+                                    disabled={isExporting}
                                     className="w-full rounded-full border border-gray-200 bg-white py-2.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
                                 >
-                                    Generate PDF
+                                    {isExporting ? 'Generating...' : 'Generate PDF'}
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => toast.success('Report saved')}
+                                    onClick={handleSaveReportTemplate}
                                     className="w-full rounded-full border border-gray-200 bg-white py-2.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
                                 >
                                     Save Report Template

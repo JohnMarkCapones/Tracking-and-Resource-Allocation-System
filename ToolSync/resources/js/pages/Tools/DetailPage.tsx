@@ -1,5 +1,6 @@
 import { Head, usePage, Link, router } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
+import { format } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
 import { Breadcrumb } from '@/Components/Breadcrumb';
 import { toast } from '@/Components/Toast';
@@ -67,6 +68,8 @@ export default function DetailPage() {
         }
     }, [page.url]);
 
+    const toLocalYmd = (date: Date): string => format(date, 'yyyy-MM-dd');
+
     useEffect(() => {
         let cancelled = false;
         const from = new Date();
@@ -74,7 +77,7 @@ export default function DetailPage() {
         to.setMonth(to.getMonth() + 2);
 
         apiRequest<AvailabilityApiResponse>(
-            `/api/tools/${tool.id}/availability?from=${from.toISOString().slice(0, 10)}&to=${to.toISOString().slice(0, 10)}`,
+            `/api/tools/${tool.id}/availability?from=${toLocalYmd(from)}&to=${toLocalYmd(to)}`,
         )
             .then((res) => {
                 if (cancelled) return;
@@ -114,8 +117,8 @@ export default function DetailPage() {
 
         setIsSubmitting(true);
 
-        const startDate = data.dateRange.from.toISOString().slice(0, 10);
-        const endDate = data.dateRange.to.toISOString().slice(0, 10);
+        const startDate = toLocalYmd(data.dateRange.from);
+        const endDate = toLocalYmd(data.dateRange.to);
 
         try {
             if (tool.status === 'Borrowed') {

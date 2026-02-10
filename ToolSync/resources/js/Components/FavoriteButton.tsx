@@ -9,6 +9,7 @@ type FavoriteButtonProps = {
         name: string;
         toolId: string;
         category: string;
+        imageUrl?: string | null;
     };
     size?: 'sm' | 'md' | 'lg';
     className?: string;

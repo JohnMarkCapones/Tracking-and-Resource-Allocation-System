@@ -23,8 +23,16 @@ Route::middleware('guest')->group(function () {
         ->name('register');
 
     Route::post('register', [RegisteredUserController::class, 'store']);
+    Route::post('register/resend-verification', [RegisteredUserController::class, 'resendVerification'])
+        ->middleware('throttle:6,1')
+        ->name('register.resend-verification');
+    Route::get('register/verify', [RegisteredUserController::class, 'verifyRegistration'])
+        ->middleware(['signed', 'throttle:6,1'])
+        ->name('registration.verify');
 
-    // Login form is at /profile/login (see web.php); form submits to POST /login.
+    Route::get('login', [AuthenticatedSessionController::class, 'create'])
+        ->name('login');
+
     Route::post('login', [AuthenticatedSessionController::class, 'store']);
 
     Route::get('forgot-password', [PasswordResetLinkController::class, 'create'])

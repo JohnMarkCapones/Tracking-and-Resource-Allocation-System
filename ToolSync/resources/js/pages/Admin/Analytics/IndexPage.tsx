@@ -73,6 +73,8 @@ export default function IndexPage() {
 
     const metricCards: MetricCard[] = useMemo(() => {
         const b = overview?.status_breakdown;
+        const avgDays = overview?.avg_return_days;
+        const newUsers = overview?.new_users_count ?? 0;
         if (!b) {
             return [
                 { label: 'Total Borrowings', value: '—', change: '—', positive: true },
@@ -85,12 +87,12 @@ export default function IndexPage() {
         }
         const total = b.borrowed + b.returned;
         return [
-            { label: 'Total Borrowings', value: String(total), change: 'vs period', positive: true },
+            { label: 'Total Borrowings', value: String(total), change: 'vs prev. period', positive: true },
             { label: 'Active Tools', value: String(b.borrowed), change: 'currently out', positive: true },
             { label: 'Overdue Items', value: String(b.overdue), change: 'need attention', positive: b.overdue === 0 },
-            { label: 'Avg. Return Time', value: '—', change: '—', positive: true },
-            { label: 'Utilization Rate', value: total > 0 ? `${Math.round((b.borrowed / total) * 100)}%` : '0%', change: '—', positive: true },
-            { label: 'New Users', value: '—', change: '—', positive: true },
+            { label: 'Avg. Return Time', value: avgDays != null ? `${avgDays} days` : '—', change: 'vs prev. period', positive: true },
+            { label: 'Utilization Rate', value: total > 0 ? `${Math.round((b.borrowed / total) * 100)}%` : '0%', change: 'vs prev. period', positive: true },
+            { label: 'New Users', value: newUsers > 0 ? String(newUsers) : '—', change: 'vs prev. period', positive: true },
         ];
     }, [overview]);
 
@@ -150,28 +152,26 @@ export default function IndexPage() {
 
                     <button
                         type="button"
-                        onClick={() => {
-                            const now = new Date();
-                            let from = new Date(now);
-
-                            if (period === '7d') {
-                                from.setDate(now.getDate() - 7);
-                            } else if (period === '30d') {
-                                from.setDate(now.getDate() - 30);
-                            } else if (period === '90d') {
-                                from.setDate(now.getDate() - 90);
-                            } else {
-                                from.setFullYear(now.getFullYear() - 1);
-                            }
-
-                            const toParam = now.toISOString().slice(0, 10);
-                            const fromParam = from.toISOString().slice(0, 10);
-
+                        onClick={async () => {
+                            const { from: fromParam, to: toParam } = getPeriodRange(period);
                             const url = new URL('/api/analytics/export', window.location.origin);
                             url.searchParams.set('from', fromParam);
                             url.searchParams.set('to', toParam);
-
-                            window.location.href = url.toString();
+                            try {
+                                const res = await fetch(url.toString(), { credentials: 'include' });
+                                if (!res.ok) throw new Error('Export failed');
+                                const blob = await res.blob();
+                                const disposition = res.headers.get('Content-Disposition');
+                                const match = disposition?.match(/filename="?([^";]+)"?/);
+                                const filename = match?.[1] ?? `analytics_${fromParam}_${toParam}.csv`;
+                                const a = document.createElement('a');
+                                a.href = URL.createObjectURL(blob);
+                                a.download = filename;
+                                a.click();
+                                URL.revokeObjectURL(a.href);
+                            } catch {
+                                setError('Failed to download report');
+                            }
                         }}
                         className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-medium text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
                     >
@@ -197,13 +197,13 @@ export default function IndexPage() {
 
                 {/* Charts Grid */}
                 <div className="grid gap-6 lg:grid-cols-2">
-                    <TrendAnalysisChart />
-                    <ToolUtilizationChart />
+                    <TrendAnalysisChart timeseries={overview?.timeseries} />
+                    <ToolUtilizationChart data={overview?.tool_utilization} />
                 </div>
 
                 <div className="grid gap-6 lg:grid-cols-2">
-                    <CategoryDistributionChart />
-                    <UserActivityMetrics />
+                    <CategoryDistributionChart data={overview?.category_distribution} />
+                    <UserActivityMetrics data={overview?.top_users} />
                 </div>
 
                 {/* Heatmap */}

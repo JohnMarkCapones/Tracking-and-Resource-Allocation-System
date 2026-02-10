@@ -10,6 +10,9 @@ class ToolCategory extends Model
 {
     use HasFactory;
 
+    /** Disabled so inserts work even if the table was created without created_at/updated_at columns. */
+    public $timestamps = false;
+
     protected $fillable = [
         'name',
     ];
