@@ -21,6 +21,7 @@ Route::get('/profile/login', function () {
 })->name('login');
 
 Route::middleware(['auth', 'admin'])->group(function () {
+    Route::redirect('/admin', '/admin/dashboard', 302);
     Route::get('/admin/dashboard', [AdminDashboardController::class, 'index'])
         ->name('admin.dashboard');
     Route::get('/admin/allocation-history', [AdminDashboardController::class, 'allocationHistory'])

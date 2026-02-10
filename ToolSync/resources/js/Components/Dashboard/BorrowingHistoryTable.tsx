@@ -175,12 +175,14 @@ export function BorrowingHistoryTable({ items }: BorrowingHistoryTableProps) {
                                         >
                                             View
                                         </button>
-                                        <button
-                                            type="button"
-                                            className="rounded-full bg-blue-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-blue-700"
-                                        >
-                                            Return
-                                        </button>
+                                        {item.status !== 'Returned' && (
+                                            <button
+                                                type="button"
+                                                className="rounded-full bg-blue-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-blue-700"
+                                            >
+                                                Return
+                                            </button>
+                                        )}
                                     </div>
                                 </td>
                             </tr>

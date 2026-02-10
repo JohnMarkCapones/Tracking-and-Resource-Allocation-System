@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\MaintenanceSchedule;
+use App\Models\Reservation;
 use App\Models\Tool;
 use App\Models\ToolAllocation;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * @group Dashboard
@@ -71,12 +74,13 @@ class DashboardController extends Controller
 
         $toolsAvailableQty = (int) Tool::query()->where('status', 'AVAILABLE')->sum('quantity');
         $toolsMaintenanceQty = (int) Tool::query()->where('status', 'MAINTENANCE')->sum('quantity');
+        // Borrowed tools have quantity 0 when out; count tools in BORROWED status (not sum(quantity) which would be 0)
+        $toolsBorrowedCount = (int) Tool::query()->where('status', 'BORROWED')->count();
 
         $activeBorrowQuery = ToolAllocation::query()->where('status', 'BORROWED');
         if ($userId) {
             $activeBorrowQuery->where('user_id', $userId);
         }
-        $borrowedActiveCount = (int) $activeBorrowQuery->count();
         $overdueCount = (int) (clone $activeBorrowQuery)
             ->where('expected_return_date', '<', now())
             ->count();
@@ -105,7 +109,8 @@ class DashboardController extends Controller
                     'tool_name' => $a->tool?->name,
                     'user_id' => $a->user_id,
                     'user_name' => $a->user?->name,
-                    'expected_return_date' => $a->expected_return_date,
+                    'borrow_date' => $a->borrow_date?->format('Y-m-d'),
+                    'expected_return_date' => $a->expected_return_date?->format('Y-m-d'),
                     'status' => $a->status,
                     'status_display' => $statusDisplay,
                     'is_overdue' => $isOverdue,
@@ -127,6 +132,42 @@ class DashboardController extends Controller
         $returnedPercent = (int) round(($returnedCount / $summaryTotal) * 100);
         $notReturnedPercent = 100 - $returnedPercent;
 
+        $totalUsers = (int) User::query()->count();
+
+        $pendingApprovalsCount = 0;
+        $pendingApprovals = [];
+        if (Schema::hasTable('reservations')) {
+            $pendingReservationsQuery = Reservation::query()
+                ->with(['tool:id,name', 'user:id,name,email'])
+                ->whereIn('status', ['PENDING', 'UPCOMING']);
+            $pendingApprovalsCount = (int) (clone $pendingReservationsQuery)->count();
+            $pendingApprovals = (clone $pendingReservationsQuery)
+                ->orderBy('created_at')
+                ->limit(10)
+                ->get()
+                ->map(function (Reservation $r): array {
+                    return [
+                        'id' => $r->id,
+                        'tool_id' => $r->tool_id,
+                        'tool_name' => $r->tool?->name ?? '—',
+                        'user_name' => $r->user?->name ?? '—',
+                        'user_email' => $r->user?->email ?? null,
+                        'start_date' => $r->start_date?->toDateString(),
+                        'end_date' => $r->end_date?->toDateString(),
+                    ];
+                })
+                ->values()
+                ->all();
+        }
+
+        $maintenanceDueCount = 0;
+        if (Schema::hasTable('maintenance_schedules')) {
+            $maintenanceDueCount = (int) MaintenanceSchedule::query()
+                ->whereIn('status', ['scheduled', 'in_progress', 'overdue'])
+                ->where('scheduled_date', '<=', now()->addDays(14))
+                ->count();
+        }
+
         return response()->json([
             'data' => [
                 'scope' => [
@@ -135,9 +176,13 @@ class DashboardController extends Controller
                 'counts' => [
                     'tools_available_quantity' => $toolsAvailableQty,
                     'tools_maintenance_quantity' => $toolsMaintenanceQty,
-                    'borrowed_active_count' => $borrowedActiveCount,
+                    'borrowed_active_count' => $toolsBorrowedCount,
                     'overdue_count' => $overdueCount,
                 ],
+                'total_users' => $totalUsers,
+                'pending_approvals_count' => $pendingApprovalsCount,
+                'pending_approvals' => $pendingApprovals,
+                'maintenance_due_count' => $maintenanceDueCount,
                 'recent_activity' => $recentAllocations,
                 'summary' => [
                     'returned_count' => $returnedCount,

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 
 export type ToolStatus = 'Available' | 'Borrowed' | 'Maintenance';
 
@@ -23,6 +23,8 @@ type ToolTableProps = {
     onDelete: (tool: Tool) => void;
     selectedIds: number[];
     onSelectionChange: (ids: number[]) => void;
+    /** Initial search query (e.g. from URL ?search=). */
+    initialSearch?: string;
 };
 
 type SortKey = 'name' | 'category' | 'status' | 'totalBorrowings';
@@ -39,8 +41,11 @@ function statusClasses(status: ToolStatus): string {
     return 'bg-rose-50 text-rose-700';
 }
 
-export function ToolTable({ tools, onEdit, onDelete, selectedIds, onSelectionChange }: ToolTableProps) {
-    const [search, setSearch] = useState('');
+export function ToolTable({ tools, onEdit, onDelete, selectedIds, onSelectionChange, initialSearch = '' }: ToolTableProps) {
+    const [search, setSearch] = useState(initialSearch);
+    useEffect(() => {
+        setSearch(initialSearch);
+    }, [initialSearch]);
     const [sortBy, setSortBy] = useState<SortKey>('name');
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
     const [page, setPage] = useState(1);

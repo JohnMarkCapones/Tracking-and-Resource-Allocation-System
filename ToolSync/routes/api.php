@@ -33,6 +33,7 @@ Route::get('analytics/usage-heatmap', [AnalyticsController::class, 'usageHeatmap
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('dashboard', [DashboardController::class, 'show']);
     Route::get('tool-allocations/history', [ToolAllocationHistoryController::class, 'index']);
+    Route::get('tool-allocations/history/summary', [ToolAllocationHistoryController::class, 'summary']);
     Route::get('tool-allocations/export', [ToolAllocationHistoryController::class, 'export']);
     Route::get('analytics/overview', [AnalyticsController::class, 'overview']);
     Route::get('analytics/export', [AnalyticsController::class, 'export']);

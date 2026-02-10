@@ -1,5 +1,5 @@
-import { Head, usePage } from '@inertiajs/react';
-import { useEffect, useState } from 'react';
+import { Head, Link, usePage } from '@inertiajs/react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { BorrowingHistoryItem } from '@/Components/Dashboard/BorrowingHistoryTable';
 import { BorrowingHistoryTable } from '@/Components/Dashboard/BorrowingHistoryTable';
 import type { SummaryData } from '@/Components/Dashboard/SummaryDonutChart';
@@ -10,6 +10,21 @@ import { apiRequest } from '@/lib/http';
 import type { DashboardApiResponse } from '@/lib/apiTypes';
 
 type SharedProps = { auth?: { user?: { name?: string } } };
+
+const NEXT_7_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+function isDueWithinNext7Days(expectedReturnDate: string): boolean {
+    const due = new Date(expectedReturnDate).getTime();
+    const now = Date.now();
+    return due >= now && due <= now + NEXT_7_DAYS_MS;
+}
+
+export type UpcomingReturnItem = {
+    id: number;
+    toolId: string;
+    toolName: string;
+    dueDateFormatted: string;
+};
 
 function mapRecentToHistoryItem(
     a: DashboardApiResponse['data']['recent_activity'][number],
@@ -40,6 +55,7 @@ export default function UserDashboardPage() {
     const [borrowedItemsCount, setBorrowedItemsCount] = useState(0);
     const [availableTools, setAvailableTools] = useState(0);
     const [borrowingHistory, setBorrowingHistory] = useState<BorrowingHistoryItem[]>([]);
+    const [recentActivityRaw, setRecentActivityRaw] = useState<DashboardApiResponse['data']['recent_activity']>([]);
     const [summary, setSummary] = useState<SummaryData>({
         returned: 0,
         borrowed: 0,
@@ -50,47 +66,67 @@ export default function UserDashboardPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        let cancelled = false;
-
-        async function load() {
+    const loadDashboard = useCallback(async (silent = false) => {
+        if (!silent) {
             setLoading(true);
             setError(null);
-            try {
-                const res = await apiRequest<DashboardApiResponse>('/api/dashboard');
-                if (cancelled) return;
-                const d = res.data;
-                const counts = d.counts;
-                setAvailableTools(counts.tools_available_quantity);
-                setToolsUnderMaintenance(counts.tools_maintenance_quantity);
-                setBorrowedItemsCount(counts.borrowed_active_count);
-                setTotalTools(
-                    counts.tools_available_quantity +
-                        counts.tools_maintenance_quantity +
-                        counts.borrowed_active_count,
-                );
-                setBorrowingHistory((d.recent_activity ?? []).map(mapRecentToHistoryItem));
-                setSummary({
-                    returned: d.summary.returned_count,
-                    borrowed: d.summary.not_returned_count,
-                    underMaintenance: counts.tools_maintenance_quantity,
-                    available: counts.tools_available_quantity,
-                    overdue: counts.overdue_count,
-                });
-            } catch (err) {
-                if (!cancelled) {
-                    setError(err instanceof Error ? err.message : 'Failed to load dashboard');
-                }
-            } finally {
-                if (!cancelled) setLoading(false);
-            }
         }
-
-        load();
-        return () => {
-            cancelled = true;
-        };
+        try {
+            const res = await apiRequest<DashboardApiResponse>('/api/dashboard');
+            const d = res.data;
+            const counts = d.counts;
+            setAvailableTools(counts.tools_available_quantity);
+            setToolsUnderMaintenance(counts.tools_maintenance_quantity);
+            setBorrowedItemsCount(counts.borrowed_active_count);
+            setTotalTools(
+                counts.tools_available_quantity +
+                    counts.tools_maintenance_quantity +
+                    counts.borrowed_active_count,
+            );
+            const recent = d.recent_activity ?? [];
+            setBorrowingHistory(recent.map(mapRecentToHistoryItem));
+            setRecentActivityRaw(recent);
+            setSummary({
+                returned: d.summary.returned_count,
+                borrowed: d.summary.not_returned_count,
+                underMaintenance: counts.tools_maintenance_quantity,
+                available: counts.tools_available_quantity,
+                overdue: counts.overdue_count,
+            });
+        } catch (err) {
+            if (!silent) {
+                setError(err instanceof Error ? err.message : 'Failed to load dashboard');
+            }
+        } finally {
+            if (!silent) setLoading(false);
+        }
     }, []);
+
+    useEffect(() => {
+        loadDashboard(false);
+    }, [loadDashboard]);
+
+    // Refetch when page gains focus so tool status (borrowed / available) stays up to date.
+    useEffect(() => {
+        const onFocus = () => loadDashboard(true);
+        window.addEventListener('focus', onFocus);
+        return () => window.removeEventListener('focus', onFocus);
+    }, [loadDashboard]);
+
+    const upcomingReturns = useMemo((): UpcomingReturnItem[] => {
+        return recentActivityRaw
+            .filter((a) => a.status !== 'RETURNED' && isDueWithinNext7Days(a.expected_return_date))
+            .map((a) => ({
+                id: a.id,
+                toolId: 'TL-' + a.tool_id,
+                toolName: a.tool_name ?? 'Unknown',
+                dueDateFormatted: new Date(a.expected_return_date).toLocaleDateString('en-US', {
+                    month: 'long',
+                    day: 'numeric',
+                    year: 'numeric',
+                }),
+            }));
+    }, [recentActivityRaw]);
 
     return (
         <AppLayout
@@ -137,33 +173,41 @@ export default function UserDashboardPage() {
                                         <h3 className="text-sm font-semibold text-gray-900">Upcoming returns</h3>
                                         <p className="text-[11px] text-gray-500">Tools that are due in the next 7 days.</p>
                                     </div>
-                                    <span className="rounded-full bg-amber-50 px-3 py-1 text-[11px] font-medium text-amber-700">2 due soon</span>
+                                    {upcomingReturns.length > 0 && (
+                                        <span className="rounded-full bg-amber-50 px-3 py-1 text-[11px] font-medium text-amber-700">
+                                            {upcomingReturns.length} due soon
+                                        </span>
+                                    )}
                                 </header>
                                 <ul className="space-y-3 text-xs text-gray-700">
-                                    <li className="flex items-center justify-between rounded-2xl bg-gray-50 px-3 py-2">
-                                        <div>
-                                            <p className="font-semibold">LP-0001 · Laptop</p>
-                                            <p className="text-[11px] text-gray-500">Due January 7, 2027</p>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            className="rounded-full bg-blue-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-blue-700"
-                                        >
-                                            Return now
-                                        </button>
-                                    </li>
-                                    <li className="flex items-center justify-between rounded-2xl bg-gray-50 px-3 py-2">
-                                        <div>
-                                            <p className="font-semibold">PR-0011 · Projector</p>
-                                            <p className="text-[11px] text-gray-500">Due Feb 2, 2026</p>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            className="rounded-full border border-gray-200 px-3 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-100"
-                                        >
-                                            View details
-                                        </button>
-                                    </li>
+                                    {upcomingReturns.length === 0 ? (
+                                        <li className="rounded-2xl bg-gray-50 px-3 py-4 text-center text-[11px] text-gray-500">
+                                            No tools due in the next 7 days.
+                                        </li>
+                                    ) : (
+                                        upcomingReturns.map((item) => (
+                                            <li key={item.id} className="flex items-center justify-between rounded-2xl bg-gray-50 px-3 py-2">
+                                                <div>
+                                                    <p className="font-semibold">{item.toolId} · {item.toolName}</p>
+                                                    <p className="text-[11px] text-gray-500">Due {item.dueDateFormatted}</p>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <Link
+                                                        href="/borrowings"
+                                                        className="rounded-full bg-blue-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-blue-700"
+                                                    >
+                                                        Return now
+                                                    </Link>
+                                                    <Link
+                                                        href="/borrowings"
+                                                        className="rounded-full border border-gray-200 px-3 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-100"
+                                                    >
+                                                        View details
+                                                    </Link>
+                                                </div>
+                                            </li>
+                                        ))
+                                    )}
                                 </ul>
                             </section>
                         </div>

@@ -10,6 +10,8 @@ class ToolStatusLog extends Model
 {
     use HasFactory;
 
+    public $timestamps = false;
+
     protected $fillable = [
         'tool_id',
         'old_status',

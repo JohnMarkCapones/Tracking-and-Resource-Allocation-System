@@ -286,6 +286,19 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                                                 <path d="M11 12L14 15" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
                                             </svg>
                                         )}
+                                        {item.key === 'categories' && (
+                                            <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                <path
+                                                    d="M4 4H8L10 6H16V14H4V4Z"
+                                                    stroke="currentColor"
+                                                    strokeWidth="1.4"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                />
+                                                <path d="M4 8H16" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                                                <path d="M4 11H12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                                            </svg>
+                                        )}
                                         {item.key === 'history' && (
                                             <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                                                 <circle cx="10" cy="10" r="4.5" stroke="currentColor" strokeWidth="1.4" />

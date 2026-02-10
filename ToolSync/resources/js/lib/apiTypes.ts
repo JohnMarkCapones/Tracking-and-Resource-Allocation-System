@@ -18,6 +18,8 @@ export type ToolDto = {
     created_at: string;
     updated_at: string;
     category?: ToolCategoryDto;
+    /** Number of times this tool has been allocated (borrowed). */
+    allocations_count?: number;
 };
 
 export type ToolCardData = {
@@ -127,6 +129,7 @@ export type DashboardRecentActivityItem = {
     tool_name: string | null;
     user_id: number;
     user_name: string | null;
+    borrow_date?: string;
     expected_return_date: string;
     status: string;
     status_display: string;
@@ -141,10 +144,24 @@ export type DashboardSummary = {
     range_days: number;
 };
 
+export type DashboardPendingApproval = {
+    id: number;
+    tool_id: number;
+    tool_name: string;
+    user_name: string;
+    user_email: string | null;
+    start_date: string | null;
+    end_date: string | null;
+};
+
 export type DashboardApiResponse = {
     data: {
         scope: { user_id: number | null };
         counts: DashboardCounts;
+        total_users?: number;
+        pending_approvals_count?: number;
+        pending_approvals?: DashboardPendingApproval[];
+        maintenance_due_count?: number;
         recent_activity: DashboardRecentActivityItem[];
         summary: DashboardSummary;
     };
@@ -157,6 +174,15 @@ export type AllocationHistoryPaginated = {
     data: AllocationHistoryItem[];
     per_page: number;
     total: number;
+};
+
+export type AllocationHistorySummary = {
+    data: {
+        total: number;
+        returned: number;
+        active: number;
+        overdue: number;
+    };
 };
 
 export type ReservationApiItem = {
@@ -249,6 +275,11 @@ export type AnalyticsOverviewApiResponse = {
         };
         top_tools: Array<{ tool_id: number; tool_name: string; borrow_count: number }>;
         status_breakdown: { borrowed: number; returned: number; overdue: number };
+        tool_utilization?: Array<{ tool_id: number; tool_name: string; days_used: number }>;
+        category_distribution?: Array<{ name: string; value: number }>;
+        top_users?: Array<{ user_id: number; user_name: string; department: string | null; borrow_count: number }>;
+        avg_return_days?: number | null;
+        new_users_count?: number;
     };
 };
 

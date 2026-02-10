@@ -4,14 +4,35 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\MaintenanceSchedule;
+use App\Models\Tool;
 use App\Services\ActivityLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 class MaintenanceScheduleController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
+        if (! Schema::hasTable('maintenance_schedules')) {
+            return response()->json(['data' => [], 'meta' => ['table_missing' => 'maintenance_schedules']]);
+        }
+
+        $activeStatuses = ['scheduled', 'in_progress', 'overdue'];
+        $toolIdsWithActive = MaintenanceSchedule::query()
+            ->whereIn('status', $activeStatuses)
+            ->pluck('tool_id')
+            ->unique()
+            ->values();
+        Tool::query()->whereIn('id', $toolIdsWithActive)->update(['status' => 'MAINTENANCE']);
+        $toolIdsWithNoActive = Tool::query()
+            ->where('status', 'MAINTENANCE')
+            ->whereNotIn('id', $toolIdsWithActive->all())
+            ->pluck('id');
+        if ($toolIdsWithNoActive->isNotEmpty()) {
+            Tool::query()->whereIn('id', $toolIdsWithNoActive)->update(['status' => 'AVAILABLE']);
+        }
+
         $query = MaintenanceSchedule::query()->with('tool.category');
 
         if ($request->filled('status')) {
@@ -41,6 +62,12 @@ class MaintenanceScheduleController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        if (! Schema::hasTable('maintenance_schedules')) {
+            return response()->json([
+                'message' => 'Maintenance scheduling is not available. Run: php artisan migrate',
+            ], 503);
+        }
+
         $validated = $request->validate([
             'tool_id' => ['required', 'integer', 'exists:tools,id'],
             'type' => ['required', 'string', 'in:routine,repair,inspection,calibration'],
@@ -61,6 +88,8 @@ class MaintenanceScheduleController extends Controller
             'usage_count' => $validated['usage_count'] ?? 0,
             'trigger_threshold' => $validated['trigger_threshold'] ?? 50,
         ]);
+
+        Tool::query()->where('id', $schedule->tool_id)->update(['status' => 'MAINTENANCE']);
 
         ActivityLogger::log(
             'maintenance_schedule.created',
@@ -89,6 +118,21 @@ class MaintenanceScheduleController extends Controller
 
         $maintenance_schedule->update($validated);
 
+        $toolId = $maintenance_schedule->tool_id;
+        $newStatus = $validated['status'] ?? $maintenance_schedule->status;
+        if ($newStatus === 'completed') {
+            $hasOtherActive = MaintenanceSchedule::query()
+                ->where('tool_id', $toolId)
+                ->where('id', '!=', $maintenance_schedule->id)
+                ->whereIn('status', ['scheduled', 'in_progress', 'overdue'])
+                ->exists();
+            if (! $hasOtherActive) {
+                Tool::query()->where('id', $toolId)->update(['status' => 'AVAILABLE']);
+            }
+        } else {
+            Tool::query()->where('id', $toolId)->update(['status' => 'MAINTENANCE']);
+        }
+
         ActivityLogger::log(
             'maintenance_schedule.updated',
             'MaintenanceSchedule',
@@ -111,6 +155,14 @@ class MaintenanceScheduleController extends Controller
         $userId = request()->user()?->id;
 
         $maintenance_schedule->delete();
+
+        $hasOtherActive = MaintenanceSchedule::query()
+            ->where('tool_id', $toolId)
+            ->whereIn('status', ['scheduled', 'in_progress', 'overdue'])
+            ->exists();
+        if (! $hasOtherActive) {
+            Tool::query()->where('id', $toolId)->update(['status' => 'AVAILABLE']);
+        }
 
         ActivityLogger::log(
             'maintenance_schedule.deleted',

@@ -13,7 +13,7 @@ type CategoryItem = {
     tools_count?: number;
 };
 
-type CategoriesApiResponse = { data: CategoryItem[] };
+type CategoriesApiResponse = { data: CategoryItem[]; meta?: { table_missing?: string } };
 
 export default function IndexPage() {
     const [categories, setCategories] = useState<CategoryItem[]>([]);
@@ -24,6 +24,8 @@ export default function IndexPage() {
     const [formName, setFormName] = useState('');
     const [saving, setSaving] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState<CategoryItem | null>(null);
+    const [deleting, setDeleting] = useState(false);
+    const [tableMissing, setTableMissing] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
@@ -35,6 +37,7 @@ export default function IndexPage() {
                 const res = await apiRequest<CategoriesApiResponse>('/api/tool-categories');
                 if (cancelled) return;
                 setCategories(res.data ?? []);
+                setTableMissing(res.meta?.table_missing === 'tool_categories');
             } catch (err) {
                 if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load categories');
             } finally {
@@ -83,7 +86,7 @@ export default function IndexPage() {
                     method: 'POST',
                     body: { name },
                 });
-                setCategories((prev) => [res.data, ...prev]);
+                setCategories((prev) => [{ ...res.data, tools_count: res.data.tools_count ?? 0 }, ...prev]);
                 toast.success('Category created');
             }
             setModalOpen(false);
@@ -96,16 +99,20 @@ export default function IndexPage() {
 
     const handleDeleteConfirm = async () => {
         if (!deleteConfirm) return;
+        setDeleting(true);
         try {
             await apiRequest(`/api/tool-categories/${deleteConfirm.id}`, {
                 method: 'DELETE',
             });
             setCategories((prev) => prev.filter((c) => c.id !== deleteConfirm.id));
             toast.success('Category deleted');
+            setDeleteConfirm(null);
         } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Could not delete category');
+            const message = err instanceof Error ? err.message : 'Could not delete category';
+            toast.error(message);
+        } finally {
+            setDeleting(false);
         }
-        setDeleteConfirm(null);
     };
 
     return (
@@ -136,6 +143,14 @@ export default function IndexPage() {
             )}
             {!loading && !error && (
                 <div className="space-y-6">
+                    {tableMissing && (
+                        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+                            <p className="font-medium">Categories are not set up yet.</p>
+                            <p className="mt-1 text-[12px]">
+                                Run <code className="rounded bg-amber-100 px-1 dark:bg-amber-900/40">php artisan migrate</code> to create the table.
+                            </p>
+                        </div>
+                    )}
                     <div className="flex flex-col gap-3 rounded-3xl bg-white/70 p-4 shadow-sm backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between dark:bg-gray-800/70">
                         <p className="text-sm text-gray-700 dark:text-gray-300">
                             {categories.length} categor{categories.length === 1 ? 'y' : 'ies'}. Categories group tools in the catalog.
@@ -253,7 +268,7 @@ export default function IndexPage() {
             </Modal>
 
             {deleteConfirm && (
-                <Modal show={true} maxWidth="sm" onClose={() => setDeleteConfirm(null)}>
+                <Modal show={true} maxWidth="sm" onClose={() => !deleting && setDeleteConfirm(null)}>
                     <div className="overflow-hidden rounded-lg">
                         <div className="bg-gradient-to-r from-rose-700 to-rose-600 px-6 py-3 text-white">
                             <h2 className="text-sm font-semibold">Delete category?</h2>
@@ -279,9 +294,10 @@ export default function IndexPage() {
                             <button
                                 type="button"
                                 onClick={handleDeleteConfirm}
-                                className="rounded-full bg-rose-600 px-4 py-1.5 text-[11px] font-semibold text-white hover:bg-rose-700"
+                                disabled={deleting}
+                                className="rounded-full bg-rose-600 px-4 py-1.5 text-[11px] font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
                             >
-                                Delete
+                                {deleting ? 'Deleting…' : 'Delete'}
                             </button>
                         </div>
                     </div>

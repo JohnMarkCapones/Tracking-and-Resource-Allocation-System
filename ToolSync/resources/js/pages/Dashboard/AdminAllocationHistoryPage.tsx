@@ -1,9 +1,14 @@
 import { Head } from '@inertiajs/react';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Modal from '@/Components/Modal';
 import AppLayout from '@/Layouts/AppLayout';
+import { toast } from '@/Components/Toast';
 import { apiRequest } from '@/lib/http';
-import type { AllocationHistoryItem, AllocationHistoryPaginated } from '@/lib/apiTypes';
+import type {
+    AllocationHistoryItem,
+    AllocationHistoryPaginated,
+    AllocationHistorySummary,
+} from '@/lib/apiTypes';
 import { mapAllocationStatusToUi } from '@/lib/apiTypes';
 
 type AllocationStatus = 'Returned' | 'Active' | 'Overdue';
@@ -95,12 +100,33 @@ function statusIcon(status: AllocationStatus): ReactNode {
     );
 }
 
+const PAGE_SIZE = 20;
+
+function buildHistoryParams(page: number, statusFilter: 'all' | AllocationStatus): string {
+    const params = new URLSearchParams();
+    params.set('per_page', String(PAGE_SIZE));
+    params.set('page', String(page));
+    if (statusFilter === 'Active') params.set('status', 'BORROWED');
+    else if (statusFilter === 'Returned') params.set('status', 'RETURNED');
+    else if (statusFilter === 'Overdue') {
+        params.set('status', 'BORROWED');
+        params.set('overdue', '1');
+    }
+    return params.toString();
+}
+
 export default function AdminAllocationHistoryPage() {
     const [allocations, setAllocations] = useState<Allocation[]>([]);
+    const [totalFromApi, setTotalFromApi] = useState(0);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [summaryCounts, setSummaryCounts] = useState({ total: 0, returned: 0, active: 0, overdue: 0 });
+    const [returningId, setReturningId] = useState<number | null>(null);
 
-    const [statusFilter, setStatusFilter] = useState<'all' | AllocationStatus>('all');
+    const [statusFilter, setStatusFilter] = useState<'all' | AllocationStatus>(() => {
+        if (typeof window === 'undefined') return 'all';
+        return new URLSearchParams(window.location.search).get('overdue') === '1' ? 'Overdue' : 'all';
+    });
     const [search, setSearch] = useState('');
     const [sortBy, setSortBy] = useState<SortKey>('borrowDate');
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
@@ -108,88 +134,127 @@ export default function AdminAllocationHistoryPage() {
     const searchInputRef = useRef<HTMLInputElement | null>(null);
     const [selectedAllocation, setSelectedAllocation] = useState<Allocation | null>(null);
 
-    const pageSize = 8;
+    const loadSummary = useCallback(async () => {
+        try {
+            const res = await apiRequest<AllocationHistorySummary>('/api/tool-allocations/history/summary');
+            setSummaryCounts(res.data);
+        } catch {
+            setSummaryCounts({ total: 0, returned: 0, active: 0, overdue: 0 });
+        }
+    }, []);
 
-    useEffect(() => {
-        let cancelled = false;
-
-        async function load() {
+    const loadHistory = useCallback(
+        async (pageNum: number) => {
             setLoading(true);
             setError(null);
             try {
+                const query = buildHistoryParams(pageNum, statusFilter);
                 const res = await apiRequest<AllocationHistoryPaginated>(
-                    '/api/tool-allocations/history?per_page=100',
+                    `/api/tool-allocations/history?${query}`,
                 );
-                if (cancelled) return;
                 setAllocations((res.data ?? []).map(mapHistoryItemToAllocation));
+                setTotalFromApi(res.total ?? 0);
             } catch (err) {
-                if (!cancelled) {
-                    setError(err instanceof Error ? err.message : 'Failed to load allocation history');
-                }
+                setError(err instanceof Error ? err.message : 'Failed to load allocation history');
+                setAllocations([]);
+                setTotalFromApi(0);
             } finally {
-                if (!cancelled) setLoading(false);
+                setLoading(false);
             }
+        },
+        [statusFilter],
+    );
+
+    const buildExportQuery = useCallback((): string => {
+        const url = new URL('/api/tool-allocations/export', window.location.origin);
+        if (statusFilter === 'Active') url.searchParams.set('status', 'BORROWED');
+        else if (statusFilter === 'Returned') url.searchParams.set('status', 'RETURNED');
+        else if (statusFilter === 'Overdue') {
+            url.searchParams.set('status', 'BORROWED');
+            url.searchParams.set('overdue', '1');
         }
+        return url.toString();
+    }, [statusFilter]);
 
-        load();
-        return () => {
-            cancelled = true;
-        };
-    }, []);
+    const handleExportCsv = useCallback(async () => {
+        try {
+            const response = await fetch(buildExportQuery(), {
+                method: 'GET',
+                credentials: 'include',
+            });
+            if (!response.ok) throw new Error(response.statusText || 'Failed to export CSV');
+            const blob = await response.blob();
+            const contentDisposition = response.headers.get('content-disposition') ?? '';
+            const match = contentDisposition.match(/filename=\"?([^\";]+)\"?/i);
+            const filename = match?.[1] ?? 'tool_allocations.csv';
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to export CSV');
+        }
+    }, [buildExportQuery]);
 
-    const summary = useMemo(() => {
-        const total = allocations.length;
-        const returned = allocations.filter((allocation) => allocation.status === 'Returned').length;
-        const active = allocations.filter((allocation) => allocation.status === 'Active').length;
-        const overdue = allocations.filter((allocation) => allocation.status === 'Overdue').length;
+    const handleReturnTool = useCallback(
+        async (row: Allocation) => {
+            setReturningId(row.id);
+            try {
+                await apiRequest(`/api/tool-allocations/${row.id}`, {
+                    method: 'PUT',
+                    body: { status: 'RETURNED' },
+                });
+                toast.success(`Tool "${row.tool}" marked as returned.`);
+                await loadSummary();
+                await loadHistory(page);
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : 'Failed to mark as returned';
+                toast.error(msg);
+            } finally {
+                setReturningId(null);
+            }
+        },
+        [page, loadSummary, loadHistory],
+    );
 
-        return { total, returned, active, overdue };
-    }, [allocations]);
+    // Load summary on mount; refetch history when page or statusFilter changes
+    useEffect(() => {
+        loadSummary();
+    }, [loadSummary]);
+
+    useEffect(() => {
+        loadHistory(page);
+    }, [page, statusFilter, loadHistory]);
+
+
+    const summary = summaryCounts;
 
     const filteredAndSorted = useMemo(() => {
         const query = search.trim().toLowerCase();
-
-        const base = allocations.filter((allocation) => {
-            if (statusFilter !== 'all' && allocation.status !== statusFilter) {
-                return false;
-            }
-
-            if (!query) {
-                return true;
-            }
-
-            const haystack = `${allocation.tool} ${allocation.borrower}`.toLowerCase();
-            return haystack.includes(query);
-        });
-        const sorted = [...base].sort((first, second) => {
-            const direction = sortDir === 'asc' ? 1 : -1;
-
-            if (sortBy === 'tool') {
-                return first.tool.localeCompare(second.tool) * direction;
-            }
-
-            if (sortBy === 'status') {
-                return first.status.localeCompare(second.status) * direction;
-            }
-
-            if (sortBy === 'expectedReturn') {
+        const base = query
+            ? allocations.filter((a) =>
+                  `${a.tool} ${a.borrower}`.toLowerCase().includes(query),
+              )
+            : allocations;
+        const direction = sortDir === 'asc' ? 1 : -1;
+        return [...base].sort((first, second) => {
+            if (sortBy === 'tool') return first.tool.localeCompare(second.tool) * direction;
+            if (sortBy === 'status') return first.status.localeCompare(second.status) * direction;
+            if (sortBy === 'expectedReturn')
                 return first.expectedReturn.localeCompare(second.expectedReturn) * direction;
-            }
-
-            // For now we sort the formatted borrow date strings lexicographically.
-            // Once real Date objects are available, this can compare timestamps instead.
             return first.borrowDate.localeCompare(second.borrowDate) * direction;
         });
+    }, [allocations, search, sortBy, sortDir]);
 
-        return sorted;
-    }, [allocations, search, sortBy, sortDir, statusFilter]);
-
-    const totalFiltered = filteredAndSorted.length;
-    const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
+    const totalPages = Math.max(1, Math.ceil(totalFromApi / PAGE_SIZE));
     const currentPage = Math.min(page, totalPages);
-    const startIndex = (currentPage - 1) * pageSize;
-    const endIndex = Math.min(startIndex + pageSize, totalFiltered);
-    const paginated = filteredAndSorted.slice(startIndex, endIndex);
+    const startIndex = (currentPage - 1) * PAGE_SIZE;
+    const paginated = filteredAndSorted;
+    const endIndex = startIndex + paginated.length;
 
     const toggleSort = (key: SortKey): void => {
         setSortBy((previousKey) => {
@@ -202,11 +267,6 @@ export default function AdminAllocationHistoryPage() {
             return key;
         });
     };
-
-    // Reset to first page whenever filters or search or sort change.
-    useEffect(() => {
-        setPage(1);
-    }, [statusFilter, search, sortBy, sortDir]);
 
     // Persist user preferences locally so they survive navigation.
     useEffect(() => {
@@ -243,7 +303,7 @@ export default function AdminAllocationHistoryPage() {
                 sortDir: 'asc' | 'desc';
             }>;
 
-            if (parsed.statusFilter) {
+            if (parsed.statusFilter && new URLSearchParams(window.location.search).get('overdue') !== '1') {
                 setStatusFilter(parsed.statusFilter);
             }
 
@@ -356,7 +416,10 @@ export default function AdminAllocationHistoryPage() {
                                 <button
                                     key={value}
                                     type="button"
-                                    onClick={() => setStatusFilter(value)}
+                                    onClick={() => {
+                                        setStatusFilter(value);
+                                        setPage(1);
+                                    }}
                                     className={`rounded-full px-3 py-1 capitalize ${
                                         statusFilter === value ? 'bg-slate-900 text-white' : 'text-gray-600 hover:bg-gray-100'
                                     }`}
@@ -371,6 +434,7 @@ export default function AdminAllocationHistoryPage() {
                                 onClick={() => {
                                     setStatusFilter('all');
                                     setSearch('');
+                                    setPage(1);
                                 }}
                                 className="text-[11px] font-medium text-blue-600 underline-offset-2 hover:underline"
                             >
@@ -397,13 +461,7 @@ export default function AdminAllocationHistoryPage() {
 
                         <button
                             type="button"
-                            onClick={() => {
-                                const url = new URL('/api/tool-allocations/export', window.location.origin);
-                                if (statusFilter !== 'all') {
-                                    url.searchParams.set('status', statusFilter.toUpperCase());
-                                }
-                                window.location.href = url.toString();
-                            }}
+                            onClick={handleExportCsv}
                             className="inline-flex items-center gap-2 rounded-full bg-amber-400 px-4 py-1.5 text-xs font-semibold text-slate-900 shadow-sm hover:bg-amber-300"
                         >
                             <span>Export CSV</span>
@@ -525,9 +583,11 @@ export default function AdminAllocationHistoryPage() {
                                                     ) : (
                                                         <button
                                                             type="button"
-                                                            className="rounded-full bg-blue-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-blue-700"
+                                                            onClick={() => handleReturnTool(row)}
+                                                            disabled={returningId === row.id}
+                                                            className="rounded-full bg-blue-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
                                                         >
-                                                            Return Tool
+                                                            {returningId === row.id ? 'Returning…' : 'Return Tool'}
                                                         </button>
                                                     )}
                                                 </td>
@@ -539,11 +599,12 @@ export default function AdminAllocationHistoryPage() {
                         </div>
                     )}
 
-                    {totalFiltered > 0 && (
+                    {(totalFromApi > 0 || paginated.length > 0) && (
                         <footer className="mt-4 flex items-center justify-between text-[11px] text-gray-500">
                             <p>
-                                Showing <span className="font-semibold">{startIndex + 1}</span> to <span className="font-semibold">{endIndex}</span>{' '}
-                                of <span className="font-semibold">{totalFiltered}</span> records
+                                Showing <span className="font-semibold">{startIndex + 1}</span> to{' '}
+                                <span className="font-semibold">{startIndex + paginated.length}</span> of{' '}
+                                <span className="font-semibold">{totalFromApi}</span> records
                             </p>
                             <div className="flex items-center gap-1">
                                 <button

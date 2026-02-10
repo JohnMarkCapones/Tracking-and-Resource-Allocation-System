@@ -18,7 +18,7 @@ function mapDtoToTool(dto: ToolDto): Tool {
         status: mapToolStatusToUi(dto.status),
         condition: 'Good',
         lastMaintenance: 'N/A',
-        totalBorrowings: 0,
+        totalBorrowings: dto.allocations_count ?? 0,
         description: dto.description ?? undefined,
         specifications: {},
     };
@@ -277,6 +277,7 @@ export default function IndexPage() {
                         onDelete={handleDelete}
                         selectedIds={selectedIds}
                         onSelectionChange={setSelectedIds}
+                        initialSearch={typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('search') ?? '' : ''}
                     />
                 )}
                 </>
@@ -312,9 +313,10 @@ export default function IndexPage() {
                             <button
                                 type="button"
                                 onClick={confirmDelete}
-                                className="rounded-full bg-rose-600 px-4 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-rose-700"
+                                disabled={saving}
+                                className="rounded-full bg-rose-600 px-4 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-rose-700 disabled:opacity-60"
                             >
-                                Delete Tool
+                                {saving ? 'Deleting…' : 'Delete Tool'}
                             </button>
                         </div>
                     </div>

@@ -23,8 +23,11 @@ class ToolAllocation extends Model
     protected function casts(): array
     {
         return [
-            'borrow_date' => 'datetime',
-            'expected_return_date' => 'datetime',
+            // Use 'datetime:Y-m-d' so the JSON output is a plain date string (e.g. "2026-02-10")
+            // WITHOUT converting to UTC first. The plain 'date' / 'datetime' casts convert to UTC
+            // which shifts the date back by 8 hours (Asia/Manila) causing Feb 10 to appear as Feb 9.
+            'borrow_date' => 'datetime:Y-m-d',
+            'expected_return_date' => 'datetime:Y-m-d',
             'actual_return_date' => 'datetime',
         ];
     }

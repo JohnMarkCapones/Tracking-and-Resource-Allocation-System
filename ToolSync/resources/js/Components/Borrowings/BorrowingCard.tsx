@@ -20,6 +20,8 @@ export type Borrowing = {
 type BorrowingCardProps = {
     borrowing: Borrowing;
     onReturn: (borrowing: Borrowing) => void;
+    /** True after user got 403 (admin must confirm); shows "Return requested" and hides Return button. */
+    returnRequested?: boolean;
 };
 
 function statusClasses(status: BorrowingStatus): string {
@@ -34,14 +36,22 @@ function statusClasses(status: BorrowingStatus): string {
     return 'bg-rose-50 text-rose-700';
 }
 
-export function BorrowingCard({ borrowing, onReturn }: BorrowingCardProps) {
+export function BorrowingCard({ borrowing, onReturn, returnRequested = false }: BorrowingCardProps) {
     const isActive = borrowing.status === 'Active';
     const isOverdue = borrowing.status === 'Overdue';
+
+    // Treat dueDate as date-only (YYYY-MM-DD) to avoid timezone shifting (e.g. 2026-02-11Z showing as Feb 10 locally).
+    const dueYmd = borrowing.dueDate.slice(0, 10);
+    const dueDisplay = new Date(`${dueYmd}T00:00:00`).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+    });
 
     let daysRemaining: number | null = null;
     if (isActive) {
         const today = new Date();
-        const due = parseISO(borrowing.dueDate);
+        const due = parseISO(dueYmd);
         daysRemaining = differenceInDays(due, today);
     }
 
@@ -57,7 +67,7 @@ export function BorrowingCard({ borrowing, onReturn }: BorrowingCardProps) {
                             {borrowing.tool.name}
                         </Link>
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusClasses(borrowing.status)}`}>
-                            {borrowing.status}
+                            {borrowing.status === 'Active' ? 'Borrowed' : borrowing.status}
                         </span>
                     </div>
                     <p className="mt-1 text-[11px] text-gray-500">
@@ -65,7 +75,11 @@ export function BorrowingCard({ borrowing, onReturn }: BorrowingCardProps) {
                     </p>
                 </div>
 
-                {(isActive || isOverdue) && (
+                {returnRequested ? (
+                    <span className="rounded-full bg-amber-50 px-3 py-1.5 text-[11px] font-semibold text-amber-700">
+                        Return requested
+                    </span>
+                ) : (isActive || isOverdue) ? (
                     <button
                         type="button"
                         onClick={() => onReturn(borrowing)}
@@ -73,7 +87,7 @@ export function BorrowingCard({ borrowing, onReturn }: BorrowingCardProps) {
                     >
                         Return
                     </button>
-                )}
+                ) : null}
             </div>
 
             <div className="mt-3 flex flex-wrap gap-4 text-[11px]">
@@ -83,7 +97,7 @@ export function BorrowingCard({ borrowing, onReturn }: BorrowingCardProps) {
                 </div>
                 <div>
                     <p className="text-gray-500">{borrowing.status === 'Returned' ? 'Returned' : 'Due'}</p>
-                    <p className="font-medium text-gray-900">{borrowing.returnDate ?? borrowing.dueDate}</p>
+                    <p className="font-medium text-gray-900">{borrowing.returnDate ?? dueDisplay}</p>
                 </div>
                 {daysRemaining !== null && (
                     <div className="ml-auto">

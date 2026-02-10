@@ -39,13 +39,13 @@ export function ToolCard({ tool }: ToolCardProps) {
                 {tool.imageUrl ? (
                     <img src={tool.imageUrl} alt={tool.name} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
                 ) : (
-                    <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-gray-100 text-gray-500">
-                        <svg className="h-14 w-14 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" xmlns="http://www.w3.org/2000/svg">
-                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                            <circle cx="8.5" cy="8.5" r="1.5" />
-                            <path d="M21 15l-5-5L5 21" />
+                    <div className="flex h-full w-full items-center justify-center text-gray-400">
+                        <svg className="h-12 w-12" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M14 8L8 14L12 18L18 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                            <path d="M22 10L30 18L26 22L18 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                            <path d="M10 28L18 20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                            <path d="M22 24L28 30" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                         </svg>
-                        <span className="text-[11px] font-medium">No image</span>
                     </div>
                 )}
                 <div className="absolute top-2 right-2 flex items-center gap-1.5">

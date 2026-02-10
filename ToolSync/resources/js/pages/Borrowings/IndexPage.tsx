@@ -14,11 +14,14 @@ type FilterStatus = 'all' | 'Active' | 'Overdue' | 'Returned';
 
 function allocationToBorrowing(a: AllocationDto): Borrowing {
     const status = mapAllocationStatusToUi(a);
-    const borrowDate = new Date(a.borrow_date).toLocaleDateString('en-US', {
+    // Treat API dates as date-only (YYYY-MM-DD) to avoid timezone shifting; parse in local time.
+    const borrowYmd = a.borrow_date.slice(0, 10);
+    const borrowDate = new Date(`${borrowYmd}T00:00:00`).toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
     });
+    // API returns date-only (Y-m-d) for expected_return_date; use as-is so display matches request (e.g. Feb 10–12).
     const dueDate = a.expected_return_date;
     const returnDate =
         a.actual_return_date != null
@@ -53,6 +56,7 @@ export default function IndexPage() {
     const [error, setError] = useState<string | null>(null);
     const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
     const [returnModalBorrowing, setReturnModalBorrowing] = useState<Borrowing | null>(null);
+    const [returnRequestedIds, setReturnRequestedIds] = useState<Set<number>>(new Set());
 
     useEffect(() => {
         if (userId == null) {
@@ -123,7 +127,13 @@ export default function IndexPage() {
             toast.success(`${returnModalBorrowing.tool.name} has been returned successfully!`);
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to mark tool as returned.';
-            toast.error(message);
+            const isAdminRequired = typeof error === 'object' && error !== null && 'status' in error && (error as { status?: number }).status === 403;
+            if (isAdminRequired) {
+                setReturnRequestedIds((prev) => new Set(prev).add(returnModalBorrowing.id));
+                toast(message, { icon: 'ℹ️', duration: 6000 });
+            } else {
+                toast.error(message);
+            }
         } finally {
             setReturnModalBorrowing(null);
         }
@@ -231,7 +241,12 @@ export default function IndexPage() {
                 ) : (
                     <div className="space-y-3">
                         {filteredBorrowings.map((borrowing) => (
-                            <BorrowingCard key={borrowing.id} borrowing={borrowing} onReturn={handleReturn} />
+                            <BorrowingCard
+                                key={borrowing.id}
+                                borrowing={borrowing}
+                                onReturn={handleReturn}
+                                returnRequested={returnRequestedIds.has(borrowing.id)}
+                            />
                         ))}
                     </div>
                 )}

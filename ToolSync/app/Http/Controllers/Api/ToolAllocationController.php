@@ -163,7 +163,15 @@ class ToolAllocationController extends Controller
             }
         }
 
-        $allocation = DB::transaction(function () use ($validated, $request): ToolAllocation {
+        // Store dates as midnight UTC so the calendar date (e.g. Feb 10–11) is preserved regardless of app timezone.
+        $borrowDateUtc = Carbon::createFromFormat('Y-m-d', $validated['borrow_date'], 'UTC')->startOfDay();
+        $expectedReturnUtc = Carbon::createFromFormat('Y-m-d', $validated['expected_return_date'], 'UTC')->startOfDay();
+        $createPayload = array_merge($validated, [
+            'borrow_date' => $borrowDateUtc,
+            'expected_return_date' => $expectedReturnUtc,
+        ]);
+
+        $allocation = DB::transaction(function () use ($createPayload, $validated, $request): ToolAllocation {
             /** @var Tool $tool */
             $tool = Tool::query()->lockForUpdate()->findOrFail((int) $validated['tool_id']);
 
@@ -175,7 +183,7 @@ class ToolAllocationController extends Controller
 
             $oldStatus = $tool->status;
 
-            $allocation = ToolAllocation::create($validated);
+            $allocation = ToolAllocation::create($createPayload);
             $allocation->refresh();
 
             $tool->quantity = max(0, (int) $tool->quantity - 1);
@@ -300,7 +308,7 @@ class ToolAllocationController extends Controller
         $actor = $request->user();
         if (! $actor || ! $actor->isAdmin()) {
             return response()->json([
-                'message' => 'Only admins can update tool allocations.',
+                'message' => "We've received your return request. An admin will confirm the tool's condition and complete the process.",
             ], 403);
         }
 
@@ -308,7 +316,7 @@ class ToolAllocationController extends Controller
 
         $oldAllocationStatus = $toolAllocation->status;
 
-        DB::transaction(function () use ($validated, $request, $toolAllocation): void {
+        DB::transaction(function () use ($validated, $request, $toolAllocation, $oldAllocationStatus): void {
             if (($validated['status'] ?? null) === 'RETURNED' && empty($validated['actual_return_date'])) {
                 $validated['actual_return_date'] = now();
             }

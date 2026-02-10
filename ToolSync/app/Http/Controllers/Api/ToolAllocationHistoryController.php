@@ -151,6 +151,12 @@ class ToolAllocationHistoryController extends Controller
                 $query->where('borrow_date', '<=', Carbon::parse($request->input('to')));
             }
 
+            if ($request->boolean('overdue')) {
+                $query
+                    ->where('status', 'BORROWED')
+                    ->where('expected_return_date', '<', now());
+            }
+
             foreach ($query->cursor() as $allocation) {
                 /** @var ToolAllocation $allocation */
                 fputcsv($handle, [
@@ -170,6 +176,44 @@ class ToolAllocationHistoryController extends Controller
 
         return response()->streamDownload($callback, $filename, [
             'Content-Type' => 'text/csv',
+        ]);
+    }
+
+    /**
+     * Get allocation history summary counts (total, returned, active, overdue).
+     */
+    public function summary(Request $request): JsonResponse
+    {
+        $base = ToolAllocation::query();
+
+        if ($request->filled('tool_id')) {
+            $base->where('tool_id', (int) $request->input('tool_id'));
+        }
+        if ($request->filled('user_id')) {
+            $base->where('user_id', (int) $request->input('user_id'));
+        }
+        if ($request->filled('from')) {
+            $base->where('borrow_date', '>=', Carbon::parse($request->input('from')));
+        }
+        if ($request->filled('to')) {
+            $base->where('borrow_date', '<=', Carbon::parse($request->input('to')));
+        }
+
+        $total = (int) (clone $base)->count();
+        $returned = (int) (clone $base)->where('status', 'RETURNED')->count();
+        $borrowed = (int) (clone $base)->where('status', 'BORROWED')->count();
+        $overdue = (int) (clone $base)
+            ->where('status', 'BORROWED')
+            ->where('expected_return_date', '<', now())
+            ->count();
+
+        return response()->json([
+            'data' => [
+                'total' => $total,
+                'returned' => $returned,
+                'active' => $borrowed,
+                'overdue' => $overdue,
+            ],
         ]);
     }
 }
