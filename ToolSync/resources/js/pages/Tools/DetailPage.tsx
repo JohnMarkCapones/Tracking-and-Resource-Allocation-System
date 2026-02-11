@@ -282,6 +282,7 @@ export default function DetailPage() {
                 show={isRequestModalOpen}
                 toolName={tool.name}
                 toolId={tool.toolId}
+                submitting={isSubmitting}
                 onClose={() => {
                     if (isSubmitting) {
                         return;
