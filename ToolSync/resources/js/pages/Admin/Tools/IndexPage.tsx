@@ -80,8 +80,24 @@ export default function IndexPage() {
         }
     };
 
+    const resolveCategoryId = async (name: string) => {
+        const existing = categories.find((c) => c.name === name);
+        if (existing) return existing.id;
+        try {
+            const res = await apiRequest<{ data: ToolCategoryDto }>('/api/tool-categories', {
+                method: 'POST',
+                body: { name },
+            });
+            setCategories((prev) => [...prev, res.data]);
+            return res.data.id;
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to create category');
+            return undefined;
+        }
+    };
+
     const handleSave = async (data: ToolFormData) => {
-        const categoryId = categories.find((c) => c.name === data.category)?.id;
+        const categoryId = await resolveCategoryId(data.category);
         if (categoryId === undefined) {
             toast.error('Please select a valid category');
             return;

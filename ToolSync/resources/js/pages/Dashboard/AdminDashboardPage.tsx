@@ -249,9 +249,28 @@ export default function AdminDashboardPage() {
         [searchQuery],
     );
 
+    const resolveCategoryId = useCallback(
+        async (name: string) => {
+            const existing = addToolCategories.find((c) => c.name === name);
+            if (existing) return existing.id;
+            try {
+                const res = await apiRequest<{ data: { id: number; name: string } }>('/api/tool-categories', {
+                    method: 'POST',
+                    body: { name },
+                });
+                setAddToolCategories((prev) => [...prev, res.data]);
+                return res.data.id;
+            } catch (err) {
+                toast.error(err instanceof Error ? err.message : 'Failed to create category');
+                return undefined;
+            }
+        },
+        [addToolCategories],
+    );
+
     const handleAddToolSave = useCallback(
         async (data: ToolFormData) => {
-            const id = addToolCategories.find((c) => c.name === data.category)?.id;
+            const id = await resolveCategoryId(data.category);
             if (id === undefined) {
                 toast.error('Please select a valid category');
                 return;
@@ -279,7 +298,7 @@ export default function AdminDashboardPage() {
                 toast.error(err instanceof Error ? err.message : 'Failed to add tool');
             }
         },
-        [addToolCategories],
+        [resolveCategoryId],
     );
 
     useEffect(() => {
