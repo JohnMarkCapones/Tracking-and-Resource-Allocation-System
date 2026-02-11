@@ -10,9 +10,11 @@ type RequestToolModalProps = {
     toolId: string;
     onClose: () => void;
     onSubmit: (data: { dateRange: DateRange; purpose: string }) => void;
+    /** When true, disables submit to prevent spamming multiple requests. */
+    submitting?: boolean;
 };
 
-export function RequestToolModal({ show, toolName, toolId, onClose, onSubmit }: RequestToolModalProps) {
+export function RequestToolModal({ show, toolName, toolId, onClose, onSubmit, submitting = false }: RequestToolModalProps) {
     const [dateRange, setDateRange] = useState<DateRange | undefined>();
     const [purpose, setPurpose] = useState('');
     const [error, setError] = useState('');
@@ -34,6 +36,11 @@ export function RequestToolModal({ show, toolName, toolId, onClose, onSubmit }: 
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (submitting) {
+            // Guard against double-submit while a request is already in-flight.
+            return;
+        }
         setError('');
 
         if (!dateRange?.from || !dateRange?.to) {
@@ -154,12 +161,17 @@ export function RequestToolModal({ show, toolName, toolId, onClose, onSubmit }: 
                         <button
                             type="button"
                             onClick={handleClose}
-                            className="rounded-full border border-gray-200 px-4 py-1.5 text-[11px] font-medium text-gray-700 hover:bg-gray-100"
+                            disabled={submitting}
+                            className="rounded-full border border-gray-200 px-4 py-1.5 text-[11px] font-medium text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                             Cancel
                         </button>
-                        <button type="submit" className="rounded-full bg-blue-600 px-4 py-1.5 text-[11px] font-semibold text-white hover:bg-blue-700">
-                            Submit Request
+                        <button
+                            type="submit"
+                            disabled={submitting}
+                            className="rounded-full bg-blue-600 px-4 py-1.5 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            {submitting ? 'Submitting…' : 'Submit Request'}
                         </button>
                     </div>
                 </form>

@@ -269,6 +269,7 @@ export default function CatalogPage() {
                     show={isRequestModalOpen}
                     toolName={selectedTool.name}
                     toolId={selectedTool.toolId}
+                    submitting={isSubmitting}
                     onClose={() => {
                         if (isSubmitting) {
                             return;

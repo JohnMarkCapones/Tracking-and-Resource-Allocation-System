@@ -71,6 +71,36 @@ class ReservationController extends Controller
             ], 422);
         }
 
+        // Prevent spamming: block multiple overlapping reservations / borrow requests
+        // for the same tool by the same user while a previous one is still active.
+        $hasOverlap = Reservation::query()
+            ->where('tool_id', (int) $validated['tool_id'])
+            ->where('user_id', $user?->id)
+            ->whereIn('status', ['PENDING', 'UPCOMING', 'ACTIVE'])
+            ->where(function ($query) use ($from, $to): void {
+                $fromDate = $from->toDateString();
+                $toDate = $to->toDateString();
+
+                $query
+                    // Existing starts inside requested range
+                    ->whereBetween('start_date', [$fromDate, $toDate])
+                    // Or existing ends inside requested range
+                    ->orWhereBetween('end_date', [$fromDate, $toDate])
+                    // Or existing fully covers requested range
+                    ->orWhere(function ($inner) use ($fromDate, $toDate): void {
+                        $inner
+                            ->where('start_date', '<=', $fromDate)
+                            ->where('end_date', '>=', $toDate);
+                    });
+            })
+            ->exists();
+
+        if ($hasOverlap) {
+            return response()->json([
+                'message' => 'You already have a pending or active reservation for this tool in the selected date range.',
+            ], 422);
+        }
+
         $isBorrowRequest = ! empty($validated['borrow_request']);
         $status = $isBorrowRequest ? 'PENDING' : 'UPCOMING';
 
