@@ -6,8 +6,8 @@ import type { SummaryData } from '@/Components/Dashboard/SummaryDonutChart';
 import { SummaryDonutChart } from '@/Components/Dashboard/SummaryDonutChart';
 import { WelcomeBanner } from '@/Components/Dashboard/WelcomeBanner';
 import AppLayout from '@/Layouts/AppLayout';
-import { apiRequest } from '@/lib/http';
 import type { DashboardApiResponse } from '@/lib/apiTypes';
+import { apiRequest } from '@/lib/http';
 
 type SharedProps = { auth?: { user?: { name?: string } } };
 
@@ -36,7 +36,7 @@ function mapRecentToHistoryItem(
               ? ('Overdue' as const)
               : ('Borrowed' as const);
     return {
-        equipment: a.tool_name ?? 'Unknown',
+        equipment: a.tool_name ?? `Tool #${a.tool_id}`,
         toolId: 'TL-' + a.tool_id,
         expectedReturnDate: new Date(a.expected_return_date).toLocaleDateString('en-US', {
             month: 'short',
@@ -131,7 +131,7 @@ export default function UserDashboardPage() {
             .map((a) => ({
                 id: a.id,
                 toolId: 'TL-' + a.tool_id,
-                toolName: a.tool_name ?? 'Unknown',
+                toolName: a.tool_name ?? `Tool #${a.tool_id}`,
                 dueDateFormatted: new Date(a.expected_return_date).toLocaleDateString('en-US', {
                     month: 'long',
                     day: 'numeric',

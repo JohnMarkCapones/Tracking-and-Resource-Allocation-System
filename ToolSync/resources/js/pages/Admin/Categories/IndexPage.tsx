@@ -2,9 +2,9 @@ import { Head } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { Breadcrumb } from '@/Components/Breadcrumb';
 import { EmptyState } from '@/Components/EmptyState';
+import Modal from '@/Components/Modal';
 import { toast } from '@/Components/Toast';
 import AppLayout from '@/Layouts/AppLayout';
-import Modal from '@/Components/Modal';
 import { apiRequest } from '@/lib/http';
 
 type CategoryItem = {

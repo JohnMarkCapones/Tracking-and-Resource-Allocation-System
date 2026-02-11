@@ -14,6 +14,7 @@ export type ToolDto = {
     image_path: string | null;
     category_id: number;
     status: ToolStatusApi;
+    condition?: string | null;
     quantity: number;
     created_at: string;
     updated_at: string;
@@ -60,7 +61,7 @@ export function mapToolStatusToUi(status: ToolStatusApi): ToolStatusUi {
     return 'Available';
 }
 
-export type AllocationStatusApi = 'BORROWED' | 'RETURNED';
+export type AllocationStatusApi = 'BORROWED' | 'PENDING_RETURN' | 'RETURNED';
 
 export type AllocationDto = {
     id: number;
@@ -76,7 +77,7 @@ export type AllocationDto = {
     tool: {
         id: number;
         name: string;
-    };
+    } | null;
     user: {
         id: number;
         name: string;
@@ -84,7 +85,7 @@ export type AllocationDto = {
     };
 };
 
-export type BorrowingStatusUi = 'Active' | 'Returned' | 'Overdue';
+export type BorrowingStatusUi = 'Active' | 'Pending' | 'Returned' | 'Overdue';
 
 export type BorrowingCardTool = {
     id: number;
@@ -105,6 +106,10 @@ export type BorrowingCardData = {
 export function mapAllocationStatusToUi(allocation: AllocationDto, now: Date = new Date()): BorrowingStatusUi {
     if (allocation.status === 'RETURNED') {
         return 'Returned';
+    }
+
+    if (allocation.status === 'PENDING_RETURN') {
+        return 'Pending';
     }
 
     // Parse the due date as a local calendar date (Y-m-d) and set to end-of-day (23:59:59)

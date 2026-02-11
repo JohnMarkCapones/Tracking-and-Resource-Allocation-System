@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { User, UserRole, UserStatus } from '@/Components/Admin/UserTable';
 import Modal from '@/Components/Modal';
+import PasswordInput from '@/Components/PasswordInput';
 
 export type UserDepartmentOption = {
     id: number;
@@ -205,9 +206,8 @@ export function UserFormModal({ show, user, departments, saving, onClose, onSave
                             <label htmlFor="user-password" className="mb-1 block text-[11px] font-semibold tracking-wide text-gray-500 uppercase">
                                 {isEditing ? 'New password (optional)' : 'Temporary password'}
                             </label>
-                            <input
+                            <PasswordInput
                                 id="user-password"
-                                type="password"
                                 value={formData.password}
                                 onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
                                 className={`w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 ${

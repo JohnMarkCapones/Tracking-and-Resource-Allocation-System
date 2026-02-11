@@ -68,19 +68,27 @@ class DashboardController extends Controller
         /** @var User|null $actor */
         $actor = $request->user();
 
-        $userId = $actor?->id ?? ($request->filled('user_id') ? (int) $request->input('user_id') : null);
+        // Admins see system-wide stats; regular users see their own.
+        $userId = null;
+        if ($actor && ! $actor->isAdmin()) {
+            $userId = $actor->id;
+        }
+        if ($request->filled('user_id')) {
+            $userId = (int) $request->input('user_id');
+        }
         $recentLimit = (int) ($request->input('recent_limit', 5));
         $recentLimit = max(1, min($recentLimit, 50));
 
         $toolsAvailableQty = (int) Tool::query()->where('status', 'AVAILABLE')->sum('quantity');
-        $toolsMaintenanceQty = (int) Tool::query()->where('status', 'MAINTENANCE')->sum('quantity');
-        // Borrowed tools have quantity 0 when out; count tools in BORROWED status (not sum(quantity) which would be 0)
-        $toolsBorrowedCount = (int) Tool::query()->where('status', 'BORROWED')->count();
+        // Number of tools (rows) under maintenance, not sum of quantity.
+        $toolsMaintenanceQty = (int) Tool::query()->where('status', 'MAINTENANCE')->count();
 
         $activeBorrowQuery = ToolAllocation::query()->where('status', 'BORROWED');
         if ($userId) {
             $activeBorrowQuery->where('user_id', $userId);
         }
+        // Count active borrow records (allocations), not tool rows.
+        $borrowedActiveCount = (int) (clone $activeBorrowQuery)->count();
         $overdueCount = (int) (clone $activeBorrowQuery)
             ->where('expected_return_date', '<', now())
             ->count();
@@ -129,7 +137,7 @@ class DashboardController extends Controller
         }
 
         $returnedCount = (int) (clone $summaryQuery)->where('status', 'RETURNED')->count();
-        $notReturnedCount = (int) (clone $summaryQuery)->where('status', 'BORROWED')->count();
+        $notReturnedCount = (int) (clone $summaryQuery)->whereIn('status', ['BORROWED', 'PENDING_RETURN'])->count();
         $summaryTotal = max(1, $returnedCount + $notReturnedCount);
         $returnedPercent = (int) round(($returnedCount / $summaryTotal) * 100);
         $notReturnedPercent = 100 - $returnedPercent;
@@ -178,7 +186,7 @@ class DashboardController extends Controller
                 'counts' => [
                     'tools_available_quantity' => $toolsAvailableQty,
                     'tools_maintenance_quantity' => $toolsMaintenanceQty,
-                    'borrowed_active_count' => $toolsBorrowedCount,
+                    'borrowed_active_count' => $borrowedActiveCount,
                     'overdue_count' => $overdueCount,
                 ],
                 'total_users' => $totalUsers,

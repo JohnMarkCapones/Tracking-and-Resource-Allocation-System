@@ -9,6 +9,8 @@ type WelcomeBannerProps = {
 };
 
 export function WelcomeBanner({ userName, totalTools, toolsUnderMaintenance, borrowedItemsCount, availableTools }: WelcomeBannerProps) {
+    const borrowedDisplay = borrowedItemsCount === 0 ? 'None' : borrowedItemsCount;
+
     return (
         <section className="rounded-3xl bg-gradient-to-r from-blue-900 via-blue-700 to-blue-500 px-8 py-6 text-white shadow-md">
             <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
@@ -74,7 +76,7 @@ export function WelcomeBanner({ userName, totalTools, toolsUnderMaintenance, bor
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-xs text-sky-50">Borrowed items</p>
-                                <p className="mt-1 text-2xl font-semibold">{borrowedItemsCount}</p>
+                                <p className="mt-1 text-2xl font-semibold">{borrowedDisplay}</p>
                             </div>
                             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500">
                                 <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">

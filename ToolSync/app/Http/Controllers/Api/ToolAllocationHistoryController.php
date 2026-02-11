@@ -210,7 +210,7 @@ class ToolAllocationHistoryController extends Controller
 
         $total = (int) (clone $base)->count();
         $returned = (int) (clone $base)->where('status', 'RETURNED')->count();
-        $borrowed = (int) (clone $base)->where('status', 'BORROWED')->count();
+        $borrowed = (int) (clone $base)->whereIn('status', ['BORROWED', 'PENDING_RETURN'])->count();
         $overdue = (int) (clone $base)
             ->where('status', 'BORROWED')
             ->where('expected_return_date', '<', now())

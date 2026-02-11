@@ -1,18 +1,29 @@
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import type { FormEventHandler } from 'react';
+import { useEffect, useState } from 'react';
 
+import PasswordInput from '@/Components/PasswordInput';
 import eqMark from '../../assets/figma/logo.png';
 import waves from '../../assets/figma/signup/Group 45.png';
-import cardBackground from '../../assets/figma/signup/Rectangle 1507.png';
 import emailIcon from '../../assets/figma/signup/Group 8.png';
+import cardBackground from '../../assets/figma/signup/Rectangle 1507.png';
 import passwordIcon from '../../assets/figma/signup/Vector.png';
 
 export default function Login() {
+    const { unverified_email } = usePage<{ unverified_email?: string | null }>().props;
+    const [showUnverifiedModal, setShowUnverifiedModal] = useState(false);
+
     const { data, setData, post, processing, errors, reset } = useForm({
         email: '',
         password: '',
         remember: false,
     });
+
+    useEffect(() => {
+        if (unverified_email) {
+            setShowUnverifiedModal(true);
+        }
+    }, [unverified_email]);
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
@@ -139,7 +150,7 @@ export default function Login() {
                                                     Password
                                                 </label>
                                                 <div className="mt-2 relative">
-                                                    <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
+                                                    <span className="pointer-events-none absolute inset-y-0 left-3 z-10 flex items-center">
                                                         <img
                                                             src={passwordIcon}
                                                             alt=""
@@ -147,14 +158,13 @@ export default function Login() {
                                                             draggable={false}
                                                         />
                                                     </span>
-                                                    <input
+                                                    <PasswordInput
                                                         id="password"
                                                         name="password"
-                                                        type="password"
                                                         value={data.password}
                                                         onChange={(e) => setData('password', e.target.value)}
                                                         autoComplete="current-password"
-                                                        className="w-full rounded-lg border border-[#060644] bg-[#F9F7F4] py-2.5 pl-9 pr-3 font-['Inter'] text-sm text-[#060644] outline-none shadow-[0px_4px_10px_rgba(0,0,0,0.08)] placeholder:text-[#9CA3AF] focus:border-[#547792] focus:ring-2 focus:ring-[#547792]/40"
+                                                        className="w-full rounded-lg border border-[#060644] bg-[#F9F7F4] py-2.5 pl-9 font-['Inter'] text-sm text-[#060644] outline-none shadow-[0px_4px_10px_rgba(0,0,0,0.08)] placeholder:text-[#9CA3AF] focus:border-[#547792] focus:ring-2 focus:ring-[#547792]/40"
                                                         placeholder="Enter your password"
                                                     />
                                                 </div>
@@ -177,6 +187,32 @@ export default function Login() {
                         </div>
                     </main>
                 </div>
+
+                {/* Unverified email modal – pop-out in the middle like email verification design */}
+                {showUnverifiedModal && unverified_email && (
+                    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/35 px-4">
+                        <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-black/10">
+                            <h3 className="font-['Poppins'] text-xl font-black tracking-[-0.02em] text-[#060644]">
+                                Email not verified
+                            </h3>
+                            <p className="mt-3 font-['Inter'] text-sm leading-6 text-[#545F71]">
+                                The email address{' '}
+                                <span className="font-semibold text-[#060644]">{unverified_email}</span> has not been
+                                verified. Please check your inbox for the verification link and verify your account
+                                before logging in.
+                            </p>
+                            <div className="mt-6 flex items-center justify-end">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowUnverifiedModal(false)}
+                                    className="inline-flex h-10 items-center justify-center rounded-lg bg-[#547792] px-4 font-['Inter'] text-sm font-semibold text-white hover:bg-[#4c6f87] focus:outline-none focus:ring-2 focus:ring-[#547792] focus:ring-offset-2"
+                                >
+                                    OK
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </>
     );

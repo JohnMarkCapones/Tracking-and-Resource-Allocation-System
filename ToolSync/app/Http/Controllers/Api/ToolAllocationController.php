@@ -17,6 +17,7 @@ use App\Services\DateValidationService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 
@@ -27,6 +28,8 @@ use Illuminate\Support\Facades\Notification;
  */
 class ToolAllocationController extends Controller
 {
+    private const TOOL_CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor', 'Damaged', 'Functional'];
+
     /**
      * List all tool allocations
      *
@@ -361,9 +364,16 @@ class ToolAllocationController extends Controller
                 ], 403);
             }
 
-            if (($request->input('status') ?? null) !== 'RETURNED') {
+            if ($toolAllocation->status === 'PENDING_RETURN') {
                 return response()->json([
-                    'message' => 'Users can only mark borrowings as returned.',
+                    'message' => 'This return request is already pending admin approval.',
+                    'data' => $toolAllocation->load(['tool', 'user']),
+                ]);
+            }
+
+            if (($request->input('status') ?? null) !== 'PENDING_RETURN') {
+                return response()->json([
+                    'message' => 'Users can only submit a return request for admin approval.',
                 ], 403);
             }
         }
@@ -371,8 +381,8 @@ class ToolAllocationController extends Controller
         $validated = $request->validated();
         if (! $actor->isAdmin()) {
             $validated = [
-                'status' => 'RETURNED',
-                'actual_return_date' => now(),
+                'status' => 'PENDING_RETURN',
+                'note' => $validated['note'] ?? $toolAllocation->note,
             ];
         }
 
@@ -385,14 +395,16 @@ class ToolAllocationController extends Controller
 
         $oldAllocationStatus = $toolAllocation->status;
 
-        DB::transaction(function () use ($validated, $request, $toolAllocation, $oldAllocationStatus): void {
+        $returnedCondition = $this->extractConditionFromNote(($validated['note'] ?? null) ?: $toolAllocation->note);
+
+        DB::transaction(function () use ($validated, $request, $toolAllocation, $oldAllocationStatus, $returnedCondition): void {
             if (($validated['status'] ?? null) === 'RETURNED' && empty($validated['actual_return_date'])) {
                 $validated['actual_return_date'] = now();
             }
 
             $toolAllocation->update($validated);
 
-            if ($oldAllocationStatus === 'BORROWED' && $toolAllocation->status === 'RETURNED') {
+            if (in_array($oldAllocationStatus, ['BORROWED', 'PENDING_RETURN'], true) && $toolAllocation->status === 'RETURNED') {
                 /** @var Tool $tool */
                 $tool = Tool::query()->lockForUpdate()->findOrFail($toolAllocation->tool_id);
                 $oldToolStatus = $tool->status;
@@ -401,6 +413,13 @@ class ToolAllocationController extends Controller
 
                 if ($tool->status === 'BORROWED' && $tool->quantity > 0) {
                     $tool->status = 'AVAILABLE';
+                }
+
+                if ($returnedCondition !== null) {
+                    $tool->condition = $returnedCondition;
+                    if ($returnedCondition === 'Damaged') {
+                        $tool->status = 'MAINTENANCE';
+                    }
                 }
 
                 $tool->save();
@@ -430,8 +449,31 @@ class ToolAllocationController extends Controller
 
         $toolAllocation->load(['tool', 'user']);
 
-        if ($oldAllocationStatus === 'BORROWED' && $toolAllocation->status === 'RETURNED') {
+        if ($oldAllocationStatus === 'BORROWED' && $toolAllocation->status === 'PENDING_RETURN') {
             $toolName = $toolAllocation->tool?->name ?? "Tool #{$toolAllocation->tool_id}";
+
+            $toolAllocation->user?->notify(new InAppSystemNotification(
+                'info',
+                'Return request submitted',
+                "Your return request for {$toolName} is waiting for admin approval.",
+                '/borrowings'
+            ));
+
+            $adminRecipients = User::query()->where('role', 'ADMIN')->get();
+            if ($adminRecipients->isNotEmpty()) {
+                Notification::send($adminRecipients, new InAppSystemNotification(
+                    'alert',
+                    'Return approval needed',
+                    "{$toolAllocation->user?->name} requested to return {$toolName}. Approve or decline below.",
+                    '/notifications',
+                    ['allocation_id' => $toolAllocation->id]
+                ));
+            }
+        }
+
+        if (in_array($oldAllocationStatus, ['BORROWED', 'PENDING_RETURN'], true) && $toolAllocation->status === 'RETURNED') {
+            $toolName = $toolAllocation->tool?->name ?? "Tool #{$toolAllocation->tool_id}";
+            $isMarkedForMaintenance = $toolAllocation->tool?->status === 'MAINTENANCE';
 
             $toolAllocation->user?->notify(new InAppSystemNotification(
                 'success',
@@ -443,18 +485,81 @@ class ToolAllocationController extends Controller
             $adminRecipients = User::query()->where('role', 'ADMIN')->get();
             if ($adminRecipients->isNotEmpty()) {
                 Notification::send($adminRecipients, new InAppSystemNotification(
-                    'info',
-                    'Tool returned',
-                    "{$toolAllocation->user?->name} returned {$toolName}.",
+                    'success',
+                    'Return approved',
+                    "Return for {$toolName} is now marked completed.",
                     '/admin/allocation-history'
                 ));
+
+                if ($isMarkedForMaintenance) {
+                    Notification::send($adminRecipients, new InAppSystemNotification(
+                        'maintenance',
+                        'Tool moved to maintenance',
+                        "{$toolName} was returned as damaged and moved to maintenance.",
+                        '/admin/maintenance'
+                    ));
+                }
             }
+
+            if ($isMarkedForMaintenance) {
+                $toolAllocation->user?->notify(new InAppSystemNotification(
+                    'maintenance',
+                    'Return sent to maintenance',
+                    "Your returned {$toolName} was flagged as damaged and sent to maintenance.",
+                    '/borrowings'
+                ));
+            }
+
+            // Remove "Return approval needed" notifications for this allocation so they don't show again
+            DatabaseNotification::query()
+                ->where('type', InAppSystemNotification::class)
+                ->where('data->allocation_id', $toolAllocation->id)
+                ->where('data->title', 'Return approval needed')
+                ->delete();
+        }
+
+        if ($oldAllocationStatus === 'PENDING_RETURN' && $toolAllocation->status === 'BORROWED') {
+            $toolName = $toolAllocation->tool?->name ?? "Tool #{$toolAllocation->tool_id}";
+
+            $toolAllocation->user?->notify(new InAppSystemNotification(
+                'alert',
+                'Return request declined',
+                "Your return request for {$toolName} was declined. The tool remains on your borrowings.",
+                '/borrowings'
+            ));
+
+            // Remove "Return approval needed" notifications for this allocation
+            DatabaseNotification::query()
+                ->where('type', InAppSystemNotification::class)
+                ->where('data->allocation_id', $toolAllocation->id)
+                ->where('data->title', 'Return approval needed')
+                ->delete();
         }
 
         return response()->json([
             'message' => 'Tool allocation updated successfully.',
             'data' => $toolAllocation,
         ]);
+    }
+
+    private function extractConditionFromNote(?string $note): ?string
+    {
+        if (! is_string($note) || trim($note) === '') {
+            return null;
+        }
+
+        if (! preg_match('/^Condition:\s*(.+)$/mi', $note, $matches)) {
+            return null;
+        }
+
+        $candidate = trim($matches[1]);
+        foreach (self::TOOL_CONDITIONS as $allowed) {
+            if (strcasecmp($candidate, $allowed) === 0) {
+                return $allowed;
+            }
+        }
+
+        return null;
     }
 
     /**

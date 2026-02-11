@@ -1,15 +1,13 @@
 import { Head, usePage, Link, router } from '@inertiajs/react';
-import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
+import { useEffect, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { Breadcrumb } from '@/Components/Breadcrumb';
 import { toast } from '@/Components/Toast';
 import { AvailabilityCalendar } from '@/Components/Tools/AvailabilityCalendar';
 import { RequestToolModal } from '@/Components/Tools/RequestToolModal';
 import AppLayout from '@/Layouts/AppLayout';
-import type { Auth } from '@/types';
 import { apiRequest } from '@/lib/http';
-import type { AllocationDto } from '@/lib/apiTypes';
 
 type AvailabilityApiResponse = {
     data: {
@@ -36,10 +34,6 @@ type ToolDetail = {
 
 type DetailPageProps = {
     tool: ToolDetail;
-} & {
-    auth: Auth & {
-        has_password: boolean;
-    };
 };
 
 function statusClasses(status: ToolStatus): string {
@@ -56,7 +50,7 @@ function statusClasses(status: ToolStatus): string {
 
 export default function DetailPage() {
     const page = usePage<DetailPageProps>();
-    const { tool, auth } = page.props;
+    const { tool } = page.props;
     const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [unavailableDates, setUnavailableDates] = useState<Array<{ from: Date; to: Date }>>([]);
@@ -137,14 +131,15 @@ export default function DetailPage() {
                 return;
             }
 
-            await apiRequest<{ message: string; data: AllocationDto }>('/api/tool-allocations', {
+            // Available tool: create a borrow request (reservation PENDING) for admin approval
+            await apiRequest<{ message: string }>('/api/reservations', {
                 method: 'POST',
                 body: {
                     tool_id: tool.id,
-                    user_id: auth.user.id,
-                    borrow_date: startDate,
-                    expected_return_date: endDate,
-                    note: data.purpose,
+                    start_date: startDate,
+                    end_date: endDate,
+                    recurring: false,
+                    borrow_request: true,
                 },
             });
 

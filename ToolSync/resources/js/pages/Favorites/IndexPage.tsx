@@ -4,9 +4,9 @@ import { Breadcrumb } from '@/Components/Breadcrumb';
 import { EmptyState } from '@/Components/EmptyState';
 import { FavoriteButton } from '@/Components/FavoriteButton';
 import AppLayout from '@/Layouts/AppLayout';
-import { useFavoritesStore } from '@/stores/favoritesStore';
-import { apiRequest } from '@/lib/http';
 import type { FavoriteApiItem } from '@/lib/apiTypes';
+import { apiRequest } from '@/lib/http';
+import { useFavoritesStore } from '@/stores/favoritesStore';
 
 type FavoritesApiResponse = { data: FavoriteApiItem[] };
 

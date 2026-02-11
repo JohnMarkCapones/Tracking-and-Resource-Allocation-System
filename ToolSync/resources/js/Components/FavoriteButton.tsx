@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { toast } from '@/Components/Toast';
-import { useFavoritesStore } from '@/stores/favoritesStore';
 import { apiRequest } from '@/lib/http';
+import { useFavoritesStore } from '@/stores/favoritesStore';
 
 type FavoriteButtonProps = {
     tool: {

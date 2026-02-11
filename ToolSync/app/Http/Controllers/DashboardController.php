@@ -48,6 +48,8 @@ class DashboardController extends Controller
                         'href' => isset($data['href']) ? (string) $data['href'] : null,
                         'createdAt' => $notification->created_at?->diffForHumans(),
                         'read' => $notification->read_at !== null,
+                        'reservationId' => isset($data['reservation_id']) ? (int) $data['reservation_id'] : null,
+                        'allocationId' => isset($data['allocation_id']) ? (int) $data['allocation_id'] : null,
                     ];
                 })
                 ->values()

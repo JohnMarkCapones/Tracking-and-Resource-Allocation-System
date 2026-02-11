@@ -9,7 +9,7 @@ type ReturnModalProps = {
     onSubmit: (data: { condition: string; notes: string }) => void;
 };
 
-const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor', 'Damaged'];
+const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor', 'Damaged', 'Functional'];
 
 export function ReturnModal({ show, toolName, toolId, onClose, onSubmit }: ReturnModalProps) {
     const [condition, setCondition] = useState('Good');

@@ -15,6 +15,9 @@ type AdminStatBarProps = {
 const statCardBase = 'flex items-center justify-between rounded-2xl px-4 py-3 text-white shadow-sm backdrop-blur-sm';
 
 export function AdminStatBar({ metrics, onExportCsv }: AdminStatBarProps) {
+    const borrowedDisplay = metrics.borrowedTools === 0 ? 'None' : metrics.borrowedTools;
+    const activeBorrowingsDisplay = metrics.activeBorrowings === 0 ? 'None' : metrics.activeBorrowings;
+
     return (
         <section className="rounded-3xl bg-gradient-to-r from-blue-900 via-blue-700 to-blue-600 px-6 py-4 text-white shadow-md">
             <div className="flex flex-wrap items-center justify-between gap-4">
@@ -65,7 +68,7 @@ export function AdminStatBar({ metrics, onExportCsv }: AdminStatBarProps) {
                 <div className={`${statCardBase} bg-white/10`}>
                     <div>
                         <p className="text-[11px] text-blue-100">Borrowed</p>
-                        <p className="mt-1 text-xl font-semibold">{metrics.borrowedTools}</p>
+                        <p className="mt-1 text-xl font-semibold">{borrowedDisplay}</p>
                         <p className="mt-1 text-[11px] text-amber-200">▬ Stable vs last week</p>
                     </div>
                     <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-500/80">
@@ -116,7 +119,7 @@ export function AdminStatBar({ metrics, onExportCsv }: AdminStatBarProps) {
                 <div className={`${statCardBase} bg-white/10`}>
                     <div>
                         <p className="text-[11px] text-blue-100">Active borrowings</p>
-                        <p className="mt-1 text-xl font-semibold">{metrics.activeBorrowings}</p>
+                        <p className="mt-1 text-xl font-semibold">{activeBorrowingsDisplay}</p>
                         <p className="mt-1 text-[11px] text-amber-200">▼ 2 overdue resolved</p>
                     </div>
                     <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-rose-500/80">

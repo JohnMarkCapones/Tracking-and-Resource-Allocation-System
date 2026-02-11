@@ -1,7 +1,7 @@
 import { Link } from '@inertiajs/react';
 import { differenceInDays, parseISO } from 'date-fns';
 
-export type BorrowingStatus = 'Active' | 'Returned' | 'Overdue';
+export type BorrowingStatus = 'Active' | 'Pending' | 'Returned' | 'Overdue';
 
 export type Borrowing = {
     id: number;
@@ -27,6 +27,10 @@ type BorrowingCardProps = {
 function statusClasses(status: BorrowingStatus): string {
     if (status === 'Returned') {
         return 'bg-emerald-50 text-emerald-700';
+    }
+
+    if (status === 'Pending') {
+        return 'bg-amber-50 text-amber-700';
     }
 
     if (status === 'Active') {
@@ -84,8 +88,9 @@ export function BorrowingCard({ borrowing, onReturn, returnRequested = false }: 
                         type="button"
                         onClick={() => onReturn(borrowing)}
                         className="rounded-full bg-blue-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-blue-700"
+                        title="Request return (requires admin approval)"
                     >
-                        Return
+                        Request return
                     </button>
                 ) : null}
             </div>

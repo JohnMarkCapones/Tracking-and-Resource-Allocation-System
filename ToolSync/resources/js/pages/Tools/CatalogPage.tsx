@@ -1,17 +1,16 @@
-import { Head, Link, router, usePage } from '@inertiajs/react';
-import { useState, useMemo, useEffect } from 'react';
+import { Head, Link, router } from '@inertiajs/react';
 import { format } from 'date-fns';
+import { useState, useMemo, useEffect } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { EmptyState } from '@/Components/EmptyState';
+import { toast } from '@/Components/Toast';
+import { RequestToolModal } from '@/Components/Tools/RequestToolModal';
 import { ToolCard, type ToolCardData } from '@/Components/Tools/ToolCard';
 import { ToolFilters } from '@/Components/Tools/ToolFilters';
-import { RequestToolModal } from '@/Components/Tools/RequestToolModal';
-import { toast } from '@/Components/Toast';
 import AppLayout from '@/Layouts/AppLayout';
-import { apiRequest } from '@/lib/http';
-import type { ToolDto, ToolCategoryDto, AllocationDto } from '@/lib/apiTypes';
+import type { ToolDto, ToolCategoryDto } from '@/lib/apiTypes';
 import { mapToolStatusToUi } from '@/lib/apiTypes';
-import type { Auth } from '@/types';
+import { apiRequest } from '@/lib/http';
 
 function mapToolToCardData(dto: ToolDto): ToolCardData {
     const availableQuantity = Math.max(0, Number(dto.quantity ?? 0));
@@ -23,7 +22,7 @@ function mapToolToCardData(dto: ToolDto): ToolCardData {
         toolId: 'TL-' + dto.id,
         category: dto.category?.name ?? 'Other',
         status: mapToolStatusToUi(dto.status),
-        condition: 'Good',
+        condition: dto.condition ?? 'Good',
         quantity: availableQuantity + borrowedQuantity,
         availableQuantity,
         borrowedQuantity,
@@ -34,9 +33,6 @@ function mapToolToCardData(dto: ToolDto): ToolCardData {
 export default function CatalogPage() {
     const toLocalYmd = (date: Date): string => format(date, 'yyyy-MM-dd');
 
-    const page = usePage<{ auth: Auth }>();
-    const { auth } = page.props;
-    
     const [tools, setTools] = useState<ToolCardData[]>([]);
     const [categories, setCategories] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
@@ -135,21 +131,22 @@ export default function CatalogPage() {
                 return;
             }
 
-            await apiRequest<{ message: string; data: AllocationDto }>('/api/tool-allocations', {
+            // Available tool: create a borrow request (reservation PENDING) for admin approval
+            await apiRequest<{ message: string }>('/api/reservations', {
                 method: 'POST',
                 body: {
                     tool_id: selectedTool.id,
-                    user_id: auth.user.id,
-                    borrow_date: startDate,
-                    expected_return_date: endDate,
-                    note: data.purpose,
+                    start_date: startDate,
+                    end_date: endDate,
+                    recurring: false,
+                    borrow_request: true,
                 },
             });
 
             setIsRequestModalOpen(false);
             toast.success('Borrowing request submitted for approval!');
             
-            // Reload the tools list to reflect the updated status
+            // Reload the tools list
             const toolsRes = await apiRequest<{ data: ToolDto[] }>('/api/tools');
             setTools((toolsRes.data ?? []).map(mapToolToCardData));
         } catch (error) {

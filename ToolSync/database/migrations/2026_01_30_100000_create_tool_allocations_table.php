@@ -19,7 +19,7 @@ return new class extends Migration
             $table->dateTime('expected_return_date');
             $table->dateTime('actual_return_date')->nullable();
             $table->text('note')->nullable();
-            $table->enum('status', ['BORROWED', 'RETURNED'])->default('BORROWED');
+            $table->enum('status', ['BORROWED', 'PENDING_RETURN', 'RETURNED'])->default('BORROWED');
             $table->timestamps();
 
             $table->index('user_id');
