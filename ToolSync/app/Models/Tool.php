@@ -12,12 +12,14 @@ class Tool extends Model
     use HasFactory;
 
     protected $fillable = [
+        'code',
         'name',
         'description',
         'image_path',
         'category_id',
         'status',
         'quantity',
+        'condition',
     ];
 
     public function category(): BelongsTo

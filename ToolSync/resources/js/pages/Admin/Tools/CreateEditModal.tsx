@@ -53,7 +53,11 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
 
     const [errors, setErrors] = useState<Partial<Record<keyof ToolFormData, string>>>({});
 
+    // Sync form when modal opens or when editing a different tool. Only depend on tool so we
+    // don't overwrite user input when they change Tool ID or Condition (avoid show in deps).
     useEffect(() => {
+        if (!show) return;
+
         if (tool) {
             setFormData({
                 name: tool.name,
@@ -85,7 +89,7 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
             setSpecRows([]);
         }
         setErrors({});
-    }, [tool, show]);
+    }, [show, tool]);
 
     const validate = (): boolean => {
         const newErrors: Partial<Record<keyof ToolFormData, string>> = {};
@@ -177,8 +181,7 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
                                         toolId: e.target.value,
                                     }))
                                 }
-                                disabled={isEditing}
-                                className={`w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 ${
+                                className={`w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 ${
                                     errors.toolId ? 'border-rose-300 bg-rose-50' : 'border-gray-200 bg-gray-50'
                                 }`}
                                 placeholder="e.g., LP-0001"

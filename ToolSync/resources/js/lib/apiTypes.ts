@@ -9,12 +9,14 @@ export type ToolCategoryDto = {
 
 export type ToolDto = {
     id: number;
+    code?: string | null;
     name: string;
     description: string | null;
     image_path: string | null;
     category_id: number;
     status: ToolStatusApi;
     quantity: number;
+    condition?: string | null;
     created_at: string;
     updated_at: string;
     category?: ToolCategoryDto;

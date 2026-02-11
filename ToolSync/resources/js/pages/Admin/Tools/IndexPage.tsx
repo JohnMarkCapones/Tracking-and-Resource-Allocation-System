@@ -13,11 +13,11 @@ function mapDtoToTool(dto: ToolDto): Tool {
     return {
         id: dto.id,
         name: dto.name,
-        toolId: 'TL-' + dto.id,
+        toolId: dto.code?.trim() ? dto.code : 'TL-' + dto.id,
         category: dto.category?.name ?? 'Other',
         status: mapToolStatusToUi(dto.status),
         quantity: dto.quantity,
-        condition: 'Good',
+        condition: dto.condition ?? 'Good',
         lastMaintenance: 'N/A',
         totalBorrowings: dto.allocations_count ?? 0,
         description: dto.description ?? undefined,
@@ -87,11 +87,13 @@ export default function IndexPage() {
             return;
         }
         const payload = {
+            code: data.toolId.trim() || null,
             name: data.name,
             description: data.description || null,
             category_id: categoryId,
             status: statusToApi(data.status),
             quantity: data.quantity,
+            condition: data.condition || null,
         };
         setSaving(true);
         try {

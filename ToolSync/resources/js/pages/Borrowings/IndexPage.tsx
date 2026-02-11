@@ -87,12 +87,38 @@ export default function IndexPage() {
         setReturnModalBorrowing(borrowing);
     };
 
-    const handleReturnSubmit = () => {
+    const handleReturnSubmit = async (data: { condition: string; notes: string }) => {
         if (!returnModalBorrowing) return;
 
-        setReturnRequestedIds((prev) => new Set(prev).add(returnModalBorrowing.id));
-        toast(`${returnModalBorrowing.tool.name} return is pending admin verification.`, { icon: 'ℹ️', duration: 6000 });
-        setReturnModalBorrowing(null);
+        const allocationId = returnModalBorrowing.id;
+        const toolName = returnModalBorrowing.tool.name;
+        setReturnRequestedIds((prev) => new Set(prev).add(allocationId));
+
+        const noteParts = [`Return condition: ${data.condition}`];
+        if (data.notes.trim()) noteParts.push(data.notes.trim());
+        const note = noteParts.join('. ');
+
+        try {
+            await apiRequest(`/api/tool-allocations/${allocationId}`, {
+                method: 'PUT',
+                body: { status: 'RETURNED', note },
+            });
+            setReturnModalBorrowing(null);
+            toast.success(`${toolName} has been marked as returned.`);
+            // Refetch so the list shows updated status (Returned) and badge updates
+            if (userId != null) {
+                const res = await apiRequest<{ data: AllocationDto[] }>(`/api/tool-allocations?user_id=${userId}`);
+                setBorrowings((res.data ?? []).map(allocationToBorrowing));
+            }
+        } catch (err) {
+            setReturnRequestedIds((prev) => {
+                const next = new Set(prev);
+                next.delete(allocationId);
+                return next;
+            });
+            const message = err instanceof Error ? err.message : 'Failed to mark as returned.';
+            toast.error(message);
+        }
     };
 
     return (
@@ -216,7 +242,7 @@ export default function IndexPage() {
                     toolName={returnModalBorrowing.tool.name}
                     toolId={returnModalBorrowing.tool.toolId}
                     onClose={() => setReturnModalBorrowing(null)}
-                    onSubmit={handleReturnSubmit}
+                    onSubmit={(data) => handleReturnSubmit(data)}
                 />
             )}
         </AppLayout>
