@@ -5,12 +5,12 @@ import { ReturnModal } from '@/Components/Borrowings/ReturnModal';
 import { EmptyState } from '@/Components/EmptyState';
 import { toast } from '@/Components/Toast';
 import AppLayout from '@/Layouts/AppLayout';
-import { apiRequest } from '@/lib/http';
 import type { AllocationDto } from '@/lib/apiTypes';
 import { mapAllocationStatusToUi } from '@/lib/apiTypes';
+import { apiRequest } from '@/lib/http';
 
 type SharedProps = { auth?: { user?: { id: number } } };
-type FilterStatus = 'all' | 'Active' | 'Overdue' | 'Returned';
+type FilterStatus = 'all' | 'Active' | 'Pending' | 'Overdue' | 'Returned';
 
 function allocationToBorrowing(a: AllocationDto): Borrowing {
     const status = mapAllocationStatusToUi(a);
@@ -35,9 +35,9 @@ function allocationToBorrowing(a: AllocationDto): Borrowing {
     return {
         id: a.id,
         tool: {
-            id: a.tool.id,
-            name: a.tool.name,
-            toolId: 'TL-' + a.tool.id,
+            id: a.tool?.id ?? a.tool_id,
+            name: a.tool?.name ?? `Tool #${a.tool_id}`,
+            toolId: 'TL-' + (a.tool?.id ?? a.tool_id),
             category: 'Other',
         },
         borrowDate,
@@ -66,7 +66,17 @@ export default function IndexPage() {
         setLoading(true);
         setError(null);
         apiRequest<{ data: AllocationDto[] }>(`/api/tool-allocations?user_id=${userId}`)
-            .then((res) => setBorrowings((res.data ?? []).map(allocationToBorrowing)))
+            .then((res) => {
+                const items = (res.data ?? []).map(allocationToBorrowing);
+                setBorrowings(items);
+                const pendingIds = new Set<number>();
+                for (const item of items) {
+                    if (item.status === 'Pending') {
+                        pendingIds.add(item.id);
+                    }
+                }
+                setReturnRequestedIds(pendingIds);
+            })
             .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load borrowings'))
             .finally(() => setLoading(false));
     }, [userId]);
@@ -78,9 +88,10 @@ export default function IndexPage() {
 
     const summary = useMemo(() => {
         const active = borrowings.filter((b) => b.status === 'Active').length;
+        const pending = borrowings.filter((b) => b.status === 'Pending').length;
         const overdue = borrowings.filter((b) => b.status === 'Overdue').length;
         const returned = borrowings.filter((b) => b.status === 'Returned').length;
-        return { active, overdue, returned, total: borrowings.length };
+        return { active, pending, overdue, returned, total: borrowings.length };
     }, [borrowings]);
 
     const handleReturn = (borrowing: Borrowing) => {
@@ -90,34 +101,28 @@ export default function IndexPage() {
     const handleReturnSubmit = async (data: { condition: string; notes: string }) => {
         if (!returnModalBorrowing) return;
 
-        const allocationId = returnModalBorrowing.id;
-        const toolName = returnModalBorrowing.tool.name;
-        setReturnRequestedIds((prev) => new Set(prev).add(allocationId));
-
-        const noteParts = [`Return condition: ${data.condition}`];
-        if (data.notes.trim()) noteParts.push(data.notes.trim());
-        const note = noteParts.join('. ');
+        const noteParts = [`Condition: ${data.condition}`];
+        if (data.notes.trim()) {
+            noteParts.push(`Notes: ${data.notes.trim()}`);
+        }
 
         try {
-            await apiRequest(`/api/tool-allocations/${allocationId}`, {
+            await apiRequest(`/api/tool-allocations/${returnModalBorrowing.id}`, {
                 method: 'PUT',
-                body: { status: 'RETURNED', note },
+                body: {
+                    status: 'PENDING_RETURN',
+                    note: noteParts.join('\n'),
+                },
             });
+
+            setBorrowings((prev) =>
+                prev.map((item) => (item.id === returnModalBorrowing.id ? { ...item, status: 'Pending' } : item)),
+            );
+            setReturnRequestedIds((prev) => new Set(prev).add(returnModalBorrowing.id));
+            toast(`${returnModalBorrowing.tool.name} return is pending admin verification.`, { icon: 'ℹ️', duration: 6000 });
             setReturnModalBorrowing(null);
-            toast.success(`${toolName} has been marked as returned.`);
-            // Refetch so the list shows updated status (Returned) and badge updates
-            if (userId != null) {
-                const res = await apiRequest<{ data: AllocationDto[] }>(`/api/tool-allocations?user_id=${userId}`);
-                setBorrowings((res.data ?? []).map(allocationToBorrowing));
-            }
         } catch (err) {
-            setReturnRequestedIds((prev) => {
-                const next = new Set(prev);
-                next.delete(allocationId);
-                return next;
-            });
-            const message = err instanceof Error ? err.message : 'Failed to mark as returned.';
-            toast.error(message);
+            toast.error(err instanceof Error ? err.message : 'Failed to submit return request.');
         }
     };
 
@@ -128,6 +133,7 @@ export default function IndexPage() {
                 <>
                     <p className="text-xs font-medium tracking-[0.18em] text-gray-500 uppercase">My borrowings</p>
                     <h1 className="text-2xl font-semibold text-gray-900">Track your borrowed equipment</h1>
+                    <p className="mt-1 text-xs text-gray-500">Returns require admin approval. Use &quot;Request return&quot; to submit.</p>
                 </>
             }
         >
@@ -161,6 +167,12 @@ export default function IndexPage() {
                             <span>Overdue</span>
                         </div>
                     )}
+                    {summary.pending > 0 && (
+                        <div className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-amber-700">
+                            <span className="font-semibold">{summary.pending}</span>
+                            <span>Pending approval</span>
+                        </div>
+                    )}
                     <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">
                         <span className="font-semibold">{summary.returned}</span>
                         <span>Returned</span>
@@ -171,7 +183,7 @@ export default function IndexPage() {
                     <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[11px] font-semibold tracking-wide text-gray-500 uppercase">Filter</span>
                         <div className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-1 py-1 text-[11px] text-gray-600 shadow-sm">
-                            {(['all', 'Active', 'Overdue', 'Returned'] as const).map((status) => (
+                            {(['all', 'Active', 'Pending', 'Overdue', 'Returned'] as const).map((status) => (
                                 <button
                                     key={status}
                                     type="button"
@@ -242,7 +254,7 @@ export default function IndexPage() {
                     toolName={returnModalBorrowing.tool.name}
                     toolId={returnModalBorrowing.tool.toolId}
                     onClose={() => setReturnModalBorrowing(null)}
-                    onSubmit={(data) => handleReturnSubmit(data)}
+                    onSubmit={handleReturnSubmit}
                 />
             )}
         </AppLayout>

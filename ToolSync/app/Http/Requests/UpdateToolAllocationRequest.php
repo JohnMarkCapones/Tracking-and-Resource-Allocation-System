@@ -23,7 +23,7 @@ class UpdateToolAllocationRequest extends FormRequest
             'expected_return_date' => ['sometimes', 'date'],
             'actual_return_date' => ['nullable', 'date'],
             'note' => ['nullable', 'string', 'max:1000'],
-            'status' => ['sometimes', 'string', 'in:BORROWED,RETURNED'],
+            'status' => ['sometimes', 'string', 'in:BORROWED,PENDING_RETURN,RETURNED'],
         ];
     }
 }

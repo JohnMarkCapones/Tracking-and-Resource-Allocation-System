@@ -2,6 +2,7 @@ import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import type { FormEventHandler } from 'react';
 import { useEffect, useState } from 'react';
 
+import PasswordInput from '@/Components/PasswordInput';
 import equipitLogo from '../assets/figma/logo.png';
 import signupGroup72 from '../assets/figma/signup/Group 72.png';
 import signupGroup77 from '../assets/figma/signup/Group 77.png';
@@ -233,7 +234,7 @@ export default function Welcome() {
                                     <label className="font-['Inter'] text-sm font-medium text-[#444444]" htmlFor="password">
                                         Password
                                     </label>
-                                    <input
+                                    <PasswordInput
                                         id="password"
                                         name="password"
                                         autoComplete="new-password"
@@ -243,7 +244,6 @@ export default function Welcome() {
                                             clearErrors('password');
                                         }}
                                         className="mt-2 w-full rounded-xl bg-[#F9F7F4] px-4 py-3 font-['Inter'] text-sm font-medium text-[#444444] ring-1 ring-black/10 outline-none focus:ring-2 focus:ring-[#060644]"
-                                        type="password"
                                         required
                                     />
                                     {errors.password && (
@@ -285,14 +285,13 @@ export default function Welcome() {
                                     <label className="font-['Inter'] text-sm font-medium text-[#444444]" htmlFor="confirm_password">
                                         Confirm Password
                                     </label>
-                                    <input
+                                    <PasswordInput
                                         id="confirm_password"
                                         name="password_confirmation"
                                         autoComplete="new-password"
                                         value={data.password_confirmation}
                                         onChange={(e) => setData('password_confirmation', e.target.value)}
                                         className="mt-2 w-full rounded-xl bg-[#F9F7F4] px-4 py-3 font-['Inter'] text-sm font-medium text-[#444444] ring-1 ring-black/10 outline-none focus:ring-2 focus:ring-[#060644]"
-                                        type="password"
                                         required
                                     />
                                     {errors.password_confirmation && (

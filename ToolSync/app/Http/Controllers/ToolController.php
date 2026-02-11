@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Tool;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -110,78 +111,30 @@ class ToolController extends Controller
 
     public function show(int $id): Response
     {
-        // Static mock data for tool detail.
-        $tools = [
-            1 => [
-                'id' => 1,
-                'name' => 'MacBook Pro 14"',
-                'toolId' => 'LP-0001',
-                'category' => 'Laptops',
-                'status' => 'Available',
-                'condition' => 'Excellent',
-                'description' => 'A powerful laptop for professionals. Features the M2 Pro chip with 16GB unified memory and 512GB SSD storage. Perfect for design work, development, and content creation.',
-                'specifications' => [
-                    'Processor' => 'Apple M2 Pro',
-                    'Memory' => '16GB Unified',
-                    'Storage' => '512GB SSD',
-                    'Display' => '14.2" Liquid Retina XDR',
-                    'Battery' => 'Up to 17 hours',
-                    'Weight' => '1.6 kg',
-                ],
-                'lastMaintenance' => 'Jan 15, 2026',
-                'totalBorrowings' => 24,
-            ],
-            2 => [
-                'id' => 2,
-                'name' => 'Dell XPS 15',
-                'toolId' => 'LP-0002',
-                'category' => 'Laptops',
-                'status' => 'Borrowed',
-                'condition' => 'Good',
-                'description' => 'Premium Windows laptop with a stunning 4K OLED display. Ideal for both work and entertainment with its powerful Intel Core i7 processor.',
-                'specifications' => [
-                    'Processor' => 'Intel Core i7-12700H',
-                    'Memory' => '32GB DDR5',
-                    'Storage' => '1TB NVMe SSD',
-                    'Display' => '15.6" 4K OLED',
-                    'Graphics' => 'NVIDIA RTX 3050 Ti',
-                    'Weight' => '1.86 kg',
-                ],
-                'lastMaintenance' => 'Dec 20, 2025',
-                'totalBorrowings' => 18,
-            ],
-            3 => [
-                'id' => 3,
-                'name' => 'Epson EB-X51',
-                'toolId' => 'PR-0001',
-                'category' => 'Projectors',
-                'status' => 'Available',
-                'condition' => 'Good',
-                'description' => 'Versatile business projector with bright 3800 lumens output. Features easy connectivity options and reliable performance for presentations.',
-                'specifications' => [
-                    'Brightness' => '3800 lumens',
-                    'Resolution' => 'XGA (1024x768)',
-                    'Contrast' => '16000:1',
-                    'Lamp Life' => '12000 hours',
-                    'Connectivity' => 'HDMI, VGA, USB',
-                    'Weight' => '2.5 kg',
-                ],
-                'lastMaintenance' => 'Jan 10, 2026',
-                'totalBorrowings' => 32,
-            ],
-        ];
+        /** @var Tool $dbTool */
+        $dbTool = Tool::query()
+            ->with('category')
+            ->withCount('allocations')
+            ->findOrFail($id);
 
-        $tool = $tools[$id] ?? [
-            'id' => $id,
-            'name' => 'Unknown Tool',
-            'toolId' => 'XX-0000',
-            'category' => 'Other',
-            'status' => 'Available',
-            'condition' => 'Good',
-            'description' => 'Tool details not available.',
+        $status = match ($dbTool->status) {
+            'BORROWED' => 'Borrowed',
+            'MAINTENANCE' => 'Maintenance',
+            default => 'Available',
+        };
+
+        $tool = [
+            'id' => $dbTool->id,
+            'name' => $dbTool->name,
+            'toolId' => 'TL-'.$dbTool->id,
+            'category' => $dbTool->category?->name ?? 'Other',
+            'status' => $status,
+            'condition' => $dbTool->condition ?? 'Good',
+            'description' => $dbTool->description ?: 'No description available.',
             'specifications' => [],
-            'lastMaintenance' => 'N/A',
-            'totalBorrowings' => 0,
+            'lastMaintenance' => $dbTool->updated_at?->format('M d, Y') ?? 'N/A',
+            'totalBorrowings' => (int) ($dbTool->allocations_count ?? 0),
+            'imageUrl' => $dbTool->image_path ? asset('storage/'.$dbTool->image_path) : null,
         ];
 
         return Inertia::render('Tools/DetailPage', [

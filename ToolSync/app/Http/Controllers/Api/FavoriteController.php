@@ -27,7 +27,7 @@ class FavoriteController extends Controller
                     'name' => $tool->name,
                     'toolId' => 'TL-'.$tool->id,
                     'category' => $tool->category?->name ?? 'Other',
-                    'imageUrl' => $tool->image_path ? asset('storage/'.$tool->image_path) : null,
+                    'imageUrl' => $tool->image_path ? asset($tool->image_path) : null,
                 ];
             });
 

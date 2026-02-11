@@ -1,17 +1,17 @@
 import { Head } from '@inertiajs/react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Modal from '@/Components/Modal';
-import AppLayout from '@/Layouts/AppLayout';
 import { toast } from '@/Components/Toast';
-import { apiRequest } from '@/lib/http';
+import AppLayout from '@/Layouts/AppLayout';
 import type {
     AllocationHistoryItem,
     AllocationHistoryPaginated,
     AllocationHistorySummary,
 } from '@/lib/apiTypes';
 import { mapAllocationStatusToUi } from '@/lib/apiTypes';
+import { apiRequest } from '@/lib/http';
 
-type AllocationStatus = 'Returned' | 'Active' | 'Overdue';
+type AllocationStatus = 'Returned' | 'Active' | 'Pending' | 'Overdue';
 
 type Allocation = {
     id: number;
@@ -23,6 +23,8 @@ type Allocation = {
     expectedReturn: string;
     status: AllocationStatus;
     statusDetail?: string;
+    /** Return condition & notes from user when they requested return (PENDING_RETURN). */
+    note?: string | null;
 };
 
 function mapHistoryItemToAllocation(a: AllocationHistoryItem): Allocation {
@@ -40,6 +42,8 @@ function mapHistoryItemToAllocation(a: AllocationHistoryItem): Allocation {
     let statusDetail = '';
     if (a.status === 'RETURNED' && a.actual_return_date) {
         statusDetail = `Returned on ${new Date(a.actual_return_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`;
+    } else if (a.status === 'PENDING_RETURN') {
+        statusDetail = 'Awaiting admin return approval';
     } else if (status === 'Overdue') {
         statusDetail = `Overdue since ${expectedReturn}`;
     } else {
@@ -56,6 +60,7 @@ function mapHistoryItemToAllocation(a: AllocationHistoryItem): Allocation {
         expectedReturn,
         status,
         statusDetail,
+        note: a.note ?? null,
     };
 }
 
@@ -64,6 +69,10 @@ type SortKey = 'tool' | 'borrowDate' | 'expectedReturn' | 'status';
 function statusClasses(status: AllocationStatus): string {
     if (status === 'Returned') {
         return 'bg-emerald-50 text-emerald-700';
+    }
+
+    if (status === 'Pending') {
+        return 'bg-amber-50 text-amber-700';
     }
 
     if (status === 'Active') {
@@ -86,6 +95,16 @@ function statusIcon(status: AllocationStatus): ReactNode {
         return (
             <svg className="mr-1.5 h-3 w-3" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M8 3.5V8L11 9.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="8" cy="8" r="4.5" stroke="currentColor" strokeWidth="1.4" />
+            </svg>
+        );
+    }
+
+    if (status === 'Pending') {
+        return (
+            <svg className="mr-1.5 h-3 w-3" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 8H13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                <path d="M8 3V13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
                 <circle cx="8" cy="8" r="4.5" stroke="currentColor" strokeWidth="1.4" />
             </svg>
         );
@@ -185,7 +204,7 @@ export default function AdminAllocationHistoryPage() {
             if (!response.ok) throw new Error(response.statusText || 'Failed to export CSV');
             const blob = await response.blob();
             const contentDisposition = response.headers.get('content-disposition') ?? '';
-            const match = contentDisposition.match(/filename=\"?([^\";]+)\"?/i);
+            const match = contentDisposition.match(/filename="?([^";]+)"?/i);
             const filename = match?.[1] ?? 'tool_allocations.csv';
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
@@ -254,7 +273,6 @@ export default function AdminAllocationHistoryPage() {
     const currentPage = Math.min(page, totalPages);
     const startIndex = (currentPage - 1) * PAGE_SIZE;
     const paginated = filteredAndSorted;
-    const endIndex = startIndex + paginated.length;
 
     const toggleSort = (key: SortKey): void => {
         setSortBy((previousKey) => {
@@ -670,6 +688,14 @@ export default function AdminAllocationHistoryPage() {
                                         )}
                                     </p>
                                 </div>
+                                {selectedAllocation.note != null && selectedAllocation.note.trim() !== '' && (
+                                    <div className="rounded-xl bg-amber-50/80 p-3">
+                                        <p className="text-[11px] font-semibold tracking-wide text-amber-800 uppercase">
+                                            {selectedAllocation.status === 'Pending' ? 'Return condition & notes (from user)' : 'Note'}
+                                        </p>
+                                        <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">{selectedAllocation.note}</p>
+                                    </div>
+                                )}
                             </div>
                             <div className="border-t bg-gray-50 px-6 py-3 text-right">
                                 <button

@@ -1,11 +1,11 @@
 import { Head } from '@inertiajs/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Breadcrumb } from '@/Components/Breadcrumb';
+import Modal from '@/Components/Modal';
 import { toast } from '@/Components/Toast';
 import AppLayout from '@/Layouts/AppLayout';
-import Modal from '@/Components/Modal';
-import { apiRequest } from '@/lib/http';
 import type { SettingsApiResponse } from '@/lib/apiTypes';
+import { apiRequest } from '@/lib/http';
 
 type DayOfWeek = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
 

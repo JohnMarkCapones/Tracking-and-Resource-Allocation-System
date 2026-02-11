@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { apiRequest } from '@/lib/http';
 import type { DepartmentApiItem } from '@/lib/apiTypes';
+import { apiRequest } from '@/lib/http';
 
 type Department = {
     id: number;

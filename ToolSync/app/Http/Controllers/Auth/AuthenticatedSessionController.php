@@ -21,6 +21,7 @@ class AuthenticatedSessionController extends Controller
         return Inertia::render('Profile/login', [
             'canResetPassword' => Route::has('password.request'),
             'status' => session('status'),
+            'unverified_email' => session('unverified_email'),
         ]);
     }
 
@@ -42,7 +43,13 @@ class AuthenticatedSessionController extends Controller
         }
 
         if ($user && ! $user->hasVerifiedEmail()) {
-            return redirect()->route('verification.notice');
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()
+                ->route('login')
+                ->with('unverified_email', $user->email);
         }
 
         if ($user && method_exists($user, 'isAdmin') && $user->isAdmin()) {

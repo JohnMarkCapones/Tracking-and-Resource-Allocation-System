@@ -5,16 +5,16 @@ import type { BorrowingStatusSegment } from '@/Components/Dashboard/BorrowingSta
 import { BorrowingStatusDonut } from '@/Components/Dashboard/BorrowingStatusDonut';
 import type { MostBorrowedTool } from '@/Components/Dashboard/MostBorrowedBarChart';
 import { MostBorrowedBarChart } from '@/Components/Dashboard/MostBorrowedBarChart';
-import AppLayout from '@/Layouts/AppLayout';
 import { toast } from '@/Components/Toast';
-import { CreateEditModal, type ToolFormData } from '@/pages/Admin/Tools/CreateEditModal';
-import { apiRequest } from '@/lib/http';
+import AppLayout from '@/Layouts/AppLayout';
 import type {
     DashboardApiResponse,
     DashboardPendingApproval,
     DashboardRecentActivityItem,
 } from '@/lib/apiTypes';
 import type { AnalyticsOverviewApiResponse } from '@/lib/apiTypes';
+import { apiRequest } from '@/lib/http';
+import { CreateEditModal, type ToolFormData } from '@/pages/Admin/Tools/CreateEditModal';
 
 type AdminMetrics = {
     totalTools: number;
@@ -112,6 +112,7 @@ export default function AdminDashboardPage() {
     const [maintenanceDueCount, setMaintenanceDueCount] = useState(0);
     const [recentActivity, setRecentActivity] = useState<RecentActivityItem[]>([]);
     const [addToolCategories, setAddToolCategories] = useState<Array<{ id: number; name: string }>>([]);
+    const [pendingActionId, setPendingActionId] = useState<number | null>(null);
 
     const { from, to } = useMemo(() => getRangeParams(timeRange), [timeRange]);
 
@@ -147,6 +148,38 @@ export default function AdminDashboardPage() {
         }
     }, []);
 
+    const handleApproveBorrowRequest = useCallback(
+        async (reservationId: number) => {
+            setPendingActionId(reservationId);
+            try {
+                await apiRequest(`/api/reservations/${reservationId}/approve`, { method: 'POST' });
+                toast.success('Borrow request approved. It now appears in the user’s My Borrowings.');
+                await loadDashboard();
+            } catch (err) {
+                toast.error(err instanceof Error ? err.message : 'Failed to approve');
+            } finally {
+                setPendingActionId(null);
+            }
+        },
+        [loadDashboard],
+    );
+
+    const handleDeclineBorrowRequest = useCallback(
+        async (reservationId: number) => {
+            setPendingActionId(reservationId);
+            try {
+                await apiRequest(`/api/reservations/${reservationId}/decline`, { method: 'POST' });
+                toast.success('Borrow request declined.');
+                await loadDashboard();
+            } catch (err) {
+                toast.error(err instanceof Error ? err.message : 'Failed to decline');
+            } finally {
+                setPendingActionId(null);
+            }
+        },
+        [loadDashboard],
+    );
+
     const loadAnalytics = useCallback(async () => {
         try {
             const res = await apiRequest<AnalyticsOverviewApiResponse>(
@@ -174,7 +207,7 @@ export default function AdminDashboardPage() {
 
     useEffect(() => {
         loadAnalytics();
-    }, [from, to]);
+    }, [loadAnalytics]);
 
     const handleExportCsv = useCallback(async () => {
         try {
@@ -189,7 +222,7 @@ export default function AdminDashboardPage() {
 
             const blob = await response.blob();
             const contentDisposition = response.headers.get('content-disposition') ?? '';
-            const match = contentDisposition.match(/filename=\"?([^\";]+)\"?/i);
+            const match = contentDisposition.match(/filename="?([^";]+)"?/i);
             const filename = match?.[1] ?? 'tool_allocations.csv';
 
             const url = window.URL.createObjectURL(blob);
@@ -387,7 +420,7 @@ export default function AdminDashboardPage() {
                             ) : (
                                 <ul className="space-y-3 text-xs text-gray-700">
                                     {pendingApprovals.slice(0, 5).map((item) => (
-                                        <li key={item.id} className="flex items-start justify-between rounded-2xl bg-gray-50 px-3 py-2">
+                                        <li key={item.id} className="flex items-start justify-between gap-2 rounded-2xl bg-gray-50 px-3 py-2">
                                             <div>
                                                 <p className="font-semibold">{item.tool_name} · TL-{item.tool_id}</p>
                                                 <p className="text-[11px] text-gray-500">
@@ -395,13 +428,24 @@ export default function AdminDashboardPage() {
                                                     {item.user_email ? ` · ${item.user_email}` : ''}
                                                 </p>
                                             </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => router.visit('/admin/allocation-history')}
-                                                className="rounded-full border border-gray-200 px-3 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-100"
-                                            >
-                                                Review
-                                            </button>
+                                            <div className="flex shrink-0 gap-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleApproveBorrowRequest(item.id)}
+                                                    disabled={pendingActionId === item.id}
+                                                    className="rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                                                >
+                                                    {pendingActionId === item.id ? '…' : 'Approve'}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDeclineBorrowRequest(item.id)}
+                                                    disabled={pendingActionId === item.id}
+                                                    className="rounded-full border border-gray-300 px-3 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-60"
+                                                >
+                                                    Decline
+                                                </button>
+                                            </div>
                                         </li>
                                     ))}
                                 </ul>

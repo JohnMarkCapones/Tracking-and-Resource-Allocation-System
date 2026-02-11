@@ -1,11 +1,11 @@
 import { Head } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { Breadcrumb } from '@/Components/Breadcrumb';
+import Modal from '@/Components/Modal';
 import { toast } from '@/Components/Toast';
 import AppLayout from '@/Layouts/AppLayout';
-import Modal from '@/Components/Modal';
-import { apiRequest } from '@/lib/http';
 import type { MaintenanceScheduleApiItem, ToolDeprecationApiItem } from '@/lib/apiTypes';
+import { apiRequest } from '@/lib/http';
 
 type MaintenanceStatus = 'scheduled' | 'in_progress' | 'completed' | 'overdue';
 

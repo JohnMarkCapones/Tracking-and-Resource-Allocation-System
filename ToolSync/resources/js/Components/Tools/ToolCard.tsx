@@ -1,4 +1,4 @@
-import { Link, router } from '@inertiajs/react';
+import { router } from '@inertiajs/react';
 import { FavoriteButton } from '@/Components/FavoriteButton';
 
 export type ToolCardStatus = 'Available' | 'Borrowed' | 'Maintenance';

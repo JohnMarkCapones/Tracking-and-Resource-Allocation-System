@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 
 class AdminUserController extends Controller
 {
@@ -58,7 +59,23 @@ class AdminUserController extends Controller
             'role' => ['required', Rule::in(['ADMIN', 'USER'])],
             'status' => ['required', Rule::in(['ACTIVE', 'INACTIVE'])],
             'department_id' => ['nullable', 'integer', 'exists:departments,id'],
-            'password' => ['required', 'string', 'min:8'],
+            'password' => [
+                'required',
+                'string',
+                Password::min(8)->uncompromised(),
+                function ($attribute, $value, $fail) {
+                    $characterTypes = 0;
+                    $characterTypes += preg_match('/[A-Z]/', $value) ? 1 : 0;
+                    $characterTypes += preg_match('/[a-z]/', $value) ? 1 : 0;
+                    $characterTypes += preg_match('/\d/', $value) ? 1 : 0;
+                    $characterTypes += preg_match('/[^A-Za-z0-9]/', $value) ? 1 : 0;
+                    if ($characterTypes < 3) {
+                        $fail('Password must use at least 3 of: uppercase, lowercase, number, special character.');
+                    }
+                },
+            ],
+        ], [
+            'password.uncompromised' => 'This password has appeared in a data leak. Please choose a different one.',
         ]);
 
         $user = User::create([
@@ -94,7 +111,26 @@ class AdminUserController extends Controller
             'status' => ['sometimes', 'in:ACTIVE,INACTIVE'],
             'role' => ['sometimes', 'in:ADMIN,USER'],
             'department_id' => ['sometimes', 'nullable', 'integer', 'exists:departments,id'],
-            'password' => ['sometimes', 'nullable', 'string', 'min:8'],
+            'password' => [
+                'sometimes',
+                'nullable',
+                'string',
+                Rule::when($request->filled('password'), [
+                    Password::min(8)->uncompromised(),
+                    function ($attribute, $value, $fail) {
+                        $characterTypes = 0;
+                        $characterTypes += preg_match('/[A-Z]/', $value) ? 1 : 0;
+                        $characterTypes += preg_match('/[a-z]/', $value) ? 1 : 0;
+                        $characterTypes += preg_match('/\d/', $value) ? 1 : 0;
+                        $characterTypes += preg_match('/[^A-Za-z0-9]/', $value) ? 1 : 0;
+                        if ($characterTypes < 3) {
+                            $fail('Password must use at least 3 of: uppercase, lowercase, number, special character.');
+                        }
+                    },
+                ]),
+            ],
+        ], [
+            'password.uncompromised' => 'This password has appeared in a data leak. Please choose a different one.',
         ]);
 
         if (($validated['status'] ?? null) === 'INACTIVE' && $actor->id === $user->id) {

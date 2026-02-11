@@ -2,6 +2,15 @@
 
 A Tracking and Resource Allocation System built with Laravel and React.
 
+## Features
+
+- **Tool catalog & allocations** — Browse tools, request/borrow, track due dates, and return. Admin can manage tools, categories, and users.
+- **Email verification** — New accounts must verify their email via a signed link before full access. Unverified users who try to log in stay on the login page and see a clear “Email not verified” modal.
+- **Strong password policy** — Minimum length, mixed character types, and Have I Been Pwned (uncompromised) check on registration, password reset, and profile/update flows. Admin-created user passwords follow the same rules.
+- **Show/hide password** — All password fields (login, register, reset, profile, admin user form) include an eye toggle to reveal or hide the password.
+- **Rate limiting** — Login and registration are throttled to reduce abuse and brute force.
+- **OAuth** — Optional social login (e.g. Google) for sign-up and sign-in.
+
 ## Tech Stack
 
 - **Backend**: Laravel 12, PHP 8.2+

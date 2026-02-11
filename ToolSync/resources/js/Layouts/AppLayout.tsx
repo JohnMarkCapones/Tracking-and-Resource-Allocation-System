@@ -1,7 +1,6 @@
 import { Link, router, usePage } from '@inertiajs/react';
 import type { PropsWithChildren, ReactNode } from 'react';
 import { useEffect, useState } from 'react';
-import ApplicationLogo from '@/Components/ApplicationLogo';
 import { LaserFlow } from '@/Components/LaserFlow';
 import { ThemeToggle } from '@/Components/ThemeToggle';
 import { toast } from '@/Components/Toast';
@@ -285,7 +284,7 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
         }
 
         setIsNotificationsOpen(false);
-        router.visit(notification.href ?? '/notifications');
+        router.visit('/notifications');
     };
 
     return (

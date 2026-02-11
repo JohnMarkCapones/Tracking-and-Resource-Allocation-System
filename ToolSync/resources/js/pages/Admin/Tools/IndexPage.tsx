@@ -4,9 +4,9 @@ import { ToolTable, type Tool } from '@/Components/Admin/ToolTable';
 import { EmptyState } from '@/Components/EmptyState';
 import { toast } from '@/Components/Toast';
 import AppLayout from '@/Layouts/AppLayout';
-import { apiRequest } from '@/lib/http';
 import type { ToolDto, ToolCategoryDto } from '@/lib/apiTypes';
 import { mapToolStatusToUi } from '@/lib/apiTypes';
+import { apiRequest } from '@/lib/http';
 import { CreateEditModal, type ToolFormData } from './CreateEditModal';
 
 function mapDtoToTool(dto: ToolDto): Tool {
@@ -92,6 +92,7 @@ export default function IndexPage() {
             description: data.description || null,
             category_id: categoryId,
             status: statusToApi(data.status),
+            condition: data.condition,
             quantity: data.quantity,
             condition: data.condition || null,
         };

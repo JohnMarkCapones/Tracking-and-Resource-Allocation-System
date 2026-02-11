@@ -18,6 +18,7 @@ class Tool extends Model
         'image_path',
         'category_id',
         'status',
+        'condition',
         'quantity',
         'condition',
     ];

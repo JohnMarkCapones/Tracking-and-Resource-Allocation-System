@@ -32,7 +32,7 @@ function nextSpecId(): string {
 
 const STATUSES: ToolStatus[] = ['Available', 'Borrowed', 'Maintenance'];
 
-const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor'];
+const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor', 'Damaged', 'Functional'];
 
 export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, onClose, onSave }: CreateEditModalProps) {
     const isEditing = tool !== null;
