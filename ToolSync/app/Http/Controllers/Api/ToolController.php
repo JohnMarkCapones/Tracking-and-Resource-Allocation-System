@@ -111,7 +111,13 @@ class ToolController extends Controller
      */
     public function store(StoreToolRequest $request): JsonResponse
     {
-        $tool = Tool::create($request->validated());
+        $validated = $request->validated();
+
+        if (! Schema::hasColumn('tools', 'code')) {
+            unset($validated['code']);
+        }
+
+        $tool = Tool::create($validated);
         $tool->load('category');
 
         return response()->json([
@@ -191,6 +197,10 @@ class ToolController extends Controller
     {
         $oldStatus = $tool->status;
         $validated = $request->validated();
+
+        if (! Schema::hasColumn('tools', 'code')) {
+            unset($validated['code']);
+        }
 
         $tool->update($validated);
 

@@ -87,14 +87,12 @@ export default function IndexPage() {
             return;
         }
         const payload = {
-            code: data.toolId.trim() || null,
             name: data.name,
             description: data.description || null,
             category_id: categoryId,
             status: statusToApi(data.status),
             condition: data.condition,
             quantity: data.quantity,
-            condition: data.condition || null,
         };
         setSaving(true);
         try {

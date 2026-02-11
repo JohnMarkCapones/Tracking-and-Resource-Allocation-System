@@ -83,7 +83,9 @@ class DashboardController extends Controller
         // Number of tools (rows) under maintenance, not sum of quantity.
         $toolsMaintenanceQty = (int) Tool::query()->where('status', 'MAINTENANCE')->count();
 
-        $activeBorrowQuery = ToolAllocation::query()->where('status', 'BORROWED');
+        // "Borrowed items" on dashboard should include items still not returned,
+        // including those awaiting admin approval (PENDING_RETURN).
+        $activeBorrowQuery = ToolAllocation::query()->whereIn('status', ['BORROWED', 'PENDING_RETURN']);
         if ($userId) {
             $activeBorrowQuery->where('user_id', $userId);
         }
