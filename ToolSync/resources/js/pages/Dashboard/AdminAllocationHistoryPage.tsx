@@ -54,7 +54,7 @@ function mapHistoryItemToAllocation(a: AllocationHistoryItem): Allocation {
         id: a.id,
         tool: a.tool?.name ?? 'Unknown',
         toolId: 'TL-' + a.tool_id,
-        category: 'Other',
+        category: a.tool?.category?.name ?? 'Other',
         borrower: a.user?.email ?? a.user?.name ?? 'Unknown',
         borrowDate,
         expectedReturn,

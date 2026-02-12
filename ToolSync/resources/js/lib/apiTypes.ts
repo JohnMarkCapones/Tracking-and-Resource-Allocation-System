@@ -17,7 +17,6 @@ export type ToolDto = {
     status: ToolStatusApi;
     condition?: string | null;
     quantity: number;
-    condition?: string | null;
     created_at: string;
     updated_at: string;
     category?: ToolCategoryDto;
@@ -79,6 +78,10 @@ export type AllocationDto = {
     tool: {
         id: number;
         name: string;
+        category?: {
+            id: number;
+            name: string;
+        };
     } | null;
     user: {
         id: number;
