@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Reservation;
+use App\Models\SystemSetting;
 use App\Models\Tool;
 use App\Models\ToolAllocation;
 use App\Models\User;
@@ -19,6 +20,23 @@ use Illuminate\Support\Facades\Notification;
 
 class ReservationController extends Controller
 {
+    private const MAX_BORROWINGS_DEFAULT = 3;
+
+    private function activeBorrowSlotsUsed(int $userId): int
+    {
+        $activeBorrowedCount = ToolAllocation::query()
+            ->where('user_id', $userId)
+            ->whereIn('status', ['BORROWED', 'PENDING_RETURN'])
+            ->count();
+
+        $pendingRequestCount = Reservation::query()
+            ->where('user_id', $userId)
+            ->where('status', 'PENDING')
+            ->count();
+
+        return (int) $activeBorrowedCount + (int) $pendingRequestCount;
+    }
+
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -103,6 +121,16 @@ class ReservationController extends Controller
 
         $isBorrowRequest = ! empty($validated['borrow_request']);
         $status = $isBorrowRequest ? 'PENDING' : 'UPCOMING';
+
+        if ($isBorrowRequest && $user) {
+            $maxBorrowings = (int) (SystemSetting::query()->where('key', 'max_borrowings')->value('value') ?? self::MAX_BORROWINGS_DEFAULT);
+            $activeSlotsUsed = $this->activeBorrowSlotsUsed($user->id);
+            if ($activeSlotsUsed >= $maxBorrowings) {
+                return response()->json([
+                    'message' => "You have reached the maximum concurrent borrow/request limit ({$maxBorrowings}). Return a tool or wait for pending requests to be resolved.",
+                ], 422);
+            }
+        }
 
         $reservation = Reservation::create([
             'tool_id' => (int) $validated['tool_id'],
@@ -204,6 +232,17 @@ class ReservationController extends Controller
             return response()->json([
                 'message' => 'Tool is no longer available for borrowing. Request cannot be approved.',
             ], 409);
+        }
+
+        $maxBorrowings = (int) (SystemSetting::query()->where('key', 'max_borrowings')->value('value') ?? self::MAX_BORROWINGS_DEFAULT);
+        $currentBorrowed = ToolAllocation::query()
+            ->where('user_id', $reservation->user_id)
+            ->whereIn('status', ['BORROWED', 'PENDING_RETURN'])
+            ->count();
+        if ($currentBorrowed >= $maxBorrowings) {
+            return response()->json([
+                'message' => "User already has the maximum concurrent borrowings ({$maxBorrowings}). Request cannot be approved.",
+            ], 422);
         }
 
         $allocation = DB::transaction(function () use ($reservation, $tool, $request): ToolAllocation {

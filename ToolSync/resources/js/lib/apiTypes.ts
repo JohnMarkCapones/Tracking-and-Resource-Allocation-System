@@ -132,6 +132,7 @@ export function mapAllocationStatusToUi(allocation: AllocationDto, now: Date = n
 // --- API response types (match backend JSON) ---
 
 export type DashboardCounts = {
+    tools_total_quantity?: number;
     tools_available_quantity: number;
     tools_maintenance_quantity: number;
     borrowed_active_count: number;

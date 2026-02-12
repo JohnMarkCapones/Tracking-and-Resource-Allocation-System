@@ -19,6 +19,7 @@ export type ToolCardData = {
 type ToolCardProps = {
     tool: ToolCardData;
     onRequestBorrow?: (tool: ToolCardData) => void;
+    disableBorrowRequest?: boolean;
 };
 
 function statusClasses(status: ToolCardStatus): string {
@@ -33,7 +34,7 @@ function statusClasses(status: ToolCardStatus): string {
     return 'bg-rose-50 text-rose-700';
 }
 
-export function ToolCard({ tool, onRequestBorrow }: ToolCardProps) {
+export function ToolCard({ tool, onRequestBorrow, disableBorrowRequest = false }: ToolCardProps) {
     const handleButtonClick = (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
@@ -81,10 +82,14 @@ export function ToolCard({ tool, onRequestBorrow }: ToolCardProps) {
             {tool.status === 'Available' && (
                 <button
                     type="button"
-                    className="mt-3 w-full rounded-full bg-blue-600 py-1.5 text-[11px] font-semibold text-white hover:bg-blue-700"
+                    className={`mt-3 w-full rounded-full py-1.5 text-[11px] font-semibold text-white ${
+                        disableBorrowRequest ? 'cursor-not-allowed bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'
+                    }`}
                     onClick={handleButtonClick}
+                    disabled={disableBorrowRequest}
+                    title={disableBorrowRequest ? 'Maximum 3 active borrow/request slots reached.' : undefined}
                 >
-                    Request to Borrow
+                    {disableBorrowRequest ? 'Borrowing limit reached' : 'Request to Borrow'}
                 </button>
             )}
 

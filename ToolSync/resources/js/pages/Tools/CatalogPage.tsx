@@ -8,9 +8,11 @@ import { RequestToolModal } from '@/Components/Tools/RequestToolModal';
 import { ToolCard, type ToolCardData } from '@/Components/Tools/ToolCard';
 import { ToolFilters } from '@/Components/Tools/ToolFilters';
 import AppLayout from '@/Layouts/AppLayout';
-import type { ToolDto, ToolCategoryDto } from '@/lib/apiTypes';
+import type { DashboardApiResponse, ReservationApiItem, ToolDto, ToolCategoryDto } from '@/lib/apiTypes';
 import { mapToolStatusToUi } from '@/lib/apiTypes';
 import { apiRequest } from '@/lib/http';
+
+const MAX_BORROWINGS = 3;
 
 function mapToolToCardData(dto: ToolDto): ToolCardData {
     const availableQuantity = Math.max(0, Number(dto.quantity ?? 0));
@@ -40,6 +42,8 @@ export default function CatalogPage() {
     const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
     const [selectedTool, setSelectedTool] = useState<ToolCardData | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [activeBorrowingsCount, setActiveBorrowingsCount] = useState(0);
+    const [pendingBorrowRequestsCount, setPendingBorrowRequestsCount] = useState(0);
 
     useEffect(() => {
         let cancelled = false;
@@ -48,13 +52,17 @@ export default function CatalogPage() {
             setLoading(true);
             setError(null);
             try {
-                const [toolsRes, categoriesRes] = await Promise.all([
+                const [toolsRes, categoriesRes, dashboardRes, reservationsRes] = await Promise.all([
                     apiRequest<{ data: ToolDto[] }>('/api/tools'),
                     apiRequest<{ data: ToolCategoryDto[] }>('/api/tool-categories'),
+                    apiRequest<DashboardApiResponse>('/api/dashboard'),
+                    apiRequest<{ data: ReservationApiItem[] }>('/api/reservations'),
                 ]);
                 if (cancelled) return;
                 setTools((toolsRes.data ?? []).map(mapToolToCardData));
                 setCategories((categoriesRes.data ?? []).map((c) => c.name));
+                setActiveBorrowingsCount(dashboardRes.data.counts.borrowed_active_count ?? 0);
+                setPendingBorrowRequestsCount((reservationsRes.data ?? []).filter((r) => r.status === 'pending').length);
             } catch (err) {
                 if (cancelled) return;
                 setError(err instanceof Error ? err.message : 'Failed to load tools');
@@ -98,7 +106,13 @@ export default function CatalogPage() {
         setSearch('');
     };
 
+    const borrowSlotsUsed = activeBorrowingsCount + pendingBorrowRequestsCount;
+
     const handleRequestBorrow = (tool: ToolCardData) => {
+        if (tool.status === 'Available' && borrowSlotsUsed >= MAX_BORROWINGS) {
+            toast.error(`You can only have up to ${MAX_BORROWINGS} active borrow/request slots at a time.`);
+            return;
+        }
         setSelectedTool(tool);
         setIsRequestModalOpen(true);
     };
@@ -131,6 +145,11 @@ export default function CatalogPage() {
                 return;
             }
 
+            if (borrowSlotsUsed >= MAX_BORROWINGS) {
+                toast.error(`You can only have up to ${MAX_BORROWINGS} active borrow/request slots at a time.`);
+                return;
+            }
+
             // Available tool: create a borrow request (reservation PENDING) for admin approval
             await apiRequest<{ message: string }>('/api/reservations', {
                 method: 'POST',
@@ -147,8 +166,14 @@ export default function CatalogPage() {
             toast.success('Borrowing request submitted for approval!');
             
             // Reload the tools list
-            const toolsRes = await apiRequest<{ data: ToolDto[] }>('/api/tools');
+            const [toolsRes, dashboardRes, reservationsRes] = await Promise.all([
+                apiRequest<{ data: ToolDto[] }>('/api/tools'),
+                apiRequest<DashboardApiResponse>('/api/dashboard'),
+                apiRequest<{ data: ReservationApiItem[] }>('/api/reservations'),
+            ]);
             setTools((toolsRes.data ?? []).map(mapToolToCardData));
+            setActiveBorrowingsCount(dashboardRes.data.counts.borrowed_active_count ?? 0);
+            setPendingBorrowRequestsCount((reservationsRes.data ?? []).filter((r) => r.status === 'pending').length);
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to submit request.';
             toast.error(message);
@@ -255,7 +280,12 @@ export default function CatalogPage() {
                         ) : (
                             <div className="grid gap-4 border-t border-gray-100 pt-4 sm:grid-cols-2 xl:grid-cols-3">
                                 {filteredTools.map((tool) => (
-                                    <ToolCard key={tool.id} tool={tool} onRequestBorrow={handleRequestBorrow} />
+                                    <ToolCard
+                                        key={tool.id}
+                                        tool={tool}
+                                        onRequestBorrow={handleRequestBorrow}
+                                        disableBorrowRequest={tool.status === 'Available' && borrowSlotsUsed >= MAX_BORROWINGS}
+                                    />
                                 ))}
                             </div>
                         )}

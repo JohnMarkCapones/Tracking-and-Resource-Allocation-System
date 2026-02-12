@@ -80,8 +80,8 @@ class DashboardController extends Controller
         $recentLimit = max(1, min($recentLimit, 50));
 
         $toolsAvailableQty = (int) Tool::query()->where('status', 'AVAILABLE')->sum('quantity');
-        // Number of tools (rows) under maintenance, not sum of quantity.
-        $toolsMaintenanceQty = (int) Tool::query()->where('status', 'MAINTENANCE')->count();
+        $toolsMaintenanceQty = (int) Tool::query()->where('status', 'MAINTENANCE')->sum('quantity');
+        $totalToolsQty = (int) Tool::query()->sum('quantity');
 
         // "Borrowed items" on dashboard should include items still not returned,
         // including those awaiting admin approval (PENDING_RETURN).
@@ -89,8 +89,13 @@ class DashboardController extends Controller
         if ($userId) {
             $activeBorrowQuery->where('user_id', $userId);
         }
-        // Count active borrow records (allocations), not tool rows.
-        $borrowedActiveCount = (int) (clone $activeBorrowQuery)->count();
+        // Admin/system scope uses inventory math so "borrowed" tracks stock movement.
+        // User-scoped dashboard should show that user's active borrowed records.
+        if ($userId === null) {
+            $borrowedActiveCount = max(0, $totalToolsQty - $toolsAvailableQty - $toolsMaintenanceQty);
+        } else {
+            $borrowedActiveCount = (int) (clone $activeBorrowQuery)->count();
+        }
         $overdueCount = (int) (clone $activeBorrowQuery)
             ->where('expected_return_date', '<', now())
             ->count();
@@ -186,6 +191,7 @@ class DashboardController extends Controller
                     'user_id' => $userId,
                 ],
                 'counts' => [
+                    'tools_total_quantity' => $totalToolsQty,
                     'tools_available_quantity' => $toolsAvailableQty,
                     'tools_maintenance_quantity' => $toolsMaintenanceQty,
                     'borrowed_active_count' => $borrowedActiveCount,

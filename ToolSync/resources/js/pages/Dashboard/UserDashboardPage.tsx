@@ -91,9 +91,10 @@ export default function UserDashboardPage() {
             setToolsUnderMaintenance(counts.tools_maintenance_quantity);
             setBorrowedItemsCount(counts.borrowed_active_count);
             setTotalTools(
-                counts.tools_available_quantity +
-                    counts.tools_maintenance_quantity +
-                    counts.borrowed_active_count,
+                counts.tools_total_quantity ??
+                    (counts.tools_available_quantity +
+                        counts.tools_maintenance_quantity +
+                        counts.borrowed_active_count),
             );
             const recent = d.recent_activity ?? [];
             setBorrowingHistory(recent.map(mapRecentToHistoryItem));

@@ -155,7 +155,7 @@ class ToolAllocationController extends Controller
         $maxDuration = (int) (SystemSetting::query()->where('key', 'max_duration')->value('value') ?? 14);
         $currentBorrowed = ToolAllocation::query()
             ->where('user_id', $borrower->id)
-            ->where('status', 'BORROWED')
+            ->whereIn('status', ['BORROWED', 'PENDING_RETURN'])
             ->count();
         $durationDays = $borrowDate->diffInDays($expectedReturn) + 1;
         $evaluator = app(AutoApprovalEvaluator::class);

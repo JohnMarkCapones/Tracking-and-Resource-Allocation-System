@@ -124,7 +124,8 @@ export default function AdminDashboardPage() {
             const d = res.data;
             const c = d.counts;
             const total =
-                c.tools_available_quantity + c.tools_maintenance_quantity + c.borrowed_active_count;
+                c.tools_total_quantity ??
+                (c.tools_available_quantity + c.tools_maintenance_quantity + c.borrowed_active_count);
             setMetrics({
                 totalTools: total,
                 availableTools: c.tools_available_quantity,
