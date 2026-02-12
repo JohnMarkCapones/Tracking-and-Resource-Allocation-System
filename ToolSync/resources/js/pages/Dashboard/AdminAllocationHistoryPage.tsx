@@ -554,6 +554,7 @@ export default function AdminAllocationHistoryPage() {
                                                 {sortBy === 'status' && <span>{sortDir === 'asc' ? '↑' : '↓'}</span>}
                                             </button>
                                         </th>
+                                        <th className="py-3 pr-4">Note</th>
                                         <th className="py-3 text-right">Action</th>
                                     </tr>
                                 </thead>
@@ -588,6 +589,15 @@ export default function AdminAllocationHistoryPage() {
                                                         {statusIcon(row.status)}
                                                         {row.status}
                                                     </span>
+                                                </td>
+                                                <td className="py-3 pr-4">
+                                                    {row.note && row.note.trim() !== '' ? (
+                                                        <div className="max-w-xs truncate" title={row.note}>
+                                                            {row.note}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-gray-400 italic">No note</span>
+                                                    )}
                                                 </td>
                                                 <td className="py-3 text-right">
                                                     {isReturned ? (
