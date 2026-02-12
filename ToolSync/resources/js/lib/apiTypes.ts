@@ -79,6 +79,10 @@ export type AllocationDto = {
     tool: {
         id: number;
         name: string;
+        category?: {
+            id: number;
+            name: string;
+        };
     } | null;
     user: {
         id: number;
