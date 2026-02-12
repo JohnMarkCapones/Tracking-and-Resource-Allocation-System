@@ -8,6 +8,7 @@ import { AvailabilityCalendar } from '@/Components/Tools/AvailabilityCalendar';
 import { RequestToolModal } from '@/Components/Tools/RequestToolModal';
 import AppLayout from '@/Layouts/AppLayout';
 import { apiRequest } from '@/lib/http';
+import { useFavoritesStore } from '@/stores/favoritesStore';
 
 type AvailabilityApiResponse = {
     data: {
@@ -51,6 +52,7 @@ function statusClasses(status: ToolStatus): string {
 export default function DetailPage() {
     const page = usePage<DetailPageProps>();
     const { tool } = page.props;
+    const { addToRecentlyViewed } = useFavoritesStore();
     const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [unavailableDates, setUnavailableDates] = useState<Array<{ from: Date; to: Date }>>([]);
@@ -61,6 +63,17 @@ export default function DetailPage() {
             setIsRequestModalOpen(true);
         }
     }, [page.url]);
+
+    // Track recently viewed tools
+    useEffect(() => {
+        addToRecentlyViewed({
+            id: tool.id,
+            name: tool.name,
+            toolId: tool.toolId,
+            category: tool.category,
+            imageUrl: tool.imageUrl,
+        });
+    }, [tool.id, tool.name, tool.toolId, tool.category, tool.imageUrl, addToRecentlyViewed]);
 
     const toLocalYmd = (date: Date): string => format(date, 'yyyy-MM-dd');
 
