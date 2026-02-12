@@ -61,7 +61,7 @@ class ToolAllocationHistoryController extends Controller
     public function index(Request $request): JsonResponse
     {
         $actor = $request->user();
-        $query = ToolAllocation::query()->with(['tool', 'user'])->orderByDesc('borrow_date');
+        $query = ToolAllocation::query()->with(['tool.category', 'user'])->orderByDesc('borrow_date');
 
         if ($request->filled('tool_id')) {
             $query->where('tool_id', (int) $request->input('tool_id'));
@@ -133,7 +133,7 @@ class ToolAllocationHistoryController extends Controller
                 'Note',
             ]);
 
-            $query = ToolAllocation::query()->with(['tool', 'user'])->orderByDesc('borrow_date');
+            $query = ToolAllocation::query()->with(['tool.category', 'user'])->orderByDesc('borrow_date');
 
             if ($request->filled('tool_id')) {
                 $query->where('tool_id', (int) $request->input('tool_id'));
