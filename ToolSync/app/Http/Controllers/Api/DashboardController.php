@@ -53,6 +53,7 @@ class DashboardController extends Controller
      *     "summary": {
      *       "returned_count": 15,
      *       "not_returned_count": 10,
+     *       "overdue_in_period_count": 2,
      *       "returned_percent": 60,
      *       "not_returned_percent": 40,
      *       "range_days": 30
@@ -123,6 +124,10 @@ class DashboardController extends Controller
 
         $returnedCount = (int) (clone $summaryQuery)->where('status', 'RETURNED')->count();
         $notReturnedCount = (int) (clone $summaryQuery)->where('status', 'BORROWED')->count();
+        $overdueInPeriodCount = (int) (clone $summaryQuery)
+            ->where('status', 'BORROWED')
+            ->where('expected_return_date', '<', now())
+            ->count();
         $summaryTotal = max(1, $returnedCount + $notReturnedCount);
         $returnedPercent = (int) round(($returnedCount / $summaryTotal) * 100);
         $notReturnedPercent = 100 - $returnedPercent;
@@ -142,6 +147,7 @@ class DashboardController extends Controller
                 'summary' => [
                     'returned_count' => $returnedCount,
                     'not_returned_count' => $notReturnedCount,
+                    'overdue_in_period_count' => $overdueInPeriodCount,
                     'returned_percent' => $returnedPercent,
                     'not_returned_percent' => $notReturnedPercent,
                     'range_days' => $days,

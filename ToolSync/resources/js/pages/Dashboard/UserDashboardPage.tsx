@@ -2,7 +2,7 @@ import { Head, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import type { BorrowingHistoryItem } from '@/Components/Dashboard/BorrowingHistoryTable';
 import { BorrowingHistoryTable } from '@/Components/Dashboard/BorrowingHistoryTable';
-import type { SummaryData } from '@/Components/Dashboard/SummaryDonutChart';
+import type { AllocationSummaryData } from '@/Components/Dashboard/SummaryDonutChart';
 import { SummaryDonutChart } from '@/Components/Dashboard/SummaryDonutChart';
 import { WelcomeBanner } from '@/Components/Dashboard/WelcomeBanner';
 import AppLayout from '@/Layouts/AppLayout';
@@ -40,11 +40,9 @@ export default function UserDashboardPage() {
     const [borrowedItemsCount, setBorrowedItemsCount] = useState(0);
     const [availableTools, setAvailableTools] = useState(0);
     const [borrowingHistory, setBorrowingHistory] = useState<BorrowingHistoryItem[]>([]);
-    const [summary, setSummary] = useState<SummaryData>({
+    const [allocationSummary, setAllocationSummary] = useState<AllocationSummaryData>({
         returned: 0,
-        borrowed: 0,
-        underMaintenance: 0,
-        available: 0,
+        active: 0,
         overdue: 0,
     });
     const [loading, setLoading] = useState(true);
@@ -70,12 +68,13 @@ export default function UserDashboardPage() {
                         counts.borrowed_active_count,
                 );
                 setBorrowingHistory((d.recent_activity ?? []).map(mapRecentToHistoryItem));
-                setSummary({
-                    returned: d.summary.returned_count,
-                    borrowed: d.summary.not_returned_count,
-                    underMaintenance: counts.tools_maintenance_quantity,
-                    available: counts.tools_available_quantity,
-                    overdue: counts.overdue_count,
+                const returned = Number(d.summary.returned_count) || 0;
+                const notReturned = Number(d.summary.not_returned_count) || 0;
+                const overdueInPeriod = Number(d.summary.overdue_in_period_count) || 0;
+                setAllocationSummary({
+                    returned,
+                    active: Math.max(0, notReturned - overdueInPeriod),
+                    overdue: overdueInPeriod,
                 });
             } catch (err) {
                 if (!cancelled) {
@@ -169,7 +168,7 @@ export default function UserDashboardPage() {
                         </div>
 
                         <div className="space-y-6">
-                            <SummaryDonutChart data={summary} />
+                            <SummaryDonutChart data={allocationSummary} />
 
                             <section className="rounded-3xl bg-white p-6 shadow-sm">
                                 <header className="mb-4 flex items-center justify-between">

@@ -1,52 +1,31 @@
-export type SummaryData = {
+/**
+ * Allocation-only summary: Returned, Active (on time), Overdue.
+ * We do not mix inventory (Available, Maintenance) with allocation outcomes,
+ * so percentages are logically consistent (all from the same allocation set).
+ */
+export type AllocationSummaryData = {
     returned: number;
-    borrowed: number;
-    underMaintenance: number;
-    available: number;
+    active: number;
     overdue: number;
 };
 
 type SummaryDonutChartProps = {
-    data: SummaryData;
+    data: AllocationSummaryData;
 };
 
 export function SummaryDonutChart({ data }: SummaryDonutChartProps) {
-    const total = data.returned + data.borrowed + data.underMaintenance + data.available + data.overdue || 1;
+    const r = Number(data.returned) || 0;
+    const a = Number(data.active) || 0;
+    const o = Number(data.overdue) || 0;
+    const sum = r + a + o;
+    const total = sum || 1; // avoid division by zero when computing segment lengths
 
     const segments = [
-        {
-            label: 'Returned',
-            value: data.returned,
-            colorClass: 'stroke-blue-900',
-            legendClass: 'bg-blue-900',
-        },
-        {
-            label: 'Borrowed',
-            value: data.borrowed,
-            colorClass: 'stroke-sky-500',
-            legendClass: 'bg-sky-500',
-        },
-        {
-            label: 'Maintenance',
-            value: data.underMaintenance,
-            colorClass: 'stroke-amber-400',
-            legendClass: 'bg-amber-400',
-        },
-        {
-            label: 'Available',
-            value: data.available,
-            colorClass: 'stroke-emerald-500',
-            legendClass: 'bg-emerald-500',
-        },
-        {
-            label: 'Overdue',
-            value: data.overdue,
-            colorClass: 'stroke-rose-500',
-            legendClass: 'bg-rose-500',
-        },
+        { label: 'Returned', value: r, colorClass: 'stroke-blue-900', legendClass: 'bg-blue-900' },
+        { label: 'Active', value: a, colorClass: 'stroke-sky-500', legendClass: 'bg-sky-500' },
+        { label: 'Overdue', value: o, colorClass: 'stroke-rose-500', legendClass: 'bg-rose-500' },
     ].filter((segment) => segment.value > 0);
 
-    // SVG circumference for a 40 radius circle.
     const radius = 40;
     const circumference = 2 * Math.PI * radius;
 
@@ -56,6 +35,7 @@ export function SummaryDonutChart({ data }: SummaryDonutChartProps) {
         <section className="rounded-3xl bg-white p-6 shadow-sm">
             <header className="mb-4">
                 <h3 className="text-sm font-semibold text-gray-900">Summary</h3>
+                <p className="mt-1 text-[11px] text-gray-500">Borrowing outcomes in the selected period</p>
             </header>
 
             <div className="flex items-center gap-6">
@@ -87,7 +67,7 @@ export function SummaryDonutChart({ data }: SummaryDonutChartProps) {
                         Total
                     </text>
                     <text x="50" y="60" textAnchor="middle" className="rotate-90 fill-slate-900 text-[15px] font-semibold">
-                        {total}
+                        {sum}
                     </text>
                 </svg>
 

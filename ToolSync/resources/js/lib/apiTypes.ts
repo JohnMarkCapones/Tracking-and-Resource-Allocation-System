@@ -136,6 +136,7 @@ export type DashboardRecentActivityItem = {
 export type DashboardSummary = {
     returned_count: number;
     not_returned_count: number;
+    overdue_in_period_count: number;
     returned_percent: number;
     not_returned_percent: number;
     range_days: number;

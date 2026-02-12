@@ -56,12 +56,15 @@ test('dashboard endpoint returns counts, recent activity, and summary', function
         ->assertJsonPath('data.counts.tools_maintenance_quantity', 3)
         ->assertJsonPath('data.counts.borrowed_active_count', 1)
         ->assertJsonPath('data.counts.overdue_count', 1)
+        ->assertJsonPath('data.summary.returned_count', 1)
+        ->assertJsonPath('data.summary.not_returned_count', 1)
+        ->assertJsonPath('data.summary.overdue_in_period_count', 1)
         ->assertJsonStructure([
             'data' => [
                 'recent_activity' => [
                     ['id', 'tool_id', 'tool_name', 'user_id', 'user_name', 'expected_return_date', 'status', 'status_display', 'is_overdue'],
                 ],
-                'summary' => ['returned_count', 'not_returned_count', 'returned_percent', 'not_returned_percent', 'range_days'],
+                'summary' => ['returned_count', 'not_returned_count', 'overdue_in_period_count', 'returned_percent', 'not_returned_percent', 'range_days'],
             ],
         ]);
 });
