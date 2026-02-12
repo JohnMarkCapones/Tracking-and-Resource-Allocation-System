@@ -1,15 +1,20 @@
 import { Head, router, usePage } from '@inertiajs/react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AdminStatBar } from '@/Components/Dashboard/AdminStatBar';
 import type { BorrowingStatusSegment } from '@/Components/Dashboard/BorrowingStatusDonut';
 import { BorrowingStatusDonut } from '@/Components/Dashboard/BorrowingStatusDonut';
 import type { MostBorrowedTool } from '@/Components/Dashboard/MostBorrowedBarChart';
 import { MostBorrowedBarChart } from '@/Components/Dashboard/MostBorrowedBarChart';
-import AppLayout from '@/Layouts/AppLayout';
 import { toast } from '@/Components/Toast';
-import { CreateEditModal, type ToolFormData } from '@/pages/Admin/Tools/CreateEditModal';
+import AppLayout from '@/Layouts/AppLayout';
+import type {
+    DashboardApiResponse,
+    DashboardPendingApproval,
+    DashboardRecentActivityItem,
+} from '@/lib/apiTypes';
+import type { AnalyticsOverviewApiResponse } from '@/lib/apiTypes';
 import { apiRequest } from '@/lib/http';
-import type { DashboardApiResponse } from '@/lib/apiTypes';
+import { CreateEditModal, type ToolFormData } from '@/pages/Admin/Tools/CreateEditModal';
 
 type AdminMetrics = {
     totalTools: number;
@@ -36,64 +41,60 @@ type RecentActivityItem = {
     tone: ActivityTone;
 };
 
-// Static sample data to make the admin dashboard feel richer and more realistic.
-// Replace these with live data from the backend once those endpoints are ready.
-const RECENT_ACTIVITY: RecentActivityItem[] = [
-    {
-        id: 1,
-        title: 'Laptop LP-0009 returned',
-        description: 'John Miller from Design returned their borrowed laptop.',
-        timeAgo: '5 minutes ago',
-        tone: 'borrowing',
-    },
-    {
-        id: 2,
-        title: 'New tool added: DSLR Camera',
-        description: 'Inventory team registered CM-0032 in the equipment pool.',
-        timeAgo: '1 hour ago',
-        tone: 'user',
-    },
-    {
-        id: 3,
-        title: 'Maintenance completed',
-        description: 'Projector PR-0010 passed functional testing.',
-        timeAgo: '2 hours ago',
-        tone: 'maintenance',
-    },
-    {
-        id: 4,
-        title: 'Overdue reminder sent',
-        description: 'System notified owners of 2 overdue borrowings.',
-        timeAgo: 'Yesterday',
-        tone: 'borrowing',
-    },
-];
-
 function activityToneClasses(tone: ActivityTone): string {
-    if (tone === 'borrowing') {
-        return 'bg-blue-500';
-    }
-
-    if (tone === 'maintenance') {
-        return 'bg-amber-500';
-    }
-
+    if (tone === 'borrowing') return 'bg-blue-500';
+    if (tone === 'maintenance') return 'bg-amber-500';
     return 'bg-emerald-500';
 }
 
-// Mock most-borrowed tools until the API provides this aggregate.
-const MOCK_MOST_BORROWED: MostBorrowedTool[] = [
-    { name: 'Laptop', count: 24 },
-    { name: 'Projector', count: 18 },
-    { name: 'Camera', count: 12 },
-    { name: 'Tablet', count: 8 },
-];
+function formatTimeAgo(date: Date): string {
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} min ago`;
+    if (diffHours < 24) return `${diffHours} hr ago`;
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return date.toLocaleDateString();
+}
+
+function mapRecentActivityToItem(a: DashboardRecentActivityItem): RecentActivityItem {
+    const date = new Date(a.borrow_date ?? a.expected_return_date ?? 0);
+    const tone: ActivityTone = a.is_overdue ? 'maintenance' : a.status === 'RETURNED' ? 'borrowing' : 'borrowing';
+    const title =
+        a.status === 'RETURNED'
+            ? `${a.tool_name ?? 'Tool'} returned`
+            : a.is_overdue
+              ? `${a.tool_name ?? 'Tool'} overdue`
+              : `${a.tool_name ?? 'Tool'} borrowed`;
+    const description =
+        a.user_name ? `${a.user_name}` : 'System';
+    return {
+        id: a.id,
+        title,
+        description,
+        timeAgo: formatTimeAgo(date),
+        tone,
+    };
+}
+
+function getRangeParams(range: '7d' | '30d' | '90d'): { from: string; to: string } {
+    const to = new Date();
+    const from = new Date();
+    if (range === '7d') from.setDate(to.getDate() - 7);
+    else if (range === '30d') from.setDate(to.getDate() - 30);
+    else from.setDate(to.getDate() - 90);
+    return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+}
 
 export default function AdminDashboardPage() {
     const fallbackProps = usePage<AdminDashboardPageProps>().props;
     const [metrics, setMetrics] = useState<AdminMetrics>(fallbackProps.metrics);
-    const [mostBorrowedTools] = useState<MostBorrowedTool[]>(
-        fallbackProps.mostBorrowedTools?.length ? fallbackProps.mostBorrowedTools : MOCK_MOST_BORROWED,
+    const [mostBorrowedTools, setMostBorrowedTools] = useState<MostBorrowedTool[]>(
+        fallbackProps.mostBorrowedTools?.length ? fallbackProps.mostBorrowedTools : [],
     );
     const [borrowingStatus, setBorrowingStatus] = useState<BorrowingStatusSegment[]>(
         fallbackProps.borrowingStatus ?? [
@@ -103,55 +104,210 @@ export default function AdminDashboardPage() {
     );
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-
     const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d');
     const [isAddToolModalOpen, setIsAddToolModalOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [pendingApprovals, setPendingApprovals] = useState<DashboardPendingApproval[]>([]);
+    const [overdueCount, setOverdueCount] = useState(0);
+    const [maintenanceDueCount, setMaintenanceDueCount] = useState(0);
+    const [recentActivity, setRecentActivity] = useState<RecentActivityItem[]>([]);
+    const [addToolCategories, setAddToolCategories] = useState<Array<{ id: number; name: string }>>([]);
+    const [pendingActionId, setPendingActionId] = useState<number | null>(null);
 
-    useEffect(() => {
-        let cancelled = false;
+    const { from, to } = useMemo(() => getRangeParams(timeRange), [timeRange]);
 
-        async function load() {
-            setLoading(true);
-            setError(null);
-            try {
-                const res = await apiRequest<DashboardApiResponse>('/api/dashboard');
-                if (cancelled) return;
-                const d = res.data;
-                const c = d.counts;
-                const total =
-                    c.tools_available_quantity + c.tools_maintenance_quantity + c.borrowed_active_count;
-                setMetrics({
-                    totalTools: total,
-                    availableTools: c.tools_available_quantity,
-                    borrowedTools: c.borrowed_active_count,
-                    toolsUnderMaintenance: c.tools_maintenance_quantity,
-                    totalUsers: 0,
-                    activeBorrowings: c.borrowed_active_count,
-                });
-                setBorrowingStatus([
-                    { label: 'Returned', value: d.summary.returned_count },
-                    { label: 'Active', value: d.summary.not_returned_count },
-                ]);
-            } catch (err) {
-                if (!cancelled) {
-                    setError(err instanceof Error ? err.message : 'Failed to load dashboard');
-                }
-            } finally {
-                if (!cancelled) setLoading(false);
-            }
+    const loadDashboard = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const res = await apiRequest<DashboardApiResponse>('/api/dashboard?recent_limit=15');
+            const d = res.data;
+            const c = d.counts;
+            const total =
+                c.tools_total_quantity ??
+                (c.tools_available_quantity + c.tools_maintenance_quantity + c.borrowed_active_count);
+            setMetrics({
+                totalTools: total,
+                availableTools: c.tools_available_quantity,
+                borrowedTools: c.borrowed_active_count,
+                toolsUnderMaintenance: c.tools_maintenance_quantity,
+                totalUsers: d.total_users ?? 0,
+                activeBorrowings: c.borrowed_active_count,
+            });
+            setBorrowingStatus([
+                { label: 'Returned', value: d.summary.returned_count },
+                { label: 'Active', value: d.summary.not_returned_count },
+            ]);
+            setPendingApprovals(d.pending_approvals ?? []);
+            setOverdueCount(c.overdue_count);
+            setMaintenanceDueCount(d.maintenance_due_count ?? 0);
+            setRecentActivity((d.recent_activity ?? []).map(mapRecentActivityToItem));
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to load dashboard');
+        } finally {
+            setLoading(false);
         }
-
-        load();
-        return () => {
-            cancelled = true;
-        };
     }, []);
 
-    const handleAddToolSave = (data: ToolFormData) => {
-        setIsAddToolModalOpen(false);
-        toast.success(`${data.name} has been added. Go to Tool Management to see it.`);
-        router.visit('/admin/tools');
-    };
+    const handleApproveBorrowRequest = useCallback(
+        async (reservationId: number) => {
+            setPendingActionId(reservationId);
+            try {
+                await apiRequest(`/api/reservations/${reservationId}/approve`, { method: 'POST' });
+                toast.success('Borrow request approved. It now appears in the user’s My Borrowings.');
+                await loadDashboard();
+            } catch (err) {
+                toast.error(err instanceof Error ? err.message : 'Failed to approve');
+            } finally {
+                setPendingActionId(null);
+            }
+        },
+        [loadDashboard],
+    );
+
+    const handleDeclineBorrowRequest = useCallback(
+        async (reservationId: number) => {
+            setPendingActionId(reservationId);
+            try {
+                await apiRequest(`/api/reservations/${reservationId}/decline`, { method: 'POST' });
+                toast.success('Borrow request declined.');
+                await loadDashboard();
+            } catch (err) {
+                toast.error(err instanceof Error ? err.message : 'Failed to decline');
+            } finally {
+                setPendingActionId(null);
+            }
+        },
+        [loadDashboard],
+    );
+
+    const loadAnalytics = useCallback(async () => {
+        try {
+            const res = await apiRequest<AnalyticsOverviewApiResponse>(
+                `/api/analytics/overview?from=${from}&to=${to}`,
+            );
+            const data = res.data;
+            setMostBorrowedTools(
+                (data.top_tools ?? []).map((t) => ({ name: t.tool_name, count: t.borrow_count })),
+            );
+            const b = data.status_breakdown;
+            if (b) {
+                setBorrowingStatus([
+                    { label: 'Returned', value: b.returned },
+                    { label: 'Active', value: b.borrowed },
+                ]);
+            }
+        } catch {
+            setMostBorrowedTools([]);
+        }
+    }, [from, to]);
+
+    useEffect(() => {
+        loadDashboard();
+    }, [loadDashboard]);
+
+    useEffect(() => {
+        loadAnalytics();
+    }, [loadAnalytics]);
+
+    const handleExportCsv = useCallback(async () => {
+        try {
+            const response = await fetch('/api/tool-allocations/export', {
+                method: 'GET',
+                credentials: 'include',
+            });
+
+            if (!response.ok) {
+                throw new Error(response.statusText || 'Failed to export CSV');
+            }
+
+            const blob = await response.blob();
+            const contentDisposition = response.headers.get('content-disposition') ?? '';
+            const match = contentDisposition.match(/filename="?([^";]+)"?/i);
+            const filename = match?.[1] ?? 'tool_allocations.csv';
+
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Failed to export CSV';
+            toast.error(message);
+        }
+    }, []);
+
+    const handleSearchSubmit = useCallback(
+        (e: React.FormEvent) => {
+            e.preventDefault();
+            const q = searchQuery.trim();
+            if (q) router.visit(`/admin/tools?search=${encodeURIComponent(q)}`);
+            else router.visit('/admin/tools');
+        },
+        [searchQuery],
+    );
+
+    const resolveCategoryId = useCallback(
+        async (name: string) => {
+            const existing = addToolCategories.find((c) => c.name === name);
+            if (existing) return existing.id;
+            try {
+                const res = await apiRequest<{ data: { id: number; name: string } }>('/api/tool-categories', {
+                    method: 'POST',
+                    body: { name },
+                });
+                setAddToolCategories((prev) => [...prev, res.data]);
+                return res.data.id;
+            } catch (err) {
+                toast.error(err instanceof Error ? err.message : 'Failed to create category');
+                return undefined;
+            }
+        },
+        [addToolCategories],
+    );
+
+    const handleAddToolSave = useCallback(
+        async (data: ToolFormData) => {
+            const id = await resolveCategoryId(data.category);
+            if (id === undefined) {
+                toast.error('Please select a valid category');
+                return;
+            }
+            try {
+                await apiRequest('/api/tools', {
+                    method: 'POST',
+                    body: {
+                        name: data.name,
+                        description: data.description || null,
+                        category_id: id,
+                        status:
+                            data.status === 'Borrowed'
+                                ? 'BORROWED'
+                                : data.status === 'Maintenance'
+                                  ? 'MAINTENANCE'
+                                  : 'AVAILABLE',
+                        quantity: data.quantity,
+                    },
+                });
+                setIsAddToolModalOpen(false);
+                toast.success(`${data.name} has been added.`);
+                router.visit('/admin/tools');
+            } catch (err) {
+                toast.error(err instanceof Error ? err.message : 'Failed to add tool');
+            }
+        },
+        [resolveCategoryId],
+    );
+
+    useEffect(() => {
+        if (!isAddToolModalOpen) return;
+        apiRequest<{ data: Array<{ id: number; name: string }> }>('/api/tool-categories').then((res) =>
+            setAddToolCategories(res.data ?? []),
+        );
+    }, [isAddToolModalOpen]);
 
     const displayTools = mostBorrowedTools;
     const displayBorrowingStatus = borrowingStatus;
@@ -186,9 +342,12 @@ export default function AdminDashboardPage() {
                         <p className="text-xs font-medium text-gray-500">Command center</p>
                         <p className="text-sm text-gray-700">Search across tools, users and borrowings or jump to common admin tasks.</p>
                     </div>
-                    <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+                    <form
+                        className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-end"
+                        onSubmit={handleSearchSubmit}
+                    >
                         <div className="flex flex-1 items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs text-gray-500">
-                            <svg className="h-3 w-3 text-gray-400" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <svg className="h-3 w-3 shrink-0 text-gray-400" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                                 <circle cx="7" cy="7" r="3.5" stroke="currentColor" strokeWidth="1.4" />
                                 <path d="M9.5 9.5L12 12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
                             </svg>
@@ -196,11 +355,14 @@ export default function AdminDashboardPage() {
                                 type="search"
                                 placeholder="Search tools, users, borrowings..."
                                 className="w-full border-none bg-transparent text-xs outline-none placeholder:text-gray-400"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
                             />
                         </div>
                         <div className="flex flex-wrap justify-end gap-2">
                             <button
                                 type="button"
+                                onClick={() => router.visit('/tools')}
                                 className="inline-flex items-center gap-1 rounded-full bg-blue-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-blue-700"
                             >
                                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
@@ -215,16 +377,17 @@ export default function AdminDashboardPage() {
                             </button>
                             <button
                                 type="button"
+                                onClick={() => router.visit('/admin/users')}
                                 className="hidden items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 sm:inline-flex"
                             >
                                 <span className="h-1 w-1 rounded-full bg-slate-400" />
                                 Manage users
                             </button>
                         </div>
-                    </div>
+                    </form>
                 </section>
 
-                <AdminStatBar metrics={metrics} />
+                <AdminStatBar metrics={metrics} onExportCsv={handleExportCsv} />
 
                 <section className="space-y-4">
                     <div className="flex items-center justify-between gap-3">
@@ -266,50 +429,56 @@ export default function AdminDashboardPage() {
                                     <h3 className="text-sm font-semibold text-gray-900">Pending approvals</h3>
                                     <p className="text-[11px] text-gray-500">Requests waiting for admin review.</p>
                                 </div>
-                                <span className="rounded-full bg-blue-50 px-3 py-1 text-[11px] font-medium text-blue-700">3 requests</span>
+                                <span className="rounded-full bg-blue-50 px-3 py-1 text-[11px] font-medium text-blue-700">
+                                    {pendingApprovals.length} request{pendingApprovals.length !== 1 ? 's' : ''}
+                                </span>
                             </header>
-                            <ul className="space-y-3 text-xs text-gray-700">
-                                <li className="flex items-start justify-between rounded-2xl bg-gray-50 px-3 py-2">
-                                    <div>
-                                        <p className="font-semibold">Laptop · LP-0009</p>
-                                        <p className="text-[11px] text-gray-500">Requested by Jane Doe · Design team</p>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <button
-                                            type="button"
-                                            className="rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700"
-                                        >
-                                            Approve
-                                        </button>
-                                        <button
-                                            type="button"
-                                            className="rounded-full border border-gray-200 px-3 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-100"
-                                        >
-                                            Reject
-                                        </button>
-                                    </div>
-                                </li>
-                                <li className="flex items-start justify-between rounded-2xl bg-gray-50 px-3 py-2">
-                                    <div>
-                                        <p className="font-semibold">Projector · PR-0020</p>
-                                        <p className="text-[11px] text-gray-500">Requested by Mark Lee · Marketing</p>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <button
-                                            type="button"
-                                            className="rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700"
-                                        >
-                                            Approve
-                                        </button>
-                                        <button
-                                            type="button"
-                                            className="rounded-full border border-gray-200 px-3 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-100"
-                                        >
-                                            Reject
-                                        </button>
-                                    </div>
-                                </li>
-                            </ul>
+                            {pendingApprovals.length === 0 ? (
+                                <p className="rounded-2xl bg-gray-50 px-3 py-4 text-[11px] text-gray-500">
+                                    No pending requests. Reservations and approval requests will appear here.
+                                </p>
+                            ) : (
+                                <ul className="space-y-3 text-xs text-gray-700">
+                                    {pendingApprovals.slice(0, 5).map((item) => (
+                                        <li key={item.id} className="flex items-start justify-between gap-2 rounded-2xl bg-gray-50 px-3 py-2">
+                                            <div>
+                                                <p className="font-semibold">{item.tool_name} · TL-{item.tool_id}</p>
+                                                <p className="text-[11px] text-gray-500">
+                                                    Requested by {item.user_name}
+                                                    {item.user_email ? ` · ${item.user_email}` : ''}
+                                                </p>
+                                            </div>
+                                            <div className="flex shrink-0 gap-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleApproveBorrowRequest(item.id)}
+                                                    disabled={pendingActionId === item.id}
+                                                    className="rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                                                >
+                                                    {pendingActionId === item.id ? '…' : 'Approve'}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDeclineBorrowRequest(item.id)}
+                                                    disabled={pendingActionId === item.id}
+                                                    className="rounded-full border border-gray-300 px-3 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-60"
+                                                >
+                                                    Decline
+                                                </button>
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                            {pendingApprovals.length > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={() => router.visit('/admin/allocation-history')}
+                                    className="mt-3 text-[11px] font-semibold text-blue-600 underline-offset-2 hover:underline"
+                                >
+                                    View all
+                                </button>
+                            )}
                         </section>
 
                         <section className="rounded-3xl bg-white p-6 shadow-sm">
@@ -318,35 +487,52 @@ export default function AdminDashboardPage() {
                                     <h3 className="text-sm font-semibold text-gray-900">System alerts</h3>
                                     <p className="text-[11px] text-gray-500">Issues that may need your attention.</p>
                                 </div>
-                                <span className="rounded-full bg-rose-50 px-3 py-1 text-[11px] font-medium text-rose-700">2 open</span>
+                                <span className="rounded-full bg-rose-50 px-3 py-1 text-[11px] font-medium text-rose-700">
+                                    {(overdueCount > 0 ? 1 : 0) + (maintenanceDueCount > 0 ? 1 : 0)} open
+                                </span>
                             </header>
                             <ul className="space-y-3 text-xs text-gray-700">
-                                <li className="flex items-start gap-3 rounded-2xl bg-rose-50 px-3 py-2">
-                                    <span className="mt-1 h-2 w-2 rounded-full bg-rose-500" />
-                                    <div>
-                                        <p className="font-semibold">Overdue borrowings</p>
-                                        <p className="text-[11px] text-rose-800">2 tools are overdue by more than 7 days.</p>
-                                        <button
-                                            type="button"
-                                            className="mt-2 text-[11px] font-semibold text-rose-700 underline-offset-2 hover:underline"
-                                        >
-                                            View affected tools
-                                        </button>
-                                    </div>
-                                </li>
-                                <li className="flex items-start gap-3 rounded-2xl bg-amber-50 px-3 py-2">
-                                    <span className="mt-1 h-2 w-2 rounded-full bg-amber-500" />
-                                    <div>
-                                        <p className="font-semibold">Upcoming maintenance</p>
-                                        <p className="text-[11px] text-amber-800">4 tools require maintenance within the next 14 days.</p>
-                                        <button
-                                            type="button"
-                                            className="mt-2 text-[11px] font-semibold text-amber-700 underline-offset-2 hover:underline"
-                                        >
-                                            Open maintenance schedule
-                                        </button>
-                                    </div>
-                                </li>
+                                {overdueCount > 0 && (
+                                    <li className="flex items-start gap-3 rounded-2xl bg-rose-50 px-3 py-2">
+                                        <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-rose-500" />
+                                        <div>
+                                            <p className="font-semibold">Overdue borrowings</p>
+                                            <p className="text-[11px] text-rose-800">
+                                                {overdueCount} tool{overdueCount !== 1 ? 's' : ''} overdue.
+                                            </p>
+                                            <button
+                                                type="button"
+                                                onClick={() => router.visit('/admin/allocation-history?overdue=1')}
+                                                className="mt-2 text-[11px] font-semibold text-rose-700 underline-offset-2 hover:underline"
+                                            >
+                                                View affected tools
+                                            </button>
+                                        </div>
+                                    </li>
+                                )}
+                                {maintenanceDueCount > 0 && (
+                                    <li className="flex items-start gap-3 rounded-2xl bg-amber-50 px-3 py-2">
+                                        <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-amber-500" />
+                                        <div>
+                                            <p className="font-semibold">Upcoming maintenance</p>
+                                            <p className="text-[11px] text-amber-800">
+                                                {maintenanceDueCount} tool{maintenanceDueCount !== 1 ? 's' : ''} require maintenance within 14 days.
+                                            </p>
+                                            <button
+                                                type="button"
+                                                onClick={() => router.visit('/admin/maintenance')}
+                                                className="mt-2 text-[11px] font-semibold text-amber-700 underline-offset-2 hover:underline"
+                                            >
+                                                Open maintenance schedule
+                                            </button>
+                                        </div>
+                                    </li>
+                                )}
+                                {overdueCount === 0 && maintenanceDueCount === 0 && (
+                                    <li className="rounded-2xl bg-gray-50 px-3 py-4 text-[11px] text-gray-500">
+                                        No open alerts. Overdue borrowings and upcoming maintenance will appear here.
+                                    </li>
+                                )}
                             </ul>
                         </section>
                     </div>
@@ -367,21 +553,29 @@ export default function AdminDashboardPage() {
                                 <span className="rounded-full bg-gray-100 px-3 py-1 text-[11px] font-medium text-gray-600">Last 24 hours</span>
                             </header>
                             <ol className="space-y-4 text-xs text-gray-700">
-                                {RECENT_ACTIVITY.map((item, index) => (
-                                    <li key={item.id} className="flex gap-3">
-                                        <div className="flex flex-col items-center">
-                                            <span className={`mt-1 h-2 w-2 rounded-full ${activityToneClasses(item.tone)}`} />
-                                            {index !== RECENT_ACTIVITY.length - 1 && <span className="mt-1 h-full w-px flex-1 bg-gray-200" />}
-                                        </div>
-                                        <div className="flex-1">
-                                            <div className="flex items-center justify-between gap-2">
-                                                <p className="text-[11px] font-semibold tracking-wide text-gray-500 uppercase">{item.timeAgo}</p>
-                                            </div>
-                                            <p className="mt-0.5 text-sm font-medium text-gray-900">{item.title}</p>
-                                            <p className="mt-0.5 text-[11px] text-gray-600">{item.description}</p>
-                                        </div>
+                                {recentActivity.length === 0 ? (
+                                    <li className="rounded-2xl bg-gray-50 px-3 py-4 text-[11px] text-gray-500">
+                                        No recent activity. Borrowing and returns will appear here.
                                     </li>
-                                ))}
+                                ) : (
+                                    recentActivity.map((item, index) => (
+                                        <li key={item.id} className="flex gap-3">
+                                            <div className="flex flex-col items-center">
+                                                <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${activityToneClasses(item.tone)}`} />
+                                                {index !== recentActivity.length - 1 && (
+                                                    <span className="mt-1 h-full w-px flex-1 bg-gray-200" />
+                                                )}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-[11px] font-semibold tracking-wide text-gray-500 uppercase">
+                                                    {item.timeAgo}
+                                                </p>
+                                                <p className="mt-0.5 text-sm font-medium text-gray-900">{item.title}</p>
+                                                <p className="mt-0.5 text-[11px] text-gray-600">{item.description}</p>
+                                            </div>
+                                        </li>
+                                    ))
+                                )}
                             </ol>
                         </section>
 
@@ -409,6 +603,7 @@ export default function AdminDashboardPage() {
                             </dl>
                             <button
                                 type="button"
+                                onClick={() => router.visit('/admin/maintenance')}
                                 className="mt-4 inline-flex items-center gap-1 text-[11px] font-semibold text-sky-300 underline-offset-2 hover:text-sky-200 hover:underline"
                             >
                                 Open maintenance schedule
@@ -422,6 +617,7 @@ export default function AdminDashboardPage() {
             <CreateEditModal
                 show={isAddToolModalOpen}
                 tool={null}
+                categories={addToolCategories.map((c) => c.name)}
                 onClose={() => setIsAddToolModalOpen(false)}
                 onSave={handleAddToolSave}
             />

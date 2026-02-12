@@ -131,14 +131,14 @@ export default function AllocationHistory() {
                                         {
                                             name: 'Deli Projector Screen',
                                             id: 'PJS-00180',
-                                            category: 'Projectors Screen',
+                                            category: 'Multimedia',
                                             status: 'User Maintenance',
                                             statusColor: 'bg-[#E0E7FF] text-[#3730A3]',
                                         },
                                         {
                                             name: 'Acer Aspire Lite 14 AL14-31P-36BE Pure Silver',
                                             id: 'LP-00010',
-                                            category: 'Laptop',
+                                            category: 'IT Equipment',
                                             status: 'Borrowed',
                                             statusColor: 'bg-[#FEF3C7] text-[#92400E]',
                                         },

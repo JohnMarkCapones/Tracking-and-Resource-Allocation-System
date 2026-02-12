@@ -5,20 +5,23 @@ import { ReturnModal } from '@/Components/Borrowings/ReturnModal';
 import { EmptyState } from '@/Components/EmptyState';
 import { toast } from '@/Components/Toast';
 import AppLayout from '@/Layouts/AppLayout';
-import { apiRequest } from '@/lib/http';
 import type { AllocationDto } from '@/lib/apiTypes';
 import { mapAllocationStatusToUi } from '@/lib/apiTypes';
+import { apiRequest } from '@/lib/http';
 
 type SharedProps = { auth?: { user?: { id: number } } };
-type FilterStatus = 'all' | 'Active' | 'Overdue' | 'Returned';
+type FilterStatus = 'all' | 'Active' | 'Pending' | 'Overdue' | 'Returned';
 
 function allocationToBorrowing(a: AllocationDto): Borrowing {
     const status = mapAllocationStatusToUi(a);
-    const borrowDate = new Date(a.borrow_date).toLocaleDateString('en-US', {
+    // Treat API dates as date-only (YYYY-MM-DD) to avoid timezone shifting; parse in local time.
+    const borrowYmd = a.borrow_date.slice(0, 10);
+    const borrowDate = new Date(`${borrowYmd}T00:00:00`).toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
     });
+    // API returns date-only (Y-m-d) for expected_return_date; use as-is so display matches request (e.g. Feb 10–12).
     const dueDate = a.expected_return_date;
     const returnDate =
         a.actual_return_date != null
@@ -32,9 +35,9 @@ function allocationToBorrowing(a: AllocationDto): Borrowing {
     return {
         id: a.id,
         tool: {
-            id: a.tool.id,
-            name: a.tool.name,
-            toolId: 'TL-' + a.tool.id,
+            id: a.tool?.id ?? a.tool_id,
+            name: a.tool?.name ?? `Tool #${a.tool_id}`,
+            toolId: 'TL-' + (a.tool?.id ?? a.tool_id),
             category: 'Other',
         },
         borrowDate,
@@ -53,6 +56,7 @@ export default function IndexPage() {
     const [error, setError] = useState<string | null>(null);
     const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
     const [returnModalBorrowing, setReturnModalBorrowing] = useState<Borrowing | null>(null);
+    const [returnRequestedIds, setReturnRequestedIds] = useState<Set<number>>(new Set());
 
     useEffect(() => {
         if (userId == null) {
@@ -62,7 +66,17 @@ export default function IndexPage() {
         setLoading(true);
         setError(null);
         apiRequest<{ data: AllocationDto[] }>(`/api/tool-allocations?user_id=${userId}`)
-            .then((res) => setBorrowings((res.data ?? []).map(allocationToBorrowing)))
+            .then((res) => {
+                const items = (res.data ?? []).map(allocationToBorrowing);
+                setBorrowings(items);
+                const pendingIds = new Set<number>();
+                for (const item of items) {
+                    if (item.status === 'Pending') {
+                        pendingIds.add(item.id);
+                    }
+                }
+                setReturnRequestedIds(pendingIds);
+            })
             .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load borrowings'))
             .finally(() => setLoading(false));
     }, [userId]);
@@ -74,58 +88,41 @@ export default function IndexPage() {
 
     const summary = useMemo(() => {
         const active = borrowings.filter((b) => b.status === 'Active').length;
+        const pending = borrowings.filter((b) => b.status === 'Pending').length;
         const overdue = borrowings.filter((b) => b.status === 'Overdue').length;
         const returned = borrowings.filter((b) => b.status === 'Returned').length;
-        return { active, overdue, returned, total: borrowings.length };
+        return { active, pending, overdue, returned, total: borrowings.length };
     }, [borrowings]);
 
     const handleReturn = (borrowing: Borrowing) => {
         setReturnModalBorrowing(borrowing);
     };
 
-    const handleReturnSubmit = async () => {
+    const handleReturnSubmit = async (data: { condition: string; notes: string }) => {
         if (!returnModalBorrowing) return;
 
+        const noteParts = [`Condition: ${data.condition}`];
+        if (data.notes.trim()) {
+            noteParts.push(`Notes: ${data.notes.trim()}`);
+        }
+
         try {
-            const response = await apiRequest<{ message: string; data: AllocationDto }>(
-                `/api/tool-allocations/${returnModalBorrowing.id}`,
-                {
-                    method: 'PUT',
-                    body: {
-                        status: 'RETURNED',
-                    },
+            await apiRequest(`/api/tool-allocations/${returnModalBorrowing.id}`, {
+                method: 'PUT',
+                body: {
+                    status: 'PENDING_RETURN',
+                    note: noteParts.join('\n'),
                 },
-            );
-
-            const updated = response.data;
-
-            const formattedReturnDate =
-                updated.actual_return_date !== null
-                    ? new Date(updated.actual_return_date).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                      })
-                    : undefined;
+            });
 
             setBorrowings((prev) =>
-                prev.map((borrowing) =>
-                    borrowing.id === returnModalBorrowing.id
-                        ? {
-                              ...borrowing,
-                              status: 'Returned' as const,
-                              returnDate: formattedReturnDate,
-                          }
-                        : borrowing,
-                ),
+                prev.map((item) => (item.id === returnModalBorrowing.id ? { ...item, status: 'Pending' } : item)),
             );
-
-            toast.success(`${returnModalBorrowing.tool.name} has been returned successfully!`);
-        } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to mark tool as returned.';
-            toast.error(message);
-        } finally {
+            setReturnRequestedIds((prev) => new Set(prev).add(returnModalBorrowing.id));
+            toast(`${returnModalBorrowing.tool.name} return is pending admin verification.`, { icon: 'ℹ️', duration: 6000 });
             setReturnModalBorrowing(null);
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to submit return request.');
         }
     };
 
@@ -136,6 +133,7 @@ export default function IndexPage() {
                 <>
                     <p className="text-xs font-medium tracking-[0.18em] text-gray-500 uppercase">My borrowings</p>
                     <h1 className="text-2xl font-semibold text-gray-900">Track your borrowed equipment</h1>
+                    <p className="mt-1 text-xs text-gray-500">Returns require admin approval. Use &quot;Request return&quot; to submit.</p>
                 </>
             }
         >
@@ -169,6 +167,12 @@ export default function IndexPage() {
                             <span>Overdue</span>
                         </div>
                     )}
+                    {summary.pending > 0 && (
+                        <div className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-amber-700">
+                            <span className="font-semibold">{summary.pending}</span>
+                            <span>Pending approval</span>
+                        </div>
+                    )}
                     <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">
                         <span className="font-semibold">{summary.returned}</span>
                         <span>Returned</span>
@@ -179,7 +183,7 @@ export default function IndexPage() {
                     <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[11px] font-semibold tracking-wide text-gray-500 uppercase">Filter</span>
                         <div className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-1 py-1 text-[11px] text-gray-600 shadow-sm">
-                            {(['all', 'Active', 'Overdue', 'Returned'] as const).map((status) => (
+                            {(['all', 'Active', 'Pending', 'Overdue', 'Returned'] as const).map((status) => (
                                 <button
                                     key={status}
                                     type="button"
@@ -231,7 +235,12 @@ export default function IndexPage() {
                 ) : (
                     <div className="space-y-3">
                         {filteredBorrowings.map((borrowing) => (
-                            <BorrowingCard key={borrowing.id} borrowing={borrowing} onReturn={handleReturn} />
+                            <BorrowingCard
+                                key={borrowing.id}
+                                borrowing={borrowing}
+                                onReturn={handleReturn}
+                                returnRequested={returnRequestedIds.has(borrowing.id)}
+                            />
                         ))}
                     </div>
                 )}

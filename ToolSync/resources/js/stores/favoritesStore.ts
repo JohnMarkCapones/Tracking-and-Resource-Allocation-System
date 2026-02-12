@@ -6,6 +6,7 @@ type FavoriteTool = {
     name: string;
     toolId: string;
     category: string;
+    imageUrl?: string | null;
     addedAt: string;
 };
 

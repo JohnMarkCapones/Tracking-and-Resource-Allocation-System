@@ -31,7 +31,7 @@ export function ToolComparison({ show, tools, onClose, onRemoveTool }: ToolCompa
     const allSpecKeys = [...new Set(tools.flatMap((t) => Object.keys(t.specifications)))];
 
     return (
-        <Modal show={show} onClose={onClose} maxWidth="4xl">
+        <Modal show={show} onClose={onClose} maxWidth="2xl">
             <div className="p-6">
                 <div className="mb-4 flex items-center justify-between">
                     <div>

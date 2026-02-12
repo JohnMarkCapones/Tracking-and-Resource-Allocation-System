@@ -1,11 +1,11 @@
 import { Head } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
-import { toast } from '@/Components/Toast';
 import { Breadcrumb } from '@/Components/Breadcrumb';
 import { EmptyState } from '@/Components/EmptyState';
+import { toast } from '@/Components/Toast';
 import AppLayout from '@/Layouts/AppLayout';
-import { apiRequest } from '@/lib/http';
 import type { ReservationApiItem } from '@/lib/apiTypes';
+import { apiRequest } from '@/lib/http';
 
 type Reservation = {
     id: number;
@@ -141,7 +141,6 @@ export default function IndexPage() {
             header={
                 <>
                     <Breadcrumb className="mb-2">
-                        <Breadcrumb.Home />
                         <Breadcrumb.Item isCurrent>Reservations</Breadcrumb.Item>
                     </Breadcrumb>
                     <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">My Reservations</h1>

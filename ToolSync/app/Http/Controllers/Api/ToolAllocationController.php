@@ -10,13 +10,16 @@ use App\Models\Tool;
 use App\Models\ToolAllocation;
 use App\Models\ToolStatusLog;
 use App\Models\User;
+use App\Notifications\InAppSystemNotification;
 use App\Services\ActivityLogger;
 use App\Services\AutoApprovalEvaluator;
 use App\Services\DateValidationService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 
 /**
  * @group Tool Allocations
@@ -25,6 +28,8 @@ use Illuminate\Support\Facades\DB;
  */
 class ToolAllocationController extends Controller
 {
+    private const TOOL_CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor', 'Damaged', 'Functional'];
+
     /**
      * List all tool allocations
      *
@@ -61,13 +66,16 @@ class ToolAllocationController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        $actor = $request->user();
         $query = ToolAllocation::with(['tool', 'user']);
 
         if ($request->has('tool_id')) {
             $query->where('tool_id', $request->input('tool_id'));
         }
 
-        if ($request->has('user_id')) {
+        if ($actor && ! $actor->isAdmin()) {
+            $query->where('user_id', $actor->id);
+        } elseif ($request->has('user_id')) {
             $query->where('user_id', $request->input('user_id'));
         }
 
@@ -123,6 +131,14 @@ class ToolAllocationController extends Controller
     public function store(StoreToolAllocationRequest $request): JsonResponse
     {
         $validated = $request->validated();
+        $actor = $request->user();
+
+        if ($actor && ! $actor->isAdmin()) {
+            $validated['user_id'] = $actor->id;
+        }
+
+        // DEBUG: log what arrives from the frontend
+        \Log::info('BORROW DEBUG - validated input', $validated);
 
         $borrowDate = Carbon::parse($validated['borrow_date']);
         $expectedReturn = Carbon::parse($validated['expected_return_date']);
@@ -139,7 +155,7 @@ class ToolAllocationController extends Controller
         $maxDuration = (int) (SystemSetting::query()->where('key', 'max_duration')->value('value') ?? 14);
         $currentBorrowed = ToolAllocation::query()
             ->where('user_id', $borrower->id)
-            ->where('status', 'BORROWED')
+            ->whereIn('status', ['BORROWED', 'PENDING_RETURN'])
             ->count();
         $durationDays = $borrowDate->diffInDays($expectedReturn) + 1;
         $evaluator = app(AutoApprovalEvaluator::class);
@@ -163,7 +179,12 @@ class ToolAllocationController extends Controller
             }
         }
 
-        $allocation = DB::transaction(function () use ($validated, $request): ToolAllocation {
+        // Pass the validated Y-m-d strings directly. MySQL will store them as
+        // "2026-02-10 00:00:00" with no timezone conversion, so the calendar date
+        // is always preserved exactly as the user selected it.
+        $createPayload = $validated;
+
+        $allocation = DB::transaction(function () use ($createPayload, $validated, $request): ToolAllocation {
             /** @var Tool $tool */
             $tool = Tool::query()->lockForUpdate()->findOrFail((int) $validated['tool_id']);
 
@@ -175,8 +196,15 @@ class ToolAllocationController extends Controller
 
             $oldStatus = $tool->status;
 
-            $allocation = ToolAllocation::create($validated);
+            $allocation = ToolAllocation::create($createPayload);
             $allocation->refresh();
+
+            // DEBUG: log what actually got stored
+            $rawRow = \DB::table('tool_allocations')->where('id', $allocation->id)->first();
+            \Log::info('BORROW DEBUG - raw DB row', [
+                'borrow_date' => $rawRow->borrow_date,
+                'expected_return_date' => $rawRow->expected_return_date,
+            ]);
 
             $tool->quantity = max(0, (int) $tool->quantity - 1);
             if ($tool->quantity === 0 && $tool->status === 'AVAILABLE') {
@@ -207,6 +235,24 @@ class ToolAllocationController extends Controller
         );
 
         $allocation->load(['tool', 'user']);
+        $toolName = $allocation->tool?->name ?? "Tool #{$allocation->tool_id}";
+
+        $allocation->user?->notify(new InAppSystemNotification(
+            'success',
+            'Borrowing confirmed',
+            "Your borrowing for {$toolName} has been created.",
+            '/borrowings'
+        ));
+
+        $adminRecipients = User::query()->where('role', 'ADMIN')->get();
+        if ($adminRecipients->isNotEmpty()) {
+            Notification::send($adminRecipients, new InAppSystemNotification(
+                'info',
+                'New borrowing activity',
+                "{$allocation->user?->name} borrowed {$toolName}.",
+                '/admin/allocation-history'
+            ));
+        }
 
         return response()->json([
             'message' => 'Tool allocation created successfully.',
@@ -244,8 +290,15 @@ class ToolAllocationController extends Controller
      *   }
      * }
      */
-    public function show(ToolAllocation $toolAllocation): JsonResponse
+    public function show(Request $request, ToolAllocation $toolAllocation): JsonResponse
     {
+        $actor = $request->user();
+        if ($actor && ! $actor->isAdmin() && $toolAllocation->user_id !== $actor->id) {
+            return response()->json([
+                'message' => 'Tool allocation not found.',
+            ], 404);
+        }
+
         $toolAllocation->load(['tool', 'user']);
 
         return response()->json([
@@ -298,24 +351,60 @@ class ToolAllocationController extends Controller
     public function update(UpdateToolAllocationRequest $request, ToolAllocation $toolAllocation): JsonResponse
     {
         $actor = $request->user();
-        if (! $actor || ! $actor->isAdmin()) {
+        if (! $actor) {
             return response()->json([
-                'message' => 'Only admins can update tool allocations.',
-            ], 403);
+                'message' => 'Unauthorized.',
+            ], 401);
+        }
+
+        if (! $actor->isAdmin()) {
+            if ($toolAllocation->user_id !== $actor->id) {
+                return response()->json([
+                    'message' => 'You can only update your own borrowings.',
+                ], 403);
+            }
+
+            if ($toolAllocation->status === 'PENDING_RETURN') {
+                return response()->json([
+                    'message' => 'This return request is already pending admin approval.',
+                    'data' => $toolAllocation->load(['tool', 'user']),
+                ]);
+            }
+
+            if (($request->input('status') ?? null) !== 'PENDING_RETURN') {
+                return response()->json([
+                    'message' => 'Users can only submit a return request for admin approval.',
+                ], 403);
+            }
         }
 
         $validated = $request->validated();
+        if (! $actor->isAdmin()) {
+            $validated = [
+                'status' => 'PENDING_RETURN',
+                'note' => $validated['note'] ?? $toolAllocation->note,
+            ];
+        }
+
+        if ($toolAllocation->status === 'RETURNED') {
+            return response()->json([
+                'message' => 'This tool has already been marked as returned.',
+                'data' => $toolAllocation->load(['tool', 'user']),
+            ]);
+        }
 
         $oldAllocationStatus = $toolAllocation->status;
 
-        DB::transaction(function () use ($validated, $request, $toolAllocation): void {
+        $returnedCondition = $this->extractConditionFromNote(($validated['note'] ?? null) ?: $toolAllocation->note);
+
+        DB::transaction(function () use ($validated, $request, $toolAllocation, $oldAllocationStatus, $returnedCondition): void {
             if (($validated['status'] ?? null) === 'RETURNED' && empty($validated['actual_return_date'])) {
                 $validated['actual_return_date'] = now();
             }
 
             $toolAllocation->update($validated);
 
-            if ($oldAllocationStatus === 'BORROWED' && $toolAllocation->status === 'RETURNED') {
+            if (in_array($oldAllocationStatus, ['BORROWED', 'PENDING_RETURN'], true) && $toolAllocation->status === 'RETURNED') {
                 /** @var Tool $tool */
                 $tool = Tool::query()->lockForUpdate()->findOrFail($toolAllocation->tool_id);
                 $oldToolStatus = $tool->status;
@@ -324,6 +413,13 @@ class ToolAllocationController extends Controller
 
                 if ($tool->status === 'BORROWED' && $tool->quantity > 0) {
                     $tool->status = 'AVAILABLE';
+                }
+
+                if ($returnedCondition !== null) {
+                    $tool->condition = $returnedCondition;
+                    if ($returnedCondition === 'Damaged') {
+                        $tool->status = 'MAINTENANCE';
+                    }
                 }
 
                 $tool->save();
@@ -353,10 +449,117 @@ class ToolAllocationController extends Controller
 
         $toolAllocation->load(['tool', 'user']);
 
+        if ($oldAllocationStatus === 'BORROWED' && $toolAllocation->status === 'PENDING_RETURN') {
+            $toolName = $toolAllocation->tool?->name ?? "Tool #{$toolAllocation->tool_id}";
+
+            $toolAllocation->user?->notify(new InAppSystemNotification(
+                'info',
+                'Return request submitted',
+                "Your return request for {$toolName} is waiting for admin approval.",
+                '/borrowings'
+            ));
+
+            $adminRecipients = User::query()->where('role', 'ADMIN')->get();
+            if ($adminRecipients->isNotEmpty()) {
+                Notification::send($adminRecipients, new InAppSystemNotification(
+                    'alert',
+                    'Return approval needed',
+                    "{$toolAllocation->user?->name} requested to return {$toolName}. Approve or decline below.",
+                    '/notifications',
+                    ['allocation_id' => $toolAllocation->id]
+                ));
+            }
+        }
+
+        if (in_array($oldAllocationStatus, ['BORROWED', 'PENDING_RETURN'], true) && $toolAllocation->status === 'RETURNED') {
+            $toolName = $toolAllocation->tool?->name ?? "Tool #{$toolAllocation->tool_id}";
+            $isMarkedForMaintenance = $toolAllocation->tool?->status === 'MAINTENANCE';
+
+            $toolAllocation->user?->notify(new InAppSystemNotification(
+                'success',
+                'Return completed',
+                "Your return for {$toolName} was recorded successfully.",
+                '/borrowings'
+            ));
+
+            $adminRecipients = User::query()->where('role', 'ADMIN')->get();
+            if ($adminRecipients->isNotEmpty()) {
+                Notification::send($adminRecipients, new InAppSystemNotification(
+                    'success',
+                    'Return approved',
+                    "Return for {$toolName} is now marked completed.",
+                    '/admin/allocation-history'
+                ));
+
+                if ($isMarkedForMaintenance) {
+                    Notification::send($adminRecipients, new InAppSystemNotification(
+                        'maintenance',
+                        'Tool moved to maintenance',
+                        "{$toolName} was returned as damaged and moved to maintenance.",
+                        '/admin/maintenance'
+                    ));
+                }
+            }
+
+            if ($isMarkedForMaintenance) {
+                $toolAllocation->user?->notify(new InAppSystemNotification(
+                    'maintenance',
+                    'Return sent to maintenance',
+                    "Your returned {$toolName} was flagged as damaged and sent to maintenance.",
+                    '/borrowings'
+                ));
+            }
+
+            // Remove "Return approval needed" notifications for this allocation so they don't show again
+            DatabaseNotification::query()
+                ->where('type', InAppSystemNotification::class)
+                ->where('data->allocation_id', $toolAllocation->id)
+                ->where('data->title', 'Return approval needed')
+                ->delete();
+        }
+
+        if ($oldAllocationStatus === 'PENDING_RETURN' && $toolAllocation->status === 'BORROWED') {
+            $toolName = $toolAllocation->tool?->name ?? "Tool #{$toolAllocation->tool_id}";
+
+            $toolAllocation->user?->notify(new InAppSystemNotification(
+                'alert',
+                'Return request declined',
+                "Your return request for {$toolName} was declined. The tool remains on your borrowings.",
+                '/borrowings'
+            ));
+
+            // Remove "Return approval needed" notifications for this allocation
+            DatabaseNotification::query()
+                ->where('type', InAppSystemNotification::class)
+                ->where('data->allocation_id', $toolAllocation->id)
+                ->where('data->title', 'Return approval needed')
+                ->delete();
+        }
+
         return response()->json([
             'message' => 'Tool allocation updated successfully.',
             'data' => $toolAllocation,
         ]);
+    }
+
+    private function extractConditionFromNote(?string $note): ?string
+    {
+        if (! is_string($note) || trim($note) === '') {
+            return null;
+        }
+
+        if (! preg_match('/^Condition:\s*(.+)$/mi', $note, $matches)) {
+            return null;
+        }
+
+        $candidate = trim($matches[1]);
+        foreach (self::TOOL_CONDITIONS as $allowed) {
+            if (strcasecmp($candidate, $allowed) === 0) {
+                return $allowed;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -372,6 +575,13 @@ class ToolAllocationController extends Controller
      */
     public function destroy(ToolAllocation $toolAllocation): JsonResponse
     {
+        $user = request()->user();
+        if (! $user || ! $user->isAdmin()) {
+            return response()->json([
+                'message' => 'Only admins can delete tool allocations.',
+            ], 403);
+        }
+
         $toolAllocation->delete();
 
         return response()->json([

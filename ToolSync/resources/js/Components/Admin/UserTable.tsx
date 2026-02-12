@@ -1,13 +1,14 @@
 import { useState, useMemo } from 'react';
 
 export type UserStatus = 'Active' | 'Inactive';
-export type UserRole = 'Admin' | 'Manager' | 'Employee';
+export type UserRole = 'Admin' | 'User';
 
 export type User = {
     id: number;
     name: string;
     email: string;
     department: string;
+    departmentId?: number | null;
     role: UserRole;
     status: UserStatus;
     activeBorrowings: number;
@@ -38,11 +39,7 @@ function roleClasses(role: UserRole): string {
         return 'bg-purple-50 text-purple-700';
     }
 
-    if (role === 'Manager') {
-        return 'bg-blue-50 text-blue-700';
-    }
-
-    return 'bg-gray-50 text-gray-600';
+    return 'bg-blue-50 text-blue-700';
 }
 
 export function UserTable({ users, onEdit, onToggleStatus, selectedIds, onSelectionChange }: UserTableProps) {

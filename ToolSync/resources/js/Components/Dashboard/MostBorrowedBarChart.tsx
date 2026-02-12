@@ -97,7 +97,12 @@ export function MostBorrowedBarChart({ tools }: MostBorrowedBarChartProps) {
                                             </div>
                                         </div>
                                     </div>
-                                    <p className="mt-1 text-[11px] font-medium text-gray-700">{tool.name}</p>
+                                    <p
+                                        className="mt-1 min-h-[2rem] w-full max-w-[110px] overflow-hidden text-center text-[11px] font-medium text-gray-700 [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical]"
+                                        title={tool.name}
+                                    >
+                                        {tool.name}
+                                    </p>
                                 </div>
                             );
                         })}

@@ -4,9 +4,9 @@ import { Breadcrumb } from '@/Components/Breadcrumb';
 import { EmptyState } from '@/Components/EmptyState';
 import { FavoriteButton } from '@/Components/FavoriteButton';
 import AppLayout from '@/Layouts/AppLayout';
-import { useFavoritesStore } from '@/stores/favoritesStore';
-import { apiRequest } from '@/lib/http';
 import type { FavoriteApiItem } from '@/lib/apiTypes';
+import { apiRequest } from '@/lib/http';
+import { useFavoritesStore } from '@/stores/favoritesStore';
 
 type FavoritesApiResponse = { data: FavoriteApiItem[] };
 
@@ -26,6 +26,7 @@ export default function IndexPage() {
                         name: t.name,
                         toolId: t.toolId,
                         category: t.category,
+                        imageUrl: t.imageUrl,
                     })),
                 );
             } catch {
@@ -45,7 +46,6 @@ export default function IndexPage() {
             header={
                 <>
                     <Breadcrumb className="mb-2">
-                        <Breadcrumb.Home />
                         <Breadcrumb.Item isCurrent>Favorites</Breadcrumb.Item>
                     </Breadcrumb>
                     <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">My Favorites</h1>
@@ -89,30 +89,34 @@ export default function IndexPage() {
                             {favorites.map((tool) => (
                                 <div
                                     key={tool.id}
-                                    className="group relative rounded-2xl bg-white p-4 shadow-sm transition-shadow hover:shadow-md dark:bg-gray-800"
+                                    className="group relative rounded-2xl bg-white p-4 shadow-sm transition-shadow hover:shadow-md dark:bg-gray-800 pointer-events-none"
                                 >
-                                    <div className="absolute top-3 right-3">
+                                    <div className="pointer-events-auto absolute top-3 right-3 z-10">
                                         <FavoriteButton tool={tool} size="sm" />
                                     </div>
-                                    <Link href={`/tools/${tool.id}`}>
+                                    <div>
                                         <div className="mb-3 aspect-[4/3] overflow-hidden rounded-xl bg-gray-100 dark:bg-gray-700">
-                                            <div className="flex h-full w-full items-center justify-center text-gray-400">
-                                                <svg className="h-12 w-12" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                    <path d="M14 8L8 14L12 18L18 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                                                    <path d="M22 10L30 18L26 22L18 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                                                    <path d="M10 28L18 20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                                                    <path d="M22 24L28 30" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                                                </svg>
-                                            </div>
+                                            {tool.imageUrl ? (
+                                                <img src={tool.imageUrl} alt={tool.name} className="h-full w-full object-cover" />
+                                            ) : (
+                                                <div className="flex h-full w-full items-center justify-center text-gray-400">
+                                                    <svg className="h-12 w-12" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                        <path d="M14 8L8 14L12 18L18 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                                        <path d="M22 10L30 18L26 22L18 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                                        <path d="M10 28L18 20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                                        <path d="M22 24L28 30" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                                    </svg>
+                                                </div>
+                                            )}
                                         </div>
                                         <p className="text-[10px] font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400">
                                             {tool.category}
                                         </p>
-                                        <h3 className="mt-0.5 text-sm font-semibold text-gray-900 group-hover:text-blue-600 dark:text-white">
+                                        <h3 className="mt-0.5 text-sm font-semibold text-gray-900 dark:text-white">
                                             {tool.name}
                                         </h3>
                                         <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">ID: {tool.toolId}</p>
-                                    </Link>
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -149,12 +153,16 @@ export default function IndexPage() {
                                     style={{ minWidth: '160px' }}
                                 >
                                     <div className="mb-2 aspect-square w-full overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-700">
-                                        <div className="flex h-full w-full items-center justify-center text-gray-400">
-                                            <svg className="h-8 w-8" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                <path d="M14 8L8 14L12 18L18 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                                                <path d="M22 10L30 18L26 22L18 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                                            </svg>
-                                        </div>
+                                        {tool.imageUrl ? (
+                                            <img src={tool.imageUrl} alt={tool.name} className="h-full w-full object-cover" />
+                                        ) : (
+                                            <div className="flex h-full w-full items-center justify-center text-gray-400">
+                                                <svg className="h-8 w-8" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                    <path d="M14 8L8 14L12 18L18 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                                    <path d="M22 10L30 18L26 22L18 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                                </svg>
+                                            </div>
+                                        )}
                                     </div>
                                     <p className="truncate text-xs font-medium text-gray-900 dark:text-white">{tool.name}</p>
                                     <p className="truncate text-[10px] text-gray-500 dark:text-gray-400">{tool.category}</p>

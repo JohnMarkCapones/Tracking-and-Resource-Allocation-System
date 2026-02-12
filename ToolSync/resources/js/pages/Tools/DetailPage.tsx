@@ -1,4 +1,5 @@
 import { Head, usePage, Link, router } from '@inertiajs/react';
+import { format } from 'date-fns';
 import { useEffect, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { Breadcrumb } from '@/Components/Breadcrumb';
@@ -6,9 +7,8 @@ import { toast } from '@/Components/Toast';
 import { AvailabilityCalendar } from '@/Components/Tools/AvailabilityCalendar';
 import { RequestToolModal } from '@/Components/Tools/RequestToolModal';
 import AppLayout from '@/Layouts/AppLayout';
-import type { Auth } from '@/types';
 import { apiRequest } from '@/lib/http';
-import type { AllocationDto } from '@/lib/apiTypes';
+import { useFavoritesStore } from '@/stores/favoritesStore';
 
 type AvailabilityApiResponse = {
     data: {
@@ -35,10 +35,6 @@ type ToolDetail = {
 
 type DetailPageProps = {
     tool: ToolDetail;
-} & {
-    auth: Auth & {
-        has_password: boolean;
-    };
 };
 
 function statusClasses(status: ToolStatus): string {
@@ -55,7 +51,8 @@ function statusClasses(status: ToolStatus): string {
 
 export default function DetailPage() {
     const page = usePage<DetailPageProps>();
-    const { tool, auth } = page.props;
+    const { tool } = page.props;
+    const { addToRecentlyViewed } = useFavoritesStore();
     const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [unavailableDates, setUnavailableDates] = useState<Array<{ from: Date; to: Date }>>([]);
@@ -67,6 +64,19 @@ export default function DetailPage() {
         }
     }, [page.url]);
 
+    // Track recently viewed tools
+    useEffect(() => {
+        addToRecentlyViewed({
+            id: tool.id,
+            name: tool.name,
+            toolId: tool.toolId,
+            category: tool.category,
+            imageUrl: tool.imageUrl,
+        });
+    }, [tool.id, tool.name, tool.toolId, tool.category, tool.imageUrl, addToRecentlyViewed]);
+
+    const toLocalYmd = (date: Date): string => format(date, 'yyyy-MM-dd');
+
     useEffect(() => {
         let cancelled = false;
         const from = new Date();
@@ -74,7 +84,7 @@ export default function DetailPage() {
         to.setMonth(to.getMonth() + 2);
 
         apiRequest<AvailabilityApiResponse>(
-            `/api/tools/${tool.id}/availability?from=${from.toISOString().slice(0, 10)}&to=${to.toISOString().slice(0, 10)}`,
+            `/api/tools/${tool.id}/availability?from=${toLocalYmd(from)}&to=${toLocalYmd(to)}`,
         )
             .then((res) => {
                 if (cancelled) return;
@@ -114,8 +124,8 @@ export default function DetailPage() {
 
         setIsSubmitting(true);
 
-        const startDate = data.dateRange.from.toISOString().slice(0, 10);
-        const endDate = data.dateRange.to.toISOString().slice(0, 10);
+        const startDate = toLocalYmd(data.dateRange.from);
+        const endDate = toLocalYmd(data.dateRange.to);
 
         try {
             if (tool.status === 'Borrowed') {
@@ -134,14 +144,15 @@ export default function DetailPage() {
                 return;
             }
 
-            await apiRequest<{ message: string; data: AllocationDto }>('/api/tool-allocations', {
+            // Available tool: create a borrow request (reservation PENDING) for admin approval
+            await apiRequest<{ message: string }>('/api/reservations', {
                 method: 'POST',
                 body: {
                     tool_id: tool.id,
-                    user_id: auth.user.id,
-                    borrow_date: startDate,
-                    expected_return_date: endDate,
-                    note: data.purpose,
+                    start_date: startDate,
+                    end_date: endDate,
+                    recurring: false,
+                    borrow_request: true,
                 },
             });
 
@@ -284,6 +295,7 @@ export default function DetailPage() {
                 show={isRequestModalOpen}
                 toolName={tool.name}
                 toolId={tool.toolId}
+                submitting={isSubmitting}
                 onClose={() => {
                     if (isSubmitting) {
                         return;

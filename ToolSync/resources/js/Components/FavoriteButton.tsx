@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { toast } from '@/Components/Toast';
-import { useFavoritesStore } from '@/stores/favoritesStore';
 import { apiRequest } from '@/lib/http';
+import { useFavoritesStore } from '@/stores/favoritesStore';
 
 type FavoriteButtonProps = {
     tool: {
@@ -9,6 +9,7 @@ type FavoriteButtonProps = {
         name: string;
         toolId: string;
         category: string;
+        imageUrl?: string | null;
     };
     size?: 'sm' | 'md' | 'lg';
     className?: string;

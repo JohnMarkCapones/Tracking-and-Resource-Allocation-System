@@ -5,19 +5,24 @@ import type { ReactNode } from 'react';
 import { EmptyState } from '@/Components/EmptyState';
 import { toast } from '@/Components/Toast';
 import AppLayout from '@/Layouts/AppLayout';
+import { apiRequest } from '@/lib/http';
 
 type NotificationType = 'alert' | 'info' | 'success' | 'maintenance';
 
 type Notification = {
-    id: number;
+    id: string;
     type: NotificationType;
     title: string;
     message: string;
-    createdAt: string;
+    createdAt: string | null;
+    href?: string | null;
     read: boolean;
+    reservationId?: number | null;
+    allocationId?: number | null;
 };
 
 type NotificationsPageProps = {
+    auth?: { user?: { role?: string } };
     notifications: Notification[];
 };
 
@@ -72,42 +77,159 @@ function typeBgClass(type: NotificationType, read: boolean): string {
 
 type FilterType = 'all' | 'unread' | NotificationType;
 
+function normalizeNotificationType(t: string | undefined): NotificationType {
+    const lower = (t ?? 'info').toLowerCase();
+    if (lower === 'alert' || lower === 'info' || lower === 'success' || lower === 'maintenance') return lower;
+    return 'info';
+}
+
 export default function IndexPage() {
-    const { notifications: initialNotifications } = usePage<NotificationsPageProps>().props;
+    const page = usePage<NotificationsPageProps>();
+    const { notifications: initialNotifications } = page.props;
+    const isAdmin = page.props.auth?.user?.role === 'ADMIN';
 
     const [notifications, setNotifications] = useState<Notification[]>(initialNotifications);
     const [filterType, setFilterType] = useState<FilterType>('all');
+    const [pendingActionId, setPendingActionId] = useState<number | null>(null);
+    const [pendingReturnActionId, setPendingReturnActionId] = useState<number | null>(null);
 
     const filteredNotifications = useMemo(() => {
         if (filterType === 'all') return notifications;
         if (filterType === 'unread') return notifications.filter((n) => !n.read);
-        return notifications.filter((n) => n.type === filterType);
+        return notifications.filter((n) => normalizeNotificationType(n.type) === filterType);
     }, [notifications, filterType]);
 
     const unreadCount = notifications.filter((n) => !n.read).length;
 
-    const handleMarkAsRead = (id: number) => {
-        setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    const handleMarkAsRead = async (id: string) => {
+        try {
+            await apiRequest<{ message: string }>(`/api/notifications/${id}/read`, {
+                method: 'POST',
+            });
+            setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to mark notification as read.';
+            toast.error(message);
+        }
     };
 
-    const handleMarkAllAsRead = () => {
-        setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-        toast.success('All notifications marked as read');
+    const handleMarkAllAsRead = async () => {
+        try {
+            await apiRequest<{ message: string }>('/api/notifications/read-all', {
+                method: 'POST',
+            });
+            setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+            toast.success('All notifications marked as read');
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to mark notifications as read.';
+            toast.error(message);
+        }
     };
 
-    const handleDelete = (id: number) => {
-        setNotifications((prev) => prev.filter((n) => n.id !== id));
-        toast('Notification deleted');
+    const handleDelete = async (id: string) => {
+        try {
+            await apiRequest<{ message: string }>(`/api/notifications/${id}`, {
+                method: 'DELETE',
+            });
+            setNotifications((prev) => prev.filter((n) => n.id !== id));
+            toast('Notification deleted');
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to delete notification.';
+            toast.error(message);
+        }
     };
 
-    const handleClearAll = () => {
-        setNotifications([]);
-        toast('All notifications cleared');
+    const handleClearAll = async () => {
+        try {
+            await apiRequest<{ message: string }>('/api/notifications', {
+                method: 'DELETE',
+            });
+            setNotifications([]);
+            setFilterType('all');
+            toast('All notifications cleared');
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to clear notifications.';
+            toast.error(message);
+        }
+    };
+
+    const clearFilter = () => setFilterType('all');
+
+    const refetchNotifications = async () => {
+        try {
+            const res = await apiRequest<{ data: Notification[] }>('/api/notifications');
+            setNotifications(res.data ?? []);
+        } catch {
+            // Keep current list on error
+        }
+    };
+
+    const handleApproveBorrowRequest = async (reservationId: number) => {
+        setPendingActionId(reservationId);
+        try {
+            await apiRequest(`/api/reservations/${reservationId}/approve`, { method: 'POST' });
+            toast.success('Borrow request approved.');
+            await refetchNotifications();
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to approve';
+            toast.error(message);
+        } finally {
+            setPendingActionId(null);
+        }
+    };
+
+    const handleDeclineBorrowRequest = async (reservationId: number) => {
+        setPendingActionId(reservationId);
+        try {
+            await apiRequest(`/api/reservations/${reservationId}/decline`, { method: 'POST' });
+            toast.success('Borrow request declined.');
+            await refetchNotifications();
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to decline';
+            toast.error(message);
+        } finally {
+            setPendingActionId(null);
+        }
+    };
+
+    const handleApproveReturnRequest = async (allocationId: number) => {
+        setPendingReturnActionId(allocationId);
+        try {
+            await apiRequest(`/api/tool-allocations/${allocationId}`, {
+                method: 'PUT',
+                body: { status: 'RETURNED' },
+            });
+            toast.success('Return approved.');
+            await refetchNotifications();
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to approve return';
+            toast.error(message);
+        } finally {
+            setPendingReturnActionId(null);
+        }
+    };
+
+    const handleDeclineReturnRequest = async (allocationId: number) => {
+        setPendingReturnActionId(allocationId);
+        try {
+            await apiRequest(`/api/tool-allocations/${allocationId}`, {
+                method: 'PUT',
+                body: { status: 'BORROWED' },
+            });
+            toast.success('Return declined. Tool stays borrowed.');
+            await refetchNotifications();
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to decline return';
+            toast.error(message);
+        } finally {
+            setPendingReturnActionId(null);
+        }
     };
 
     return (
         <AppLayout
             activeRoute="notifications"
+            variant={isAdmin ? 'admin' : 'user'}
             header={
                 <>
                     <p className="text-xs font-medium tracking-[0.18em] text-gray-500 uppercase">Notifications</p>
@@ -127,6 +249,8 @@ export default function IndexPage() {
                                     key={type}
                                     type="button"
                                     onClick={() => setFilterType(type)}
+                                    aria-pressed={filterType === type}
+                                    aria-label={type === 'all' ? 'Show all notifications' : type === 'unread' ? `Show unread (${unreadCount})` : `Filter by ${type}`}
                                     className={`rounded-full px-3 py-1 capitalize ${
                                         filterType === type ? 'bg-slate-900 text-white' : 'text-gray-600 hover:bg-gray-100'
                                     }`}
@@ -184,18 +308,25 @@ export default function IndexPage() {
                         description={
                             filterType === 'all'
                                 ? "You're all caught up! Notifications about your borrowings will appear here."
-                                : 'Try changing the filter to see other notifications.'
+                                : 'No notifications match this filter. Show all to see everything.'
+                        }
+                        action={
+                            filterType !== 'all' && notifications.length > 0
+                                ? { label: 'Show all', onClick: clearFilter }
+                                : undefined
                         }
                     />
                 ) : (
                     <div className="space-y-2">
-                        {filteredNotifications.map((notification) => (
+                        {filteredNotifications.map((notification) => {
+                            const notifType = normalizeNotificationType(notification.type);
+                            return (
                             <div
                                 key={notification.id}
-                                className={`flex items-start gap-3 rounded-2xl px-4 py-3 shadow-sm ${typeBgClass(notification.type, notification.read)}`}
+                                className={`flex items-start gap-3 rounded-2xl px-4 py-3 shadow-sm ${typeBgClass(notifType, notification.read)}`}
                             >
-                                <div className="mt-0.5">{typeIcon(notification.type)}</div>
-                                <div className="flex-1">
+                                <div className="mt-0.5">{typeIcon(notifType)}</div>
+                                        <div className="flex-1">
                                     <div className="flex items-start justify-between gap-2">
                                         <div>
                                             <p className={`text-sm ${notification.read ? 'text-gray-700' : 'font-semibold text-gray-900'}`}>
@@ -203,6 +334,46 @@ export default function IndexPage() {
                                             </p>
                                             <p className="mt-0.5 text-xs text-gray-600">{notification.message}</p>
                                             <p className="mt-1 text-[10px] text-gray-400">{notification.createdAt}</p>
+                                            {isAdmin && notification.reservationId != null && (
+                                                <div className="mt-2 flex flex-wrap gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleApproveBorrowRequest(notification.reservationId!)}
+                                                        disabled={pendingActionId === notification.reservationId}
+                                                        className="rounded-full bg-emerald-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                                                    >
+                                                        {pendingActionId === notification.reservationId ? '…' : 'Approve'}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleDeclineBorrowRequest(notification.reservationId!)}
+                                                        disabled={pendingActionId === notification.reservationId}
+                                                        className="rounded-full border border-gray-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-60"
+                                                    >
+                                                        Decline
+                                                    </button>
+                                                </div>
+                                            )}
+                                            {isAdmin && notification.allocationId != null && (
+                                                <div className="mt-2 flex flex-wrap gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleApproveReturnRequest(notification.allocationId!)}
+                                                        disabled={pendingReturnActionId === notification.allocationId}
+                                                        className="rounded-full bg-emerald-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                                                    >
+                                                        {pendingReturnActionId === notification.allocationId ? '…' : 'Approve'}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleDeclineReturnRequest(notification.allocationId!)}
+                                                        disabled={pendingReturnActionId === notification.allocationId}
+                                                        className="rounded-full border border-gray-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-60"
+                                                    >
+                                                        Decline
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
                                         <div className="flex items-center gap-1">
                                             {!notification.read && (
@@ -238,7 +409,8 @@ export default function IndexPage() {
                                 </div>
                                 {!notification.read && <span className="mt-1 h-2 w-2 flex-shrink-0 rounded-full bg-blue-500" />}
                             </div>
-                        ))}
+                        );
+                        })}
                     </div>
                 )}
             </div>

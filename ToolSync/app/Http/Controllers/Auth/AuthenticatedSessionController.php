@@ -18,9 +18,10 @@ class AuthenticatedSessionController extends Controller
      */
     public function create(): Response
     {
-        return Inertia::render('Auth/Login', [
+        return Inertia::render('Profile/login', [
             'canResetPassword' => Route::has('password.request'),
             'status' => session('status'),
+            'unverified_email' => session('unverified_email'),
         ]);
     }
 
@@ -33,7 +34,29 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route('dashboard', absolute: false));
+        $user = $request->user();
+
+        // Only this seeded admin account bypasses email verification.
+        if ($user && strtolower((string) $user->email) === 'admin@example.com' && ! $user->hasVerifiedEmail()) {
+            $user->forceFill(['email_verified_at' => now()])->save();
+            $user->refresh();
+        }
+
+        if ($user && ! $user->hasVerifiedEmail()) {
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()
+                ->route('login')
+                ->with('unverified_email', $user->email);
+        }
+
+        if ($user && method_exists($user, 'isAdmin') && $user->isAdmin()) {
+            return redirect()->route('admin.dashboard');
+        }
+
+        return redirect()->route('dashboard');
     }
 
     /**

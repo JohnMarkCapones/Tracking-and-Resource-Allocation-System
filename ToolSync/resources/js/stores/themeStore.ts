@@ -17,8 +17,9 @@ const getSystemTheme = (): 'light' | 'dark' => {
 export const useThemeStore = create<ThemeState>()(
     persist(
         (set) => ({
-            theme: 'system',
-            resolvedTheme: getSystemTheme(),
+            // Default to light mode; user can switch to dark/system via the toggle
+            theme: 'light',
+            resolvedTheme: 'light',
             setTheme: (theme: Theme) => {
                 const resolvedTheme = theme === 'system' ? getSystemTheme() : theme;
                 set({ theme, resolvedTheme });

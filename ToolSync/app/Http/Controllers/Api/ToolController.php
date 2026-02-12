@@ -11,6 +11,7 @@ use App\Models\Reservation;
 use App\Models\ToolStatusLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * @group Tools
@@ -50,7 +51,13 @@ class ToolController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = Tool::with('category');
+        $query = Tool::with('category')
+            ->withCount('allocations')
+            ->withCount([
+                'allocations as borrowed_count' => function ($q) {
+                    $q->where('status', 'BORROWED');
+                },
+            ]);
 
         if ($request->has('status')) {
             $query->where('status', $request->input('status'));
@@ -104,7 +111,13 @@ class ToolController extends Controller
      */
     public function store(StoreToolRequest $request): JsonResponse
     {
-        $tool = Tool::create($request->validated());
+        $validated = $request->validated();
+
+        if (! Schema::hasColumn('tools', 'code')) {
+            unset($validated['code']);
+        }
+
+        $tool = Tool::create($validated);
         $tool->load('category');
 
         return response()->json([
@@ -185,6 +198,10 @@ class ToolController extends Controller
         $oldStatus = $tool->status;
         $validated = $request->validated();
 
+        if (! Schema::hasColumn('tools', 'code')) {
+            unset($validated['code']);
+        }
+
         $tool->update($validated);
 
         if (array_key_exists('status', $validated) && $validated['status'] !== $oldStatus) {
@@ -247,17 +264,20 @@ class ToolController extends Controller
                 'status',
             ]);
 
-        $reservations = Reservation::query()
-            ->where('tool_id', $tool->id)
-            ->whereBetween('start_date', [$from, $to])
-            ->get([
-                'id',
-                'start_date',
-                'end_date',
-                'status',
-                'recurring',
-                'recurrence_pattern',
-            ]);
+        $reservations = [];
+        if (Schema::hasTable('reservations')) {
+            $reservations = Reservation::query()
+                ->where('tool_id', $tool->id)
+                ->whereBetween('start_date', [$from, $to])
+                ->get([
+                    'id',
+                    'start_date',
+                    'end_date',
+                    'status',
+                    'recurring',
+                    'recurrence_pattern',
+                ]);
+        }
 
         return response()->json([
             'data' => [

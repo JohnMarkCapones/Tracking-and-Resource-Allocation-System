@@ -4,14 +4,17 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\Rules;
 use Inertia\Inertia;
 use Inertia\Response;
+use App\Notifications\PendingRegistrationVerification;
 
 class RegisteredUserController extends Controller
 {
@@ -20,7 +23,7 @@ class RegisteredUserController extends Controller
      */
     public function create(): Response
     {
-        return Inertia::render('Auth/Register');
+        return Inertia::render('welcome');
     }
 
     /**
@@ -30,22 +33,126 @@ class RegisteredUserController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
-        $request->validate([
+        $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
-            'password' => ['required', 'confirmed', Rules\Password::defaults()],
+            'password' => [
+                'required',
+                'confirmed',
+                Rules\Password::min(8)
+                    ->uncompromised(),
+                function ($attribute, $value, $fail) {
+                    $characterTypes = 0;
+                    $characterTypes += preg_match('/[A-Z]/', $value) ? 1 : 0;
+                    $characterTypes += preg_match('/[a-z]/', $value) ? 1 : 0;
+                    $characterTypes += preg_match('/\d/', $value) ? 1 : 0;
+                    $characterTypes += preg_match('/[^A-Za-z0-9]/', $value) ? 1 : 0;
+
+                    if ($characterTypes < 3) {
+                        $fail('Password is too weak. Use at least 3 of these: uppercase, lowercase, number, special character.');
+                    }
+                },
+            ],
+        ], [
+            'password.min' => 'Password is too weak. Use at least 8 characters.',
+            'password.uncompromised' => 'This password has appeared in a data leak. Please choose a different one.',
         ]);
 
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
+        $email = strtolower($validated['email']);
+        $payload = Crypt::encryptString((string) json_encode([
+            'name' => $validated['name'],
+            'email' => $email,
+            'password_hash' => Hash::make($validated['password']),
+        ]));
+        $verificationUrl = URL::temporarySignedRoute(
+            'registration.verify',
+            now()->addMinutes(60),
+            ['payload' => $payload],
+        );
+
+        Notification::route('mail', $email)
+            ->notify(new PendingRegistrationVerification($verificationUrl, $email));
+        $request->session()->put('pending_registration', [
+            'payload' => $payload,
+            'email' => $email,
         ]);
 
-        event(new Registered($user));
+        return redirect()
+            ->route('home')
+            ->with('status', 'verification-link-sent')
+            ->with('verification_email', $email);
+    }
+
+    public function resendVerification(Request $request): RedirectResponse
+    {
+        $pending = $request->session()->get('pending_registration');
+
+        if (! is_array($pending) || ! isset($pending['payload'], $pending['email'])) {
+            return redirect()
+                ->route('home')
+                ->withErrors(['email' => 'Your verification session expired. Please register again.']);
+        }
+
+        $verificationUrl = URL::temporarySignedRoute(
+            'registration.verify',
+            now()->addMinutes(60),
+            ['payload' => $pending['payload']],
+        );
+
+        Notification::route('mail', (string) $pending['email'])
+            ->notify(new PendingRegistrationVerification($verificationUrl, (string) $pending['email']));
+
+        return redirect()
+            ->route('home')
+            ->with('status', 'verification-link-sent')
+            ->with('verification_email', (string) $pending['email']);
+    }
+
+    public function verifyRegistration(Request $request): RedirectResponse
+    {
+        $payload = $request->string('payload')->toString();
+
+        if ($payload === '') {
+            return redirect()->route('home');
+        }
+
+        try {
+            $decrypted = Crypt::decryptString($payload);
+            $data = json_decode($decrypted, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\Throwable) {
+            return redirect()->route('home');
+        }
+
+        if (! is_array($data) || ! isset($data['name'], $data['email'], $data['password_hash'])) {
+            return redirect()->route('home');
+        }
+
+        $email = strtolower((string) $data['email']);
+        $user = User::where('email', $email)->first();
+
+        if (! $user) {
+            $user = User::create([
+                'name' => (string) $data['name'],
+                'email' => $email,
+                'password' => (string) $data['password_hash'],
+            ]);
+            $user->forceFill(['email_verified_at' => now()])->save();
+        } else {
+            if (! $user->hasVerifiedEmail()) {
+                $user->forceFill(['email_verified_at' => now()])->save();
+            }
+            if (method_exists($user, 'hasPassword') && ! $user->hasPassword()) {
+                $user->forceFill(['password' => (string) $data['password_hash']])->save();
+            }
+        }
 
         Auth::login($user);
+        $request->session()->forget('pending_registration');
 
-        return redirect(route('dashboard', absolute: false));
+        if (method_exists($user, 'isAdmin') && $user->isAdmin()) {
+            return redirect()->route('admin.dashboard');
+        }
+
+        return redirect()->route('dashboard');
     }
 }

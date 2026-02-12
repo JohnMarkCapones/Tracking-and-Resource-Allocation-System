@@ -10,15 +10,37 @@ type RequestToolModalProps = {
     toolId: string;
     onClose: () => void;
     onSubmit: (data: { dateRange: DateRange; purpose: string }) => void;
+    /** When true, disables submit to prevent spamming multiple requests. */
+    submitting?: boolean;
 };
 
-export function RequestToolModal({ show, toolName, toolId, onClose, onSubmit }: RequestToolModalProps) {
+export function RequestToolModal({ show, toolName, toolId, onClose, onSubmit, submitting = false }: RequestToolModalProps) {
     const [dateRange, setDateRange] = useState<DateRange | undefined>();
     const [purpose, setPurpose] = useState('');
     const [error, setError] = useState('');
 
+    const handleDateSelect = (selectedDate: Date | undefined) => {
+        if (!selectedDate) {
+            setDateRange(undefined);
+            return;
+        }
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const endDate = new Date(selectedDate);
+        endDate.setHours(0, 0, 0, 0);
+
+        // Always create a range from today to the selected date
+        setDateRange({ from: today, to: endDate });
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (submitting) {
+            // Guard against double-submit while a request is already in-flight.
+            return;
+        }
         setError('');
 
         if (!dateRange?.from || !dateRange?.to) {
@@ -61,11 +83,24 @@ export function RequestToolModal({ show, toolName, toolId, onClose, onSubmit }: 
                                  * so arrows, spacing, and selection feel consistent across the app.
                                  */}
                                 <DayPicker
-                                    mode="range"
-                                    selected={dateRange}
-                                    onSelect={setDateRange}
+                                    mode="single"
+                                    selected={dateRange?.to}
+                                    onSelect={handleDateSelect}
                                     numberOfMonths={1}
                                     disabled={{ before: new Date() }}
+                                    modifiers={{ 
+                                        range_start: dateRange?.from ? [dateRange.from] : [],
+                                        range_end: dateRange?.to ? [dateRange.to] : [],
+                                        range_middle: dateRange?.from && dateRange?.to ? (date) => {
+                                            if (!dateRange.from || !dateRange.to) return false;
+                                            return date > dateRange.from && date < dateRange.to;
+                                        } : []
+                                    }}
+                                    modifiersClassNames={{
+                                        range_start: 'bg-blue-600 text-white hover:bg-blue-700 rounded-full',
+                                        range_end: 'bg-blue-600 text-white hover:bg-blue-700 rounded-full',
+                                        range_middle: 'bg-blue-50 text-blue-900'
+                                    }}
                                     navLayout="around"
                                     classNames={(() => {
                                         const defaultClassNames = getDefaultClassNames();
@@ -126,12 +161,17 @@ export function RequestToolModal({ show, toolName, toolId, onClose, onSubmit }: 
                         <button
                             type="button"
                             onClick={handleClose}
-                            className="rounded-full border border-gray-200 px-4 py-1.5 text-[11px] font-medium text-gray-700 hover:bg-gray-100"
+                            disabled={submitting}
+                            className="rounded-full border border-gray-200 px-4 py-1.5 text-[11px] font-medium text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                             Cancel
                         </button>
-                        <button type="submit" className="rounded-full bg-blue-600 px-4 py-1.5 text-[11px] font-semibold text-white hover:bg-blue-700">
-                            Submit Request
+                        <button
+                            type="submit"
+                            disabled={submitting}
+                            className="rounded-full bg-blue-600 px-4 py-1.5 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            {submitting ? 'Submitting…' : 'Submit Request'}
                         </button>
                     </div>
                 </form>

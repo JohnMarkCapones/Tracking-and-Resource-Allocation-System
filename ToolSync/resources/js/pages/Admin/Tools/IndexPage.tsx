@@ -4,21 +4,22 @@ import { ToolTable, type Tool } from '@/Components/Admin/ToolTable';
 import { EmptyState } from '@/Components/EmptyState';
 import { toast } from '@/Components/Toast';
 import AppLayout from '@/Layouts/AppLayout';
-import { apiRequest } from '@/lib/http';
 import type { ToolDto, ToolCategoryDto } from '@/lib/apiTypes';
 import { mapToolStatusToUi } from '@/lib/apiTypes';
+import { apiRequest } from '@/lib/http';
 import { CreateEditModal, type ToolFormData } from './CreateEditModal';
 
 function mapDtoToTool(dto: ToolDto): Tool {
     return {
         id: dto.id,
         name: dto.name,
-        toolId: 'TL-' + dto.id,
+        toolId: dto.code?.trim() ? dto.code : 'TL-' + dto.id,
         category: dto.category?.name ?? 'Other',
         status: mapToolStatusToUi(dto.status),
-        condition: 'Good',
+        quantity: dto.quantity,
+        condition: dto.condition ?? 'Good',
         lastMaintenance: 'N/A',
-        totalBorrowings: 0,
+        totalBorrowings: dto.allocations_count ?? 0,
         description: dto.description ?? undefined,
         specifications: {},
     };
@@ -79,8 +80,24 @@ export default function IndexPage() {
         }
     };
 
+    const resolveCategoryId = async (name: string) => {
+        const existing = categories.find((c) => c.name === name);
+        if (existing) return existing.id;
+        try {
+            const res = await apiRequest<{ data: ToolCategoryDto }>('/api/tool-categories', {
+                method: 'POST',
+                body: { name },
+            });
+            setCategories((prev) => [...prev, res.data]);
+            return res.data.id;
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to create category');
+            return undefined;
+        }
+    };
+
     const handleSave = async (data: ToolFormData) => {
-        const categoryId = categories.find((c) => c.name === data.category)?.id;
+        const categoryId = await resolveCategoryId(data.category);
         if (categoryId === undefined) {
             toast.error('Please select a valid category');
             return;
@@ -90,7 +107,8 @@ export default function IndexPage() {
             description: data.description || null,
             category_id: categoryId,
             status: statusToApi(data.status),
-            quantity: 1,
+            condition: data.condition,
+            quantity: data.quantity,
         };
         setSaving(true);
         try {
@@ -277,6 +295,7 @@ export default function IndexPage() {
                         onDelete={handleDelete}
                         selectedIds={selectedIds}
                         onSelectionChange={setSelectedIds}
+                        initialSearch={typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('search') ?? '' : ''}
                     />
                 )}
                 </>
@@ -312,9 +331,10 @@ export default function IndexPage() {
                             <button
                                 type="button"
                                 onClick={confirmDelete}
-                                className="rounded-full bg-rose-600 px-4 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-rose-700"
+                                disabled={saving}
+                                className="rounded-full bg-rose-600 px-4 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-rose-700 disabled:opacity-60"
                             >
-                                Delete Tool
+                                {saving ? 'Deleting…' : 'Delete Tool'}
                             </button>
                         </div>
                     </div>

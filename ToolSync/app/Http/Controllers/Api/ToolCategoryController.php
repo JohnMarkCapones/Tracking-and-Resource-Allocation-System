@@ -7,6 +7,7 @@ use App\Http\Requests\StoreToolCategoryRequest;
 use App\Http\Requests\UpdateToolCategoryRequest;
 use App\Models\ToolCategory;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * @group Tool Categories
@@ -34,6 +35,10 @@ class ToolCategoryController extends Controller
      */
     public function index(): JsonResponse
     {
+        if (! Schema::hasTable('tool_categories')) {
+            return response()->json(['data' => [], 'meta' => ['table_missing' => 'tool_categories']]);
+        }
+
         $categories = ToolCategory::withCount('tools')->get();
 
         return response()->json([
@@ -60,6 +65,10 @@ class ToolCategoryController extends Controller
      */
     public function store(StoreToolCategoryRequest $request): JsonResponse
     {
+        if (! Schema::hasTable('tool_categories')) {
+            return response()->json(['message' => 'Categories are not available. Run: php artisan migrate'], 503);
+        }
+
         $category = ToolCategory::create($request->validated());
 
         return response()->json([

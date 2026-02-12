@@ -1,30 +1,49 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
+import { format } from 'date-fns';
 import { useState, useMemo, useEffect } from 'react';
+import type { DateRange } from 'react-day-picker';
 import { EmptyState } from '@/Components/EmptyState';
+import { toast } from '@/Components/Toast';
+import { RequestToolModal } from '@/Components/Tools/RequestToolModal';
 import { ToolCard, type ToolCardData } from '@/Components/Tools/ToolCard';
 import { ToolFilters } from '@/Components/Tools/ToolFilters';
 import AppLayout from '@/Layouts/AppLayout';
-import { apiRequest } from '@/lib/http';
-import type { ToolDto, ToolCategoryDto } from '@/lib/apiTypes';
+import type { DashboardApiResponse, ReservationApiItem, ToolDto, ToolCategoryDto } from '@/lib/apiTypes';
 import { mapToolStatusToUi } from '@/lib/apiTypes';
+import { apiRequest } from '@/lib/http';
+
+const MAX_BORROWINGS = 3;
 
 function mapToolToCardData(dto: ToolDto): ToolCardData {
+    const availableQuantity = Math.max(0, Number(dto.quantity ?? 0));
+    const borrowedQuantity = Math.max(0, Number(dto.borrowed_count ?? 0));
+
     return {
         id: dto.id,
         name: dto.name,
         toolId: 'TL-' + dto.id,
         category: dto.category?.name ?? 'Other',
         status: mapToolStatusToUi(dto.status),
-        condition: 'Good',
+        condition: dto.condition ?? 'Good',
+        quantity: availableQuantity + borrowedQuantity,
+        availableQuantity,
+        borrowedQuantity,
         imageUrl: dto.image_path ? (dto.image_path.startsWith('http') ? dto.image_path : `/${dto.image_path}`) : undefined,
     };
 }
 
 export default function CatalogPage() {
+    const toLocalYmd = (date: Date): string => format(date, 'yyyy-MM-dd');
+
     const [tools, setTools] = useState<ToolCardData[]>([]);
     const [categories, setCategories] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+    const [selectedTool, setSelectedTool] = useState<ToolCardData | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [activeBorrowingsCount, setActiveBorrowingsCount] = useState(0);
+    const [pendingBorrowRequestsCount, setPendingBorrowRequestsCount] = useState(0);
 
     useEffect(() => {
         let cancelled = false;
@@ -33,13 +52,17 @@ export default function CatalogPage() {
             setLoading(true);
             setError(null);
             try {
-                const [toolsRes, categoriesRes] = await Promise.all([
+                const [toolsRes, categoriesRes, dashboardRes, reservationsRes] = await Promise.all([
                     apiRequest<{ data: ToolDto[] }>('/api/tools'),
                     apiRequest<{ data: ToolCategoryDto[] }>('/api/tool-categories'),
+                    apiRequest<DashboardApiResponse>('/api/dashboard'),
+                    apiRequest<{ data: ReservationApiItem[] }>('/api/reservations'),
                 ]);
                 if (cancelled) return;
                 setTools((toolsRes.data ?? []).map(mapToolToCardData));
                 setCategories((categoriesRes.data ?? []).map((c) => c.name));
+                setActiveBorrowingsCount(dashboardRes.data.counts.borrowed_active_count ?? 0);
+                setPendingBorrowRequestsCount((reservationsRes.data ?? []).filter((r) => r.status === 'pending').length);
             } catch (err) {
                 if (cancelled) return;
                 setError(err instanceof Error ? err.message : 'Failed to load tools');
@@ -81,6 +104,82 @@ export default function CatalogPage() {
         setSelectedCategories([]);
         setSelectedStatuses([]);
         setSearch('');
+    };
+
+    const borrowSlotsUsed = activeBorrowingsCount + pendingBorrowRequestsCount;
+
+    const handleRequestBorrow = (tool: ToolCardData) => {
+        if (tool.status === 'Available' && borrowSlotsUsed >= MAX_BORROWINGS) {
+            toast.error(`You can only have up to ${MAX_BORROWINGS} active borrow/request slots at a time.`);
+            return;
+        }
+        setSelectedTool(tool);
+        setIsRequestModalOpen(true);
+    };
+
+    const handleRequestSubmit = async (data: { dateRange: DateRange; purpose: string }) => {
+        if (!selectedTool || !data.dateRange.from || !data.dateRange.to) {
+            toast.error('Please select a valid date range.');
+            return;
+        }
+
+        setIsSubmitting(true);
+
+        const startDate = toLocalYmd(data.dateRange.from);
+        const endDate = toLocalYmd(data.dateRange.to);
+
+        try {
+            if (selectedTool.status === 'Borrowed') {
+                await apiRequest('/api/reservations', {
+                    method: 'POST',
+                    body: {
+                        tool_id: selectedTool.id,
+                        start_date: startDate,
+                        end_date: endDate,
+                        recurring: false,
+                    },
+                });
+                setIsRequestModalOpen(false);
+                toast.success('Reservation created successfully!');
+                router.visit('/reservations');
+                return;
+            }
+
+            if (borrowSlotsUsed >= MAX_BORROWINGS) {
+                toast.error(`You can only have up to ${MAX_BORROWINGS} active borrow/request slots at a time.`);
+                return;
+            }
+
+            // Available tool: create a borrow request (reservation PENDING) for admin approval
+            await apiRequest<{ message: string }>('/api/reservations', {
+                method: 'POST',
+                body: {
+                    tool_id: selectedTool.id,
+                    start_date: startDate,
+                    end_date: endDate,
+                    recurring: false,
+                    borrow_request: true,
+                },
+            });
+
+            setIsRequestModalOpen(false);
+            toast.success('Borrowing request submitted for approval!');
+            
+            // Reload the tools list
+            const [toolsRes, dashboardRes, reservationsRes] = await Promise.all([
+                apiRequest<{ data: ToolDto[] }>('/api/tools'),
+                apiRequest<DashboardApiResponse>('/api/dashboard'),
+                apiRequest<{ data: ReservationApiItem[] }>('/api/reservations'),
+            ]);
+            setTools((toolsRes.data ?? []).map(mapToolToCardData));
+            setActiveBorrowingsCount(dashboardRes.data.counts.borrowed_active_count ?? 0);
+            setPendingBorrowRequestsCount((reservationsRes.data ?? []).filter((r) => r.status === 'pending').length);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to submit request.';
+            toast.error(message);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -181,7 +280,12 @@ export default function CatalogPage() {
                         ) : (
                             <div className="grid gap-4 border-t border-gray-100 pt-4 sm:grid-cols-2 xl:grid-cols-3">
                                 {filteredTools.map((tool) => (
-                                    <ToolCard key={tool.id} tool={tool} />
+                                    <ToolCard
+                                        key={tool.id}
+                                        tool={tool}
+                                        onRequestBorrow={handleRequestBorrow}
+                                        disableBorrowRequest={tool.status === 'Available' && borrowSlotsUsed >= MAX_BORROWINGS}
+                                    />
                                 ))}
                             </div>
                         )}
@@ -189,6 +293,23 @@ export default function CatalogPage() {
                 </div>
                 )}
             </div>
+
+            {selectedTool && (
+                <RequestToolModal
+                    show={isRequestModalOpen}
+                    toolName={selectedTool.name}
+                    toolId={selectedTool.toolId}
+                    submitting={isSubmitting}
+                    onClose={() => {
+                        if (isSubmitting) {
+                            return;
+                        }
+                        setIsRequestModalOpen(false);
+                        setSelectedTool(null);
+                    }}
+                    onSubmit={handleRequestSubmit}
+                />
+            )}
         </AppLayout>
     );
 }

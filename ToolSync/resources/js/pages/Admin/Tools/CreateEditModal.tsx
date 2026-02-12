@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import type { Tool, ToolStatus } from '@/Components/Admin/ToolTable';
 import Modal from '@/Components/Modal';
 
-const DEFAULT_CATEGORIES = ['Laptops', 'Projectors', 'Cameras', 'Printers', 'Tablets', 'Audio Equipment', 'Other'];
+const DEFAULT_CATEGORIES = ['IT Equipment', 'Office Equipment', 'Multimedia'];
 
 type CreateEditModalProps = {
     show: boolean;
@@ -17,9 +17,11 @@ export type ToolFormData = {
     toolId: string;
     category: string;
     status: ToolStatus;
+    quantity: number;
     condition: string;
     description: string;
     specifications: Record<string, string>;
+    displayImage?: File | null;
 };
 
 /** Single row in the dynamic specifications list (id for React keys). */
@@ -31,16 +33,18 @@ function nextSpecId(): string {
 
 const STATUSES: ToolStatus[] = ['Available', 'Borrowed', 'Maintenance'];
 
-const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor'];
+const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor', 'Damaged', 'Functional'];
 
 export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, onClose, onSave }: CreateEditModalProps) {
     const isEditing = tool !== null;
+    const categoryOptions = categories.length > 0 ? categories : DEFAULT_CATEGORIES;
 
     const [formData, setFormData] = useState<ToolFormData>({
         name: '',
         toolId: '',
-        category: categories[0] ?? DEFAULT_CATEGORIES[0],
+        category: categoryOptions[0],
         status: 'Available',
+        quantity: 1,
         condition: 'Good',
         description: '',
         specifications: {},
@@ -48,16 +52,23 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
 
     /** Dynamic spec rows for the UI; id used for React keys. */
     const [specRows, setSpecRows] = useState<SpecRow[]>([]);
+    const [displayImageFile, setDisplayImageFile] = useState<File | null>(null);
+    const [displayImagePreview, setDisplayImagePreview] = useState<string | null>(null);
 
     const [errors, setErrors] = useState<Partial<Record<keyof ToolFormData, string>>>({});
 
+    // Sync form when modal opens or when editing a different tool. Only depend on tool so we
+    // don't overwrite user input when they change Tool ID or Condition (avoid show in deps).
     useEffect(() => {
+        if (!show) return;
+
         if (tool) {
             setFormData({
                 name: tool.name,
                 toolId: tool.toolId,
                 category: tool.category,
                 status: tool.status,
+                quantity: tool.quantity,
                 condition: tool.condition,
                 description: tool.description ?? '',
                 specifications: tool.specifications ?? {},
@@ -72,8 +83,9 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
             setFormData({
                 name: '',
                 toolId: '',
-                category: categories[0] ?? DEFAULT_CATEGORIES[0],
+                category: categoryOptions[0],
                 status: 'Available',
+                quantity: 1,
                 condition: 'Good',
                 description: '',
                 specifications: {},
@@ -81,7 +93,12 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
             setSpecRows([]);
         }
         setErrors({});
-    }, [tool, show]);
+        setDisplayImageFile(null);
+        setDisplayImagePreview((prev) => {
+            if (prev) URL.revokeObjectURL(prev);
+            return null;
+        });
+    }, [show, tool]);
 
     const validate = (): boolean => {
         const newErrors: Partial<Record<keyof ToolFormData, string>> = {};
@@ -92,6 +109,9 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
 
         if (!formData.toolId.trim()) {
             newErrors.toolId = 'Tool ID is required';
+        }
+        if (!Number.isInteger(formData.quantity) || formData.quantity < 1) {
+            newErrors.quantity = 'Quantity must be at least 1';
         }
 
         setErrors(newErrors);
@@ -111,6 +131,7 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
                 ...formData,
                 description: formData.description.trim(),
                 specifications,
+                displayImage: displayImageFile,
             });
         }
     };
@@ -123,6 +144,15 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
 
     const removeSpecRow = (id: string) => {
         setSpecRows((prev) => prev.filter((row) => row.id !== id));
+    };
+
+    const handleDisplayImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0] ?? null;
+        setDisplayImageFile(file);
+        setDisplayImagePreview((prev) => {
+            if (prev) URL.revokeObjectURL(prev);
+            return file ? URL.createObjectURL(file) : null;
+        });
     };
 
     return (
@@ -170,8 +200,7 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
                                         toolId: e.target.value,
                                     }))
                                 }
-                                disabled={isEditing}
-                                className={`w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50 ${
+                                className={`w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 ${
                                     errors.toolId ? 'border-rose-300 bg-rose-50' : 'border-gray-200 bg-gray-50'
                                 }`}
                                 placeholder="e.g., LP-0001"
@@ -179,7 +208,7 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
                             {errors.toolId && <p className="mt-1 text-[11px] text-rose-600">{errors.toolId}</p>}
                         </div>
 
-                        <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="grid gap-4 sm:grid-cols-3">
                             <div>
                                 <label htmlFor="category" className="mb-1 block text-[11px] font-semibold tracking-wide text-gray-500 uppercase">
                                     Category
@@ -195,7 +224,7 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
                                     }
                                     className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
                                 >
-                                    {categories.map((cat) => (
+                                    {categoryOptions.map((cat) => (
                                         <option key={cat} value={cat}>
                                             {cat}
                                         </option>
@@ -224,6 +253,29 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
                                         </option>
                                     ))}
                                 </select>
+                            </div>
+
+                            <div>
+                                <label htmlFor="quantity" className="mb-1 block text-[11px] font-semibold tracking-wide text-gray-500 uppercase">
+                                    Quantity
+                                </label>
+                                <input
+                                    type="number"
+                                    id="quantity"
+                                    min={1}
+                                    value={formData.quantity}
+                                    onChange={(e) =>
+                                        setFormData((prev) => ({
+                                            ...prev,
+                                            quantity: Math.max(1, Number.parseInt(e.target.value || '1', 10) || 1),
+                                        }))
+                                    }
+                                    className={`w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 ${
+                                        errors.quantity ? 'border-rose-300 bg-rose-50' : 'border-gray-200 bg-gray-50'
+                                    }`}
+                                    placeholder="e.g., 10"
+                                />
+                                {errors.quantity && <p className="mt-1 text-[11px] text-rose-600">{errors.quantity}</p>}
                             </div>
                         </div>
 
@@ -267,6 +319,31 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
                                 className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
                                 placeholder="e.g., A powerful laptop for professionals. Features the M2 Pro chip..."
                             />
+                        </div>
+
+                        <div>
+                            <label htmlFor="displayImage" className="mb-1 block text-[11px] font-semibold tracking-wide text-gray-500 uppercase">
+                                Display Image
+                            </label>
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                                <div className="flex h-20 w-20 items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50">
+                                    {displayImagePreview ? (
+                                        <img src={displayImagePreview} alt="Tool preview" className="h-full w-full rounded-xl object-cover" />
+                                    ) : (
+                                        <span className="text-[10px] text-gray-400">No image</span>
+                                    )}
+                                </div>
+                                <div className="flex-1">
+                                    <input
+                                        type="file"
+                                        id="displayImage"
+                                        accept="image/*"
+                                        onChange={handleDisplayImageChange}
+                                        className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-full file:border-0 file:bg-blue-50 file:px-4 file:py-1.5 file:text-[11px] file:font-semibold file:text-blue-700 hover:file:bg-blue-100"
+                                    />
+                                    <p className="mt-1 text-[11px] text-gray-500">PNG or JPG recommended. Max 2MB.</p>
+                                </div>
+                            </div>
                         </div>
 
                         <div>

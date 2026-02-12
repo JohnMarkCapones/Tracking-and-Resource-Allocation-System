@@ -1,4 +1,4 @@
-import { Link, router } from '@inertiajs/react';
+import { router } from '@inertiajs/react';
 import { FavoriteButton } from '@/Components/FavoriteButton';
 
 export type ToolCardStatus = 'Available' | 'Borrowed' | 'Maintenance';
@@ -10,11 +10,16 @@ export type ToolCardData = {
     category: string;
     status: ToolCardStatus;
     condition: string;
+    quantity: number;
+    availableQuantity: number;
+    borrowedQuantity: number;
     imageUrl?: string;
 };
 
 type ToolCardProps = {
     tool: ToolCardData;
+    onRequestBorrow?: (tool: ToolCardData) => void;
+    disableBorrowRequest?: boolean;
 };
 
 function statusClasses(status: ToolCardStatus): string {
@@ -29,15 +34,27 @@ function statusClasses(status: ToolCardStatus): string {
     return 'bg-rose-50 text-rose-700';
 }
 
-export function ToolCard({ tool }: ToolCardProps) {
+export function ToolCard({ tool, onRequestBorrow, disableBorrowRequest = false }: ToolCardProps) {
+    const handleButtonClick = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        if (onRequestBorrow) {
+            onRequestBorrow(tool);
+        } else {
+            router.visit(`/tools/${tool.id}?request=1`);
+        }
+    };
+
+    const quantityLabel = `Qty: ${tool.quantity} total · ${tool.availableQuantity} available${
+        tool.borrowedQuantity > 0 ? ` · ${tool.borrowedQuantity} borrowed` : ''
+    }`;
+
     return (
-        <Link
-            href={`/tools/${tool.id}`}
-            className="group rounded-2xl bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md hover:bg-gray-50"
-        >
-            <div className="relative mb-3 aspect-[4/3] overflow-hidden rounded-xl bg-gray-100">
+        <div className="group rounded-2xl bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md hover:bg-gray-50">
+            <div className="relative mb-3 aspect-[4/3] overflow-hidden rounded-xl bg-gray-100 pointer-events-none">
                 {tool.imageUrl ? (
-                    <img src={tool.imageUrl} alt={tool.name} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
+                    <img src={tool.imageUrl} alt={tool.name} className="h-full w-full object-cover" />
                 ) : (
                     <div className="flex h-full w-full items-center justify-center text-gray-400">
                         <svg className="h-12 w-12" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -48,7 +65,7 @@ export function ToolCard({ tool }: ToolCardProps) {
                         </svg>
                     </div>
                 )}
-                <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                <div className="absolute top-2 right-2 flex items-center gap-1.5 pointer-events-auto">
                     <FavoriteButton tool={tool} size="sm" />
                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusClasses(tool.status)}`}>{tool.status}</span>
                 </div>
@@ -56,26 +73,23 @@ export function ToolCard({ tool }: ToolCardProps) {
 
             <div>
                 <p className="text-[10px] font-medium tracking-wide text-gray-500 uppercase">{tool.category}</p>
-                <h3 className="mt-0.5 text-sm font-semibold text-gray-900 group-hover:text-blue-600">{tool.name}</h3>
+                <h3 className="mt-0.5 text-sm font-semibold text-gray-900">{tool.name}</h3>
                 <p className="mt-1 text-[11px] text-gray-500">
-                    ID: {tool.toolId} · {tool.condition}
+                    ID: {tool.toolId} · {tool.condition} · {quantityLabel}
                 </p>
             </div>
 
             {tool.status === 'Available' && (
                 <button
                     type="button"
-                    className="mt-3 w-full rounded-full bg-blue-600 py-1.5 text-[11px] font-semibold text-white hover:bg-blue-700"
-                    onClick={(e) => {
-                        // Navigate to the tool detail page and auto-open the request
-                        // modal using a query string flag. We stop the Link navigation
-                        // so we can control the destination URL explicitly.
-                        e.preventDefault();
-                        e.stopPropagation();
-                        router.visit(`/tools/${tool.id}?request=1`);
-                    }}
+                    className={`mt-3 w-full rounded-full py-1.5 text-[11px] font-semibold text-white ${
+                        disableBorrowRequest ? 'cursor-not-allowed bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'
+                    }`}
+                    onClick={handleButtonClick}
+                    disabled={disableBorrowRequest}
+                    title={disableBorrowRequest ? 'Maximum 3 active borrow/request slots reached.' : undefined}
                 >
-                    Request to Borrow
+                    {disableBorrowRequest ? 'Borrowing limit reached' : 'Request to Borrow'}
                 </button>
             )}
 
@@ -83,17 +97,11 @@ export function ToolCard({ tool }: ToolCardProps) {
                 <button
                     type="button"
                     className="mt-3 w-full rounded-full bg-blue-600 py-1.5 text-[11px] font-semibold text-white hover:bg-blue-700"
-                    onClick={(e) => {
-                        // Same flow as borrowing, but messaging is about reserving
-                        // a future slot while the tool is currently borrowed.
-                        e.preventDefault();
-                        e.stopPropagation();
-                        router.visit(`/tools/${tool.id}?request=1`);
-                    }}
+                    onClick={handleButtonClick}
                 >
                     Request a Reservation
                 </button>
             )}
-        </Link>
+        </div>
     );
 }

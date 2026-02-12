@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Modal from '@/Components/Modal';
 
 type ReturnModalProps = {
@@ -9,11 +9,21 @@ type ReturnModalProps = {
     onSubmit: (data: { condition: string; notes: string }) => void;
 };
 
-const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor', 'Damaged'];
+const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor', 'Damaged', 'Functional'];
 
 export function ReturnModal({ show, toolName, toolId, onClose, onSubmit }: ReturnModalProps) {
     const [condition, setCondition] = useState('Good');
     const [notes, setNotes] = useState('');
+    const prevShowRef = useRef(false);
+
+    // Reset condition and notes only when the modal opens (show: false → true), not while it stays open.
+    useEffect(() => {
+        if (show && !prevShowRef.current) {
+            setCondition('Good');
+            setNotes('');
+        }
+        prevShowRef.current = show;
+    }, [show]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
