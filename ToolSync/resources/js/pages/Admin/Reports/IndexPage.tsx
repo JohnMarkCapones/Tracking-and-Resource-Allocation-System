@@ -76,7 +76,7 @@ const PRESET_REPORTS: SavedReport[] = [
     },
 ];
 
-const SAVED_REPORTS_STORAGE_KEY = 'toolsync_saved_reports';
+const SAVED_REPORTS_STORAGE_KEY = 'equipit_saved_reports';
 
 export default function IndexPage() {
     const [activeTab, setActiveTab] = useState<'saved' | 'builder'>('saved');
@@ -294,7 +294,7 @@ export default function IndexPage() {
                                         </button>
                                         <button
                                             type="button"
-                                            onClick={() => void handleExportPDF(report.columns, report.type, report.name, `${report.name} - ToolSync`)}
+                                            onClick={() => void handleExportPDF(report.columns, report.type, report.name, `${report.name} - EquipIT`)}
                                             disabled={isExporting}
                                             className="rounded-full bg-blue-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-blue-700"
                                         >
@@ -448,7 +448,7 @@ export default function IndexPage() {
                                             selectedFields,
                                             reportType,
                                             reportName || `${reportType}_report`,
-                                            reportName || 'ToolSync Report',
+                                            reportName || 'EquipIT Report',
                                         )
                                     }
                                     disabled={isExporting}

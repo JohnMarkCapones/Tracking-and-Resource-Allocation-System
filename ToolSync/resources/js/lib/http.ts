@@ -52,11 +52,16 @@ async function handleResponse<T>(response: Response): Promise<T> {
 export async function apiRequest<T>(url: string, options: ApiRequestOptions = {}): Promise<T> {
     const { method = 'GET', body, signal } = options;
 
+    const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+
     const headers: Record<string, string> = {
         Accept: 'application/json',
-        'Content-Type': 'application/json',
         'X-Requested-With': 'XMLHttpRequest',
     };
+
+    if (!isFormData) {
+        headers['Content-Type'] = 'application/json';
+    }
 
     // Required for Laravel Sanctum stateful (cookie) auth on same-origin.
     if (method !== 'GET') {
@@ -74,7 +79,7 @@ export async function apiRequest<T>(url: string, options: ApiRequestOptions = {}
     };
 
     if (body !== undefined) {
-        init.body = JSON.stringify(body);
+        init.body = isFormData ? body : JSON.stringify(body);
     }
 
     const response = await fetch(url, init);

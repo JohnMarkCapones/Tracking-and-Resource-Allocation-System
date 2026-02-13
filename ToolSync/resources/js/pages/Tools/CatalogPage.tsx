@@ -28,7 +28,11 @@ function mapToolToCardData(dto: ToolDto): ToolCardData {
         quantity: availableQuantity + borrowedQuantity,
         availableQuantity,
         borrowedQuantity,
-        imageUrl: dto.image_path ? (dto.image_path.startsWith('http') ? dto.image_path : `/${dto.image_path}`) : undefined,
+        imageUrl: dto.image_path
+            ? dto.image_path.startsWith('http')
+                ? dto.image_path
+                : `/storage/${dto.image_path.replace(/^\/+/, '')}`
+            : undefined,
     };
 }
 

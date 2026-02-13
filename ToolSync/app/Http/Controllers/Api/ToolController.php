@@ -117,6 +117,10 @@ class ToolController extends Controller
             unset($validated['code']);
         }
 
+        if ($request->hasFile('image')) {
+            $validated['image_path'] = $request->file('image')->store('images/tools', 'public');
+        }
+
         $tool = Tool::create($validated);
         $tool->load('category');
 
@@ -200,6 +204,10 @@ class ToolController extends Controller
 
         if (! Schema::hasColumn('tools', 'code')) {
             unset($validated['code']);
+        }
+
+        if ($request->hasFile('image')) {
+            $validated['image_path'] = $request->file('image')->store('images/tools', 'public');
         }
 
         $tool->update($validated);

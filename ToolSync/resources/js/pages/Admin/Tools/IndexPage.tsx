@@ -102,19 +102,22 @@ export default function IndexPage() {
             toast.error('Please select a valid category');
             return;
         }
-        const payload = {
-            name: data.name,
-            description: data.description || null,
-            category_id: categoryId,
-            status: statusToApi(data.status),
-            condition: data.condition,
-            quantity: data.quantity,
-        };
+        const payload = new FormData();
+        payload.append('name', data.name);
+        payload.append('description', data.description || '');
+        payload.append('category_id', String(categoryId));
+        payload.append('status', statusToApi(data.status));
+        payload.append('condition', data.condition);
+        payload.append('quantity', String(data.quantity));
+        if (data.displayImage) {
+            payload.append('image', data.displayImage);
+        }
         setSaving(true);
         try {
             if (editingTool) {
+                payload.append('_method', 'PUT');
                 const res = await apiRequest<{ data: ToolDto }>(`/api/tools/${editingTool.id}`, {
-                    method: 'PUT',
+                    method: 'POST',
                     body: payload,
                 });
                 setTools((prev) =>

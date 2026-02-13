@@ -298,9 +298,9 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                 <aside className="hidden w-64 flex-shrink-0 border-r bg-white px-4 pt-6 pb-6 shadow-sm lg:flex lg:flex-col dark:border-gray-700 dark:bg-gray-800">
                     <div className="flex items-center gap-2 px-2">
                         <Link href={logoHref}>
-                            <img src={equipitLogo} alt="ToolSync" className="h-8 w-auto" />
+                            <img src={equipitLogo} alt="EquipIT" className="h-8 w-auto" />
                         </Link>
-                        <span className="text-lg font-semibold tracking-wide text-[#060644] dark:text-white">ToolSync</span>
+                        <span className="text-lg font-semibold tracking-wide text-[#060644] dark:text-white">EquipIT</span>
                     </div>
 
                     <nav className="mt-8 space-y-1">
@@ -504,9 +504,9 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                             <div className="flex items-center justify-between gap-2 px-2">
                                 <div className="flex items-center gap-2">
                                     <Link href={logoHref}>
-                                        <img src={equipitLogo} alt="ToolSync" className="h-8 w-auto" />
+                                        <img src={equipitLogo} alt="EquipIT" className="h-8 w-auto" />
                                     </Link>
-                                    <span className="text-lg font-semibold tracking-wide text-[#060644] dark:text-white">ToolSync</span>
+                                    <span className="text-lg font-semibold tracking-wide text-[#060644] dark:text-white">EquipIT</span>
                                 </div>
                                 <button
                                     type="button"
@@ -656,7 +656,7 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
             {isLogoutModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
                     <div role="dialog" aria-modal="true" className="w-full max-w-sm rounded-2xl bg-white p-6 text-sm text-gray-800 shadow-xl">
-                        <h2 className="text-base font-semibold text-gray-900">Log out of ToolSync?</h2>
+                        <h2 className="text-base font-semibold text-gray-900">Log out of EquipIT?</h2>
                         <p className="mt-2 text-xs text-gray-600">
                             You will be signed out of your current session. Any in‑progress changes that are not saved might be lost.
                         </p>
