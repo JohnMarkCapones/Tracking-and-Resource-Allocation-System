@@ -4,17 +4,18 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Notifications\PendingRegistrationVerification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\Rules;
 use Inertia\Inertia;
 use Inertia\Response;
-use App\Notifications\PendingRegistrationVerification;
 
 class RegisteredUserController extends Controller
 {
@@ -70,8 +71,24 @@ class RegisteredUserController extends Controller
             ['payload' => $payload],
         );
 
-        Notification::route('mail', $email)
-            ->notify(new PendingRegistrationVerification($verificationUrl, $email));
+        try {
+            Log::info('Sending registration verification email', ['email' => $email]);
+            Notification::route('mail', $email)
+                ->notify(new PendingRegistrationVerification($verificationUrl, $email));
+            Log::info('Registration verification email sent successfully', [
+                'email' => $email,
+                'mail_driver' => config('mail.default'),
+                'note' => config('mail.default') === 'log' ? 'Email content is in storage/logs/laravel.log' : null,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Failed to send registration verification email', [
+                'email' => $email,
+                'exception' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            throw $e;
+        }
+
         $request->session()->put('pending_registration', [
             'payload' => $payload,
             'email' => $email,
@@ -99,13 +116,29 @@ class RegisteredUserController extends Controller
             ['payload' => $pending['payload']],
         );
 
-        Notification::route('mail', (string) $pending['email'])
-            ->notify(new PendingRegistrationVerification($verificationUrl, (string) $pending['email']));
+        $resendEmail = (string) $pending['email'];
+        try {
+            Log::info('Resending registration verification email', ['email' => $resendEmail]);
+            Notification::route('mail', $resendEmail)
+                ->notify(new PendingRegistrationVerification($verificationUrl, $resendEmail));
+            Log::info('Registration verification email resent successfully', [
+                'email' => $resendEmail,
+                'mail_driver' => config('mail.default'),
+                'note' => config('mail.default') === 'log' ? 'Email content is in storage/logs/laravel.log' : null,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Failed to resend registration verification email', [
+                'email' => $resendEmail,
+                'exception' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            throw $e;
+        }
 
         return redirect()
             ->route('home')
             ->with('status', 'verification-link-sent')
-            ->with('verification_email', (string) $pending['email']);
+            ->with('verification_email', $resendEmail);
     }
 
     public function verifyRegistration(Request $request): RedirectResponse

@@ -5,9 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreToolRequest;
 use App\Http\Requests\UpdateToolRequest;
+use App\Models\Reservation;
 use App\Models\Tool;
 use App\Models\ToolAllocation;
-use App\Models\Reservation;
 use App\Models\ToolStatusLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -117,6 +117,13 @@ class ToolController extends Controller
             unset($validated['code']);
         }
 
+        if (! Schema::hasColumn('tools', 'specifications')) {
+            unset($validated['specifications']);
+        } elseif (isset($validated['specifications']) && is_string($validated['specifications'])) {
+            $decoded = json_decode($validated['specifications'], true);
+            $validated['specifications'] = is_array($decoded) ? $decoded : [];
+        }
+
         if ($request->hasFile('image')) {
             $validated['image_path'] = $request->file('image')->store('images/tools', 'public');
         }
@@ -206,6 +213,13 @@ class ToolController extends Controller
             unset($validated['code']);
         }
 
+        if (! Schema::hasColumn('tools', 'specifications')) {
+            unset($validated['specifications']);
+        } elseif (array_key_exists('specifications', $validated) && is_string($validated['specifications'])) {
+            $decoded = json_decode($validated['specifications'], true);
+            $validated['specifications'] = is_array($decoded) ? $decoded : [];
+        }
+
         if ($request->hasFile('image')) {
             $validated['image_path'] = $request->file('image')->store('images/tools', 'public');
         }
@@ -253,6 +267,7 @@ class ToolController extends Controller
      * Get availability information for a tool between a date range.
      *
      * @urlParam tool int required The ID of the tool. Example: 1
+     *
      * @queryParam from date Start of the range (inclusive). Example: 2026-01-01
      * @queryParam to date End of the range (inclusive). Example: 2026-01-31
      */

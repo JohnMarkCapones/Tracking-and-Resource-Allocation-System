@@ -29,6 +29,23 @@ test('new users can register', function () {
     Notification::assertSentOnDemand(PendingRegistrationVerification::class);
 });
 
+test('registration verification-status returns verified false when guest', function () {
+    $response = $this->getJson('/api/registration/verification-status');
+
+    $response->assertOk();
+    $response->assertJson(['verified' => false]);
+});
+
+test('registration verification-status returns verified true when authenticated and verified', function () {
+    $user = User::factory()->create(['email_verified_at' => now()]);
+
+    $response = $this->actingAs($user)->getJson('/api/registration/verification-status');
+
+    $response->assertOk();
+    $response->assertJson(['verified' => true]);
+    $response->assertJsonStructure(['verified', 'email_verified_at']);
+});
+
 test('verification link creates verified user and logs them in', function () {
     Notification::fake();
 

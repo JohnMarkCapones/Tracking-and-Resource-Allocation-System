@@ -123,15 +123,19 @@ class ToolController extends Controller
             default => 'Available',
         };
 
+        $toolIdDisplay = $dbTool->code && trim((string) $dbTool->code) !== ''
+            ? trim((string) $dbTool->code)
+            : 'TL-'.$dbTool->id;
+
         $tool = [
             'id' => $dbTool->id,
             'name' => $dbTool->name,
-            'toolId' => 'TL-'.$dbTool->id,
+            'toolId' => $toolIdDisplay,
             'category' => $dbTool->category?->name ?? 'Other',
             'status' => $status,
             'condition' => $dbTool->condition ?? 'Good',
             'description' => $dbTool->description ?: 'No description available.',
-            'specifications' => [],
+            'specifications' => $dbTool->specifications ?? [],
             'lastMaintenance' => $dbTool->updated_at?->format('M d, Y') ?? 'N/A',
             'totalBorrowings' => (int) ($dbTool->allocations_count ?? 0),
             'imageUrl' => $dbTool->image_path ? asset('storage/'.$dbTool->image_path) : null,

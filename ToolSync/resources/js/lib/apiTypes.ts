@@ -24,6 +24,8 @@ export type ToolDto = {
     allocations_count?: number;
     /** Number of currently borrowed allocations for this tool. */
     borrowed_count?: number;
+    /** Key-value specs (e.g. Processor, Memory) shown on tool detail. */
+    specifications?: Record<string, string> | null;
 };
 
 export type ToolCardData = {

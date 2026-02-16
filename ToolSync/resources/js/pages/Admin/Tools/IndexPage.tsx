@@ -21,7 +21,7 @@ function mapDtoToTool(dto: ToolDto): Tool {
         lastMaintenance: 'N/A',
         totalBorrowings: dto.allocations_count ?? 0,
         description: dto.description ?? undefined,
-        specifications: {},
+        specifications: (dto.specifications && typeof dto.specifications === 'object') ? dto.specifications : {},
     };
 }
 
@@ -103,12 +103,14 @@ export default function IndexPage() {
             return;
         }
         const payload = new FormData();
+        payload.append('code', data.toolId.trim());
         payload.append('name', data.name);
         payload.append('description', data.description || '');
         payload.append('category_id', String(categoryId));
         payload.append('status', statusToApi(data.status));
         payload.append('condition', data.condition);
         payload.append('quantity', String(data.quantity));
+        payload.append('specifications', JSON.stringify(data.specifications ?? {}));
         if (data.displayImage) {
             payload.append('image', data.displayImage);
         }

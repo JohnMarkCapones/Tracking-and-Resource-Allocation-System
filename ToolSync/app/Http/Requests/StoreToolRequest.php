@@ -27,6 +27,7 @@ class StoreToolRequest extends FormRequest
             'condition' => ['sometimes', 'string', 'in:Excellent,Good,Fair,Poor,Damaged,Functional'],
             'quantity' => ['sometimes', 'integer', 'min:1'],
             'condition' => ['nullable', 'string', 'max:50'],
+            'specifications' => ['nullable', 'string'],
         ];
     }
 }

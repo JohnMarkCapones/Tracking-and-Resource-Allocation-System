@@ -115,11 +115,13 @@ class AnalyticsController extends Controller
         if ($userId !== null) {
             $utilBase->where('user_id', $userId);
         }
+        $driver = DB::connection()->getDriverName();
+        $daysUsedSql = $driver === 'sqlite'
+            ? 'SUM(MAX(0, CAST((julianday(MIN(COALESCE(actual_return_date, ?), ?)) - julianday(MAX(borrow_date, ?)) + 1) AS INTEGER))) as days_used'
+            : 'SUM(GREATEST(0, DATEDIFF(LEAST(COALESCE(actual_return_date, ?), ?), GREATEST(borrow_date, ?)) + 1)) as days_used';
         $toolUtilization = (clone $utilBase)
             ->join('tools', 'tool_allocations.tool_id', '=', 'tools.id')
-            ->selectRaw('tools.id as tool_id, tools.name as tool_name,
-                SUM(GREATEST(0, DATEDIFF(LEAST(COALESCE(actual_return_date, ?), ?), GREATEST(borrow_date, ?)) + 1)) as days_used',
-                [$to60, $to60, $from60])
+            ->selectRaw("tools.id as tool_id, tools.name as tool_name, {$daysUsedSql}", [$to60, $to60, $from60])
             ->groupBy('tools.id', 'tools.name')
             ->orderByDesc('days_used')
             ->limit(10)
@@ -157,10 +159,13 @@ class AnalyticsController extends Controller
                 'borrow_count' => (int) $r->borrow_count,
             ]);
 
+        $avgReturnDaysRaw = $driver === 'sqlite'
+            ? 'AVG(julianday(actual_return_date) - julianday(borrow_date)) as avg_days'
+            : 'AVG(DATEDIFF(actual_return_date, borrow_date)) as avg_days';
         $avgReturnDays = (clone $base)
             ->where('status', 'RETURNED')
             ->whereNotNull('actual_return_date')
-            ->selectRaw('AVG(DATEDIFF(actual_return_date, borrow_date)) as avg_days')
+            ->selectRaw($avgReturnDaysRaw)
             ->value('avg_days');
         $avgReturnDays = $avgReturnDays !== null ? round((float) $avgReturnDays, 1) : null;
 

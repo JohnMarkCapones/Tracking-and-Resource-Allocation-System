@@ -20,8 +20,18 @@ class Tool extends Model
         'status',
         'condition',
         'quantity',
-        'condition',
+        'specifications',
     ];
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'specifications' => 'array',
+        ];
+    }
 
     public function category(): BelongsTo
     {

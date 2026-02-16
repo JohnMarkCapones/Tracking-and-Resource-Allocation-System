@@ -18,11 +18,23 @@ use App\Http\Controllers\Api\ToolController;
 use App\Http\Controllers\Api\ToolDeprecationController;
 use App\Http\Controllers\Api\ToolStatusLogController;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
+
+// Unauthenticated: allows welcome page to poll for verification after registration.
+// Uses web guard so we see the session once the user clicks the verification link.
+Route::get('/registration/verification-status', function (Request $request): array {
+    $user = Auth::guard('web')->user();
+
+    return [
+        'verified' => $user !== null && $user->email_verified_at !== null,
+        'email_verified_at' => $user?->email_verified_at?->toIso8601String(),
+    ];
+});
 
 // Public (catalog): no auth required for browsing tools and categories.
 Route::apiResource('tool-categories', ToolCategoryController::class)->only(['index', 'show']);

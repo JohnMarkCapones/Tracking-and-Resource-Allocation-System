@@ -24,8 +24,14 @@ export default function Welcome() {
     useEffect(() => {
         if (status === 'verification-link-sent') {
             setShowVerificationModal(true);
+            const email = verification_email ?? data.email;
+            console.log(
+                '[EquipIT] Verification email sent successfully to:',
+                email,
+                '— Check your inbox (and spam folder).',
+            );
         }
-    }, [status]);
+    }, [status, verification_email, data.email]);
 
     useEffect(() => {
         if (!shouldShowVerificationModal) {
@@ -34,7 +40,7 @@ export default function Welcome() {
 
         const checkVerificationStatus = async () => {
             try {
-                const response = await fetch('/api/user', {
+                const response = await fetch('/api/registration/verification-status', {
                     method: 'GET',
                     headers: { Accept: 'application/json' },
                     credentials: 'same-origin',
@@ -44,8 +50,8 @@ export default function Welcome() {
                     return;
                 }
 
-                const user = (await response.json()) as { email_verified_at?: string | null };
-                if (user?.email_verified_at) {
+                const body = (await response.json()) as { verified?: boolean };
+                if (body.verified) {
                     window.location.href = '/dashboard';
                 }
             } catch {
@@ -98,13 +104,30 @@ export default function Welcome() {
             password: d.password,
             password_confirmation: d.password_confirmation,
         }));
-        post('/register', { replace: true });
+        post('/register', {
+            replace: true,
+            onSuccess: () => {
+                console.log('[EquipIT] Registration accepted. Verification email has been sent.');
+            },
+            onError: (errors) => {
+                console.warn('[EquipIT] Registration had errors:', errors);
+            },
+        });
     };
 
     const resendVerificationEmail = () => {
         postVerificationNotification('/register/resend-verification', {
             preserveScroll: true,
-            onSuccess: () => setShowVerificationModal(true),
+            onSuccess: () => {
+                setShowVerificationModal(true);
+                console.log(
+                    '[EquipIT] Verification email resent successfully to:',
+                    verification_email ?? data.email,
+                );
+            },
+            onError: (errors) => {
+                console.warn('[EquipIT] Resend verification failed:', errors);
+            },
         });
     };
 

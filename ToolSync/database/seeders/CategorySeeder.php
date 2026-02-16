@@ -10,13 +10,25 @@ class CategorySeeder extends Seeder
     public function run(): void
     {
         $categories = [
-            ['name' => 'IT Equipment'],
-            ['name' => 'Office Equipment'],
-            ['name' => 'Multimedia'],
+            'IT Equipment',
+            'Office Equipment',
+            'Multimedia',
+            'Safety & PPE',
+            'Furniture',
+            'Power & Electrical',
+            'Hand Tools',
+            'Cleaning & Janitorial',
+            'Transport & Vehicles',
+            'Lab & Scientific',
+            'Sports & Recreation',
+            'Kitchen & Break Room',
+            'Storage & Packaging',
+            'Gardening & Outdoor',
+            'Medical & First Aid',
         ];
 
-        foreach ($categories as $category) {
-            ToolCategory::firstOrCreate(['name' => $category['name']]);
+        foreach ($categories as $name) {
+            ToolCategory::firstOrCreate(['name' => $name]);
         }
     }
 }
