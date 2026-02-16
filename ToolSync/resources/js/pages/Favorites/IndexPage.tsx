@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { Breadcrumb } from '@/Components/Breadcrumb';
 import { EmptyState } from '@/Components/EmptyState';
 import { FavoriteButton } from '@/Components/FavoriteButton';
+import { ToolCard, type ToolCardData } from '@/Components/Tools/ToolCard';
 import AppLayout from '@/Layouts/AppLayout';
 import type { FavoriteApiItem } from '@/lib/apiTypes';
 import { apiRequest } from '@/lib/http';
@@ -12,6 +13,24 @@ type FavoritesApiResponse = { data: FavoriteApiItem[] };
 
 export default function IndexPage() {
     const { favorites, recentlyViewed, clearRecentlyViewed, setFavorites } = useFavoritesStore();
+
+    const handleRequestBorrow = (tool: ToolCardData) => {
+        router.visit(`/tools/${tool.id}?request=1`);
+    };
+
+    // Convert favorite tools to ToolCard format
+    const favoriteTools: ToolCardData[] = favorites.map((tool) => ({
+        id: tool.id,
+        name: tool.name,
+        toolId: tool.toolId,
+        category: tool.category,
+        status: tool.status as 'Available' | 'Borrowed' | 'Maintenance',
+        condition: tool.condition || 'Good',
+        quantity: tool.quantity || 1,
+        availableQuantity: tool.availableQuantity || 0,
+        borrowedQuantity: tool.borrowedQuantity || 0,
+        imageUrl: tool.imageUrl || undefined,
+    }));
 
     useEffect(() => {
         let cancelled = false;
@@ -86,38 +105,12 @@ export default function IndexPage() {
                         />
                     ) : (
                         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                            {favorites.map((tool) => (
-                                <div
+                            {favoriteTools.map((tool) => (
+                                <ToolCard
                                     key={tool.id}
-                                    className="group relative rounded-2xl bg-white p-4 shadow-sm transition-shadow hover:shadow-md dark:bg-gray-800 pointer-events-none"
-                                >
-                                    <div className="pointer-events-auto absolute top-3 right-3 z-10">
-                                        <FavoriteButton tool={tool} size="sm" />
-                                    </div>
-                                    <div>
-                                        <div className="mb-3 aspect-[4/3] overflow-hidden rounded-xl bg-gray-100 dark:bg-gray-700">
-                                            {tool.imageUrl ? (
-                                                <img src={tool.imageUrl} alt={tool.name} className="h-full w-full object-cover" />
-                                            ) : (
-                                                <div className="flex h-full w-full items-center justify-center text-gray-400">
-                                                    <svg className="h-12 w-12" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                        <path d="M14 8L8 14L12 18L18 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                                                        <path d="M22 10L30 18L26 22L18 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                                                        <path d="M10 28L18 20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                                                        <path d="M22 24L28 30" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                                                    </svg>
-                                                </div>
-                                            )}
-                                        </div>
-                                        <p className="text-[10px] font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400">
-                                            {tool.category}
-                                        </p>
-                                        <h3 className="mt-0.5 text-sm font-semibold text-gray-900 dark:text-white">
-                                            {tool.name}
-                                        </h3>
-                                        <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">ID: {tool.toolId}</p>
-                                    </div>
-                                </div>
+                                    tool={tool}
+                                    onRequestBorrow={handleRequestBorrow}
+                                />
                             ))}
                         </div>
                     )}
