@@ -90,13 +90,9 @@ class DashboardController extends Controller
         if ($userId) {
             $activeBorrowQuery->where('user_id', $userId);
         }
-        // Admin/system scope uses inventory math so "borrowed" tracks stock movement.
-        // User-scoped dashboard should show that user's active borrowed records.
-        if ($userId === null) {
-            $borrowedActiveCount = max(0, $totalToolsQty - $toolsAvailableQty - $toolsMaintenanceQty);
-        } else {
-            $borrowedActiveCount = (int) (clone $activeBorrowQuery)->count();
-        }
+        // Both admin and user: show count of active allocation records (BORROWED + PENDING_RETURN)
+        // so the dashboard "borrowed" count is consistent and correct for all roles.
+        $borrowedActiveCount = (int) (clone $activeBorrowQuery)->count();
         $overdueCount = (int) (clone $activeBorrowQuery)
             ->where('expected_return_date', '<', now())
             ->count();
