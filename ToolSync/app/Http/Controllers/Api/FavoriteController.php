@@ -21,6 +21,8 @@ class FavoriteController extends Controller
             ->map(function (Favorite $favorite): array {
                 /** @var Tool $tool */
                 $tool = $favorite->tool;
+                $borrowedCount = $tool->allocations()->where('status', 'BORROWED')->count();
+                $availableQuantity = max(0, $tool->quantity - $borrowedCount);
 
                 return [
                     'id' => $tool->id,
@@ -28,6 +30,11 @@ class FavoriteController extends Controller
                     'toolId' => 'TL-'.$tool->id,
                     'category' => $tool->category?->name ?? 'Other',
                     'imageUrl' => $tool->image_path ? asset('storage/'.$tool->image_path) : null,
+                    'status' => $tool->status,
+                    'condition' => $tool->condition ?? 'Good',
+                    'quantity' => $tool->quantity,
+                    'availableQuantity' => $availableQuantity,
+                    'borrowedQuantity' => $borrowedCount,
                 ];
             });
 

@@ -7,6 +7,11 @@ type FavoriteTool = {
     toolId: string;
     category: string;
     imageUrl?: string | null;
+    status?: 'Available' | 'Borrowed' | 'Maintenance';
+    condition?: string;
+    quantity?: number;
+    availableQuantity?: number;
+    borrowedQuantity?: number;
     addedAt: string;
 };
 
