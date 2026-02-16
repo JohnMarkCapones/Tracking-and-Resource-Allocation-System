@@ -109,7 +109,8 @@ export default function IndexPage() {
         payload.append('category_id', String(categoryId));
         payload.append('status', statusToApi(data.status));
         payload.append('condition', data.condition);
-        payload.append('quantity', String(data.quantity));
+        const quantity = Number(data.quantity);
+        payload.append('quantity', String(Number.isFinite(quantity) && quantity >= 1 ? quantity : 1));
         payload.append('specifications', JSON.stringify(data.specifications ?? {}));
         if (data.displayImage) {
             payload.append('image', data.displayImage);

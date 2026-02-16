@@ -63,12 +63,13 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
         if (!show) return;
 
         if (tool) {
+            const quantity = Number(tool.quantity);
             setFormData({
                 name: tool.name,
                 toolId: tool.toolId,
                 category: tool.category,
                 status: tool.status,
-                quantity: tool.quantity,
+                quantity: Number.isFinite(quantity) && quantity >= 1 ? quantity : 1,
                 condition: tool.condition,
                 description: tool.description ?? '',
                 specifications: tool.specifications ?? {},
@@ -110,7 +111,8 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
         if (!formData.toolId.trim()) {
             newErrors.toolId = 'Tool ID is required';
         }
-        if (!Number.isInteger(formData.quantity) || formData.quantity < 1) {
+        const quantityNum = Number(formData.quantity);
+        if (!Number.isFinite(quantityNum) || quantityNum < 1) {
             newErrors.quantity = 'Quantity must be at least 1';
         }
 
