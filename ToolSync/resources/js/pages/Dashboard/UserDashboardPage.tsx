@@ -1,5 +1,6 @@
 import { Head, Link, usePage } from '@inertiajs/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ReturnModal } from '@/Components/Borrowings/ReturnModal';
 import type { BorrowingHistoryItem } from '@/Components/Dashboard/BorrowingHistoryTable';
 import { BorrowingHistoryTable } from '@/Components/Dashboard/BorrowingHistoryTable';
 import type { AllocationSummaryData } from '@/Components/Dashboard/SummaryDonutChart';
@@ -8,6 +9,7 @@ import { WelcomeBanner } from '@/Components/Dashboard/WelcomeBanner';
 import AppLayout from '@/Layouts/AppLayout';
 import type { DashboardApiResponse } from '@/lib/apiTypes';
 import { apiRequest } from '@/lib/http';
+import { toast } from '@/Components/Toast';
 
 type SharedProps = { auth?: { user?: { name?: string } } };
 
@@ -32,9 +34,11 @@ function mapRecentToHistoryItem(
     const status =
         a.status === 'RETURNED'
             ? ('Returned' as const)
-            : a.is_overdue
-              ? ('Overdue' as const)
-              : ('Borrowed' as const);
+            : a.status === 'PENDING_RETURN'
+              ? ('Pending' as const)
+              : a.is_overdue
+                ? ('Overdue' as const)
+                : ('Borrowed' as const);
     return {
         equipment: a.tool_name ?? `Tool #${a.tool_id}`,
         toolId: 'TL-' + a.tool_id,
@@ -44,6 +48,7 @@ function mapRecentToHistoryItem(
             year: 'numeric',
         }),
         status,
+        allocationId: a.id,
     };
 }
 
@@ -75,6 +80,30 @@ export default function UserDashboardPage() {
     });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [returnModalItem, setReturnModalItem] = useState<BorrowingHistoryItem | null>(null);
+
+    const handleReturnSubmit = useCallback(
+        async (data: { condition: string; notes: string }) => {
+            if (!returnModalItem?.allocationId) return;
+            const noteParts = [`Condition: ${data.condition}`];
+            if (data.notes.trim()) noteParts.push(`Notes: ${data.notes.trim()}`);
+            try {
+                await apiRequest(`/api/tool-allocations/${returnModalItem.allocationId}`, {
+                    method: 'PUT',
+                    body: { status: 'PENDING_RETURN', note: noteParts.join('\n') },
+                });
+                toast(`${returnModalItem.equipment} return is pending admin verification.`, {
+                    icon: 'ℹ️',
+                    duration: 6000,
+                });
+                setReturnModalItem(null);
+                await loadDashboard(true);
+            } catch (err) {
+                toast.error(err instanceof Error ? err.message : 'Failed to submit return request.');
+            }
+        },
+        [returnModalItem, loadDashboard],
+    );
 
     const loadDashboard = useCallback(async (silent = false) => {
         if (!silent) {
@@ -177,7 +206,11 @@ export default function UserDashboardPage() {
 
                     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
                         <div className="space-y-6">
-                            <BorrowingHistoryTable items={borrowingHistory} />
+                            <BorrowingHistoryTable
+                                items={borrowingHistory}
+                                getViewHref={(item) => (item.allocationId ? `/borrowings?allocation=${item.allocationId}` : '/borrowings')}
+                                onReturn={(item) => item.allocationId && setReturnModalItem(item)}
+                            />
 
                             <section className="rounded-3xl bg-white p-6 shadow-sm">
                                 <header className="mb-4 flex items-center justify-between">
@@ -296,6 +329,15 @@ export default function UserDashboardPage() {
                     </div>
                 </section>
             </div>
+            )}
+            {returnModalItem && (
+                <ReturnModal
+                    show={true}
+                    toolName={returnModalItem.equipment}
+                    toolId={returnModalItem.toolId}
+                    onClose={() => setReturnModalItem(null)}
+                    onSubmit={handleReturnSubmit}
+                />
             )}
         </AppLayout>
     );

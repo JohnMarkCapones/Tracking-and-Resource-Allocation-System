@@ -84,19 +84,14 @@ class DashboardController extends Controller
         $toolsMaintenanceQty = (int) Tool::query()->where('status', 'MAINTENANCE')->sum('quantity');
         $totalToolsQty = (int) Tool::query()->sum('quantity');
 
-        // "Borrowed items" on dashboard should include items still not returned,
-        // including those awaiting admin approval (PENDING_RETURN).
+        // "Borrowed items" on dashboard = count of active allocation records (BORROWED or PENDING_RETURN).
+        // Use allocation count for both admin and user so top cards match Utilization insights and reflect real active borrowings.
+        // (Inventory math total - available - maintenance only equals borrowed when every tool has quantity 1 or status flips to BORROWED.)
         $activeBorrowQuery = ToolAllocation::query()->whereIn('status', ['BORROWED', 'PENDING_RETURN']);
         if ($userId) {
             $activeBorrowQuery->where('user_id', $userId);
         }
-        // Admin/system scope uses inventory math so "borrowed" tracks stock movement.
-        // User-scoped dashboard should show that user's active borrowed records.
-        if ($userId === null) {
-            $borrowedActiveCount = max(0, $totalToolsQty - $toolsAvailableQty - $toolsMaintenanceQty);
-        } else {
-            $borrowedActiveCount = (int) (clone $activeBorrowQuery)->count();
-        }
+        $borrowedActiveCount = (int) (clone $activeBorrowQuery)->count();
         $overdueCount = (int) (clone $activeBorrowQuery)
             ->where('expected_return_date', '<', now())
             ->count();

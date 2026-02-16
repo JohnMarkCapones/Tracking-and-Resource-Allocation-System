@@ -14,7 +14,7 @@ class AdminDashboardController extends Controller
         // focus on UI and layout first, and swap in real queries later.
         $totalTools = 80;
         $availableTools = 45;
-        $borrowedTools = 20;
+        $returnedCount = 0;
         $toolsUnderMaintenance = 5;
         $totalUsers = 25;
         $activeBorrowings = 12;
@@ -23,7 +23,7 @@ class AdminDashboardController extends Controller
             'metrics' => [
                 'totalTools' => $totalTools,
                 'availableTools' => $availableTools,
-                'borrowedTools' => $borrowedTools,
+                'returnedCount' => $returnedCount,
                 'toolsUnderMaintenance' => $toolsUnderMaintenance,
                 'totalUsers' => $totalUsers,
                 'activeBorrowings' => $activeBorrowings,

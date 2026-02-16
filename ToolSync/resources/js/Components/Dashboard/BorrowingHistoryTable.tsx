@@ -1,27 +1,33 @@
+import { Link } from '@inertiajs/react';
 import { useState, type ReactElement } from 'react';
 
-export type BorrowingHistoryStatus = 'Returned' | 'Borrowed' | 'Overdue';
+export type BorrowingHistoryStatus = 'Returned' | 'Borrowed' | 'Overdue' | 'Pending';
 
 export type BorrowingHistoryItem = {
     equipment: string;
     toolId: string;
     expectedReturnDate: string;
     status: BorrowingHistoryStatus;
+    /** Allocation id for linking to allocation history / borrow details */
+    allocationId?: number;
 };
 
 type BorrowingHistoryTableProps = {
     items: BorrowingHistoryItem[];
+    /** If provided, View button becomes a link to this URL (per item). */
+    getViewHref?: (item: BorrowingHistoryItem) => string;
+    /** If provided, Return button is shown for non-returned items and calls this when clicked. */
+    onReturn?: (item: BorrowingHistoryItem) => void;
+    /** Optional empty state title when there are no items (e.g. admin: "No borrowing history yet"). */
+    emptyMessage?: string;
+    /** Optional empty state subtext. */
+    emptySubtext?: string;
 };
 
 function statusClasses(status: BorrowingHistoryStatus): string {
-    if (status === 'Returned') {
-        return 'bg-emerald-50 text-emerald-700';
-    }
-
-    if (status === 'Borrowed') {
-        return 'bg-amber-50 text-amber-700';
-    }
-
+    if (status === 'Returned') return 'bg-emerald-50 text-emerald-700';
+    if (status === 'Borrowed') return 'bg-amber-50 text-amber-700';
+    if (status === 'Pending') return 'bg-amber-50 text-amber-700';
     return 'bg-rose-50 text-rose-700';
 }
 
@@ -34,7 +40,7 @@ function statusIcon(status: BorrowingHistoryStatus): ReactElement {
         );
     }
 
-    if (status === 'Borrowed') {
+    if (status === 'Borrowed' || status === 'Pending') {
         return (
             <svg className="mr-1.5 h-3 w-3" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M8 3.5V8L11 9.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
@@ -52,7 +58,16 @@ function statusIcon(status: BorrowingHistoryStatus): ReactElement {
     );
 }
 
-export function BorrowingHistoryTable({ items }: BorrowingHistoryTableProps) {
+const DEFAULT_EMPTY_MESSAGE = "You haven't borrowed any tools yet";
+const DEFAULT_EMPTY_SUBTEXT = 'Once you start borrowing, your recent history will appear here.';
+
+export function BorrowingHistoryTable({
+    items,
+    getViewHref,
+    onReturn,
+    emptyMessage = DEFAULT_EMPTY_MESSAGE,
+    emptySubtext = DEFAULT_EMPTY_SUBTEXT,
+}: BorrowingHistoryTableProps) {
     // For now this component manages client-side filtering and sorting only.
     // Once real data is wired in, this state will map to query params.
     const [query, setQuery] = useState('');
@@ -66,8 +81,8 @@ export function BorrowingHistoryTable({ items }: BorrowingHistoryTableProps) {
                     <h3 className="text-sm font-semibold text-gray-900">Overview of Borrowing History</h3>
                 </header>
                 <div className="flex h-32 flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-gray-50 text-center">
-                    <p className="text-xs font-medium text-gray-600">You haven&apos;t borrowed any tools yet</p>
-                    <p className="mt-1 text-[11px] text-gray-500">Once you start borrowing, your recent history will appear here.</p>
+                    <p className="text-xs font-medium text-gray-600">{emptyMessage}</p>
+                    <p className="mt-1 text-[11px] text-gray-500">{emptySubtext}</p>
                 </div>
             </section>
         );
@@ -169,15 +184,25 @@ export function BorrowingHistoryTable({ items }: BorrowingHistoryTableProps) {
                                 </td>
                                 <td className="py-3 text-right">
                                     <div className="flex justify-end gap-2">
-                                        <button
-                                            type="button"
-                                            className="rounded-full border border-gray-200 px-3 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-50"
-                                        >
-                                            View
-                                        </button>
-                                        {item.status !== 'Returned' && (
+                                        {getViewHref ? (
+                                            <Link
+                                                href={getViewHref(item)}
+                                                className="rounded-full border border-gray-200 px-3 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-50"
+                                            >
+                                                View
+                                            </Link>
+                                        ) : (
                                             <button
                                                 type="button"
+                                                className="rounded-full border border-gray-200 px-3 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-50"
+                                            >
+                                                View
+                                            </button>
+                                        )}
+                                        {item.status !== 'Returned' && item.status !== 'Pending' && onReturn && (
+                                            <button
+                                                type="button"
+                                                onClick={() => onReturn(item)}
                                                 className="rounded-full bg-blue-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-blue-700"
                                             >
                                                 Return

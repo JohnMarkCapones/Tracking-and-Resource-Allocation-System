@@ -1,7 +1,7 @@
 type AdminMetrics = {
     totalTools: number;
     availableTools: number;
-    borrowedTools: number;
+    returnedCount: number;
     toolsUnderMaintenance: number;
     totalUsers: number;
     activeBorrowings: number;
@@ -15,7 +15,7 @@ type AdminStatBarProps = {
 const statCardBase = 'flex items-center justify-between rounded-2xl px-4 py-3 text-white shadow-sm backdrop-blur-sm';
 
 export function AdminStatBar({ metrics, onExportCsv }: AdminStatBarProps) {
-    const borrowedDisplay = metrics.borrowedTools === 0 ? 'None' : metrics.borrowedTools;
+    const returnedDisplay = metrics.returnedCount === 0 ? 'None' : metrics.returnedCount;
     const activeBorrowingsDisplay = metrics.activeBorrowings === 0 ? 'None' : metrics.activeBorrowings;
 
     return (
@@ -67,9 +67,9 @@ export function AdminStatBar({ metrics, onExportCsv }: AdminStatBarProps) {
 
                 <div className={`${statCardBase} bg-white/10`}>
                     <div>
-                        <p className="text-[11px] text-blue-100">Borrowed</p>
-                        <p className="mt-1 text-xl font-semibold">{borrowedDisplay}</p>
-                        <p className="mt-1 text-[11px] text-amber-200">▬ Stable vs last week</p>
+                        <p className="text-[11px] text-blue-100">Returned</p>
+                        <p className="mt-1 text-xl font-semibold">{returnedDisplay}</p>
+                        <p className="mt-1 text-[11px] text-amber-200">in last 30 days</p>
                     </div>
                     <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-500/80">
                         <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">

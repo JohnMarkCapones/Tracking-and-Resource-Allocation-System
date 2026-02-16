@@ -1,5 +1,7 @@
 import { Head, router, usePage } from '@inertiajs/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { BorrowingHistoryItem } from '@/Components/Dashboard/BorrowingHistoryTable';
+import { BorrowingHistoryTable } from '@/Components/Dashboard/BorrowingHistoryTable';
 import { AdminStatBar } from '@/Components/Dashboard/AdminStatBar';
 import type { BorrowingStatusSegment } from '@/Components/Dashboard/BorrowingStatusDonut';
 import { BorrowingStatusDonut } from '@/Components/Dashboard/BorrowingStatusDonut';
@@ -19,7 +21,7 @@ import { CreateEditModal, type ToolFormData } from '@/pages/Admin/Tools/CreateEd
 type AdminMetrics = {
     totalTools: number;
     availableTools: number;
-    borrowedTools: number;
+    returnedCount: number;
     toolsUnderMaintenance: number;
     totalUsers: number;
     activeBorrowings: number;
@@ -59,6 +61,28 @@ function formatTimeAgo(date: Date): string {
     if (diffDays === 1) return 'Yesterday';
     if (diffDays < 7) return `${diffDays} days ago`;
     return date.toLocaleDateString();
+}
+
+function mapDashboardRecentToBorrowingItem(a: DashboardRecentActivityItem): BorrowingHistoryItem {
+    const status =
+        a.status === 'RETURNED'
+            ? ('Returned' as const)
+            : a.status === 'PENDING_RETURN'
+              ? ('Pending' as const)
+              : a.is_overdue
+                ? ('Overdue' as const)
+                : ('Borrowed' as const);
+    return {
+        equipment: a.tool_name ?? `Tool #${a.tool_id}`,
+        toolId: 'TL-' + a.tool_id,
+        expectedReturnDate: new Date(a.expected_return_date ?? 0).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+        }),
+        status,
+        allocationId: a.id,
+    };
 }
 
 function mapRecentActivityToItem(a: DashboardRecentActivityItem): RecentActivityItem {
@@ -111,6 +135,7 @@ export default function AdminDashboardPage() {
     const [overdueCount, setOverdueCount] = useState(0);
     const [maintenanceDueCount, setMaintenanceDueCount] = useState(0);
     const [recentActivity, setRecentActivity] = useState<RecentActivityItem[]>([]);
+    const [borrowingHistory, setBorrowingHistory] = useState<BorrowingHistoryItem[]>([]);
     const [addToolCategories, setAddToolCategories] = useState<Array<{ id: number; name: string }>>([]);
     const [pendingActionId, setPendingActionId] = useState<number | null>(null);
 
@@ -129,7 +154,7 @@ export default function AdminDashboardPage() {
             setMetrics({
                 totalTools: total,
                 availableTools: c.tools_available_quantity,
-                borrowedTools: c.borrowed_active_count,
+                returnedCount: d.summary.returned_count ?? 0,
                 toolsUnderMaintenance: c.tools_maintenance_quantity,
                 totalUsers: d.total_users ?? 0,
                 activeBorrowings: c.borrowed_active_count,
@@ -142,6 +167,7 @@ export default function AdminDashboardPage() {
             setOverdueCount(c.overdue_count);
             setMaintenanceDueCount(d.maintenance_due_count ?? 0);
             setRecentActivity((d.recent_activity ?? []).map(mapRecentActivityToItem));
+            setBorrowingHistory((d.recent_activity ?? []).map(mapDashboardRecentToBorrowingItem));
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to load dashboard');
         } finally {
@@ -415,6 +441,19 @@ export default function AdminDashboardPage() {
                         <MostBorrowedBarChart tools={displayTools} />
                         <BorrowingStatusDonut segments={displayBorrowingStatus} />
                     </div>
+                </section>
+
+                <section className="space-y-4">
+                    <BorrowingHistoryTable
+                        items={borrowingHistory}
+                        getViewHref={(item) =>
+                            item.allocationId
+                                ? `/admin/allocation-history?allocation=${item.allocationId}`
+                                : '/admin/allocation-history'
+                        }
+                        emptyMessage="No borrowing history yet"
+                        emptySubtext="Allocation activity will appear here."
+                    />
                 </section>
 
                 <section className="space-y-4">
