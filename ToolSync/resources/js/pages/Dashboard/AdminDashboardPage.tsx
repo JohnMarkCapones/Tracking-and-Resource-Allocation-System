@@ -25,6 +25,7 @@ type AdminMetrics = {
     toolsUnderMaintenance: number;
     totalUsers: number;
     activeBorrowings: number;
+    reservedCount: number;
 };
 
 type AdminDashboardPageProps = {
@@ -116,7 +117,10 @@ function getRangeParams(range: '7d' | '30d' | '90d'): { from: string; to: string
 
 export default function AdminDashboardPage() {
     const fallbackProps = usePage<AdminDashboardPageProps>().props;
-    const [metrics, setMetrics] = useState<AdminMetrics>(fallbackProps.metrics);
+    const [metrics, setMetrics] = useState<AdminMetrics>({
+        ...fallbackProps.metrics,
+        reservedCount: fallbackProps.metrics?.reservedCount ?? 0,
+    });
     const [mostBorrowedTools, setMostBorrowedTools] = useState<MostBorrowedTool[]>(
         fallbackProps.mostBorrowedTools?.length ? fallbackProps.mostBorrowedTools : [],
     );
@@ -158,6 +162,7 @@ export default function AdminDashboardPage() {
                 toolsUnderMaintenance: c.tools_maintenance_quantity,
                 totalUsers: d.total_users ?? 0,
                 activeBorrowings: c.borrowed_active_count,
+                reservedCount: c.reserved_active_count ?? 0,
             });
             setBorrowingStatus([
                 { label: 'Returned', value: d.summary.returned_count },

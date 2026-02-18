@@ -5,6 +5,7 @@ type WelcomeBannerProps = {
     totalTools: number;
     toolsUnderMaintenance: number;
     borrowedItemsCount: number;
+    reservedCount: number;
     availableTools: number;
     returnedTodayCount: number;
 };
@@ -14,10 +15,12 @@ export function WelcomeBanner({
     totalTools,
     toolsUnderMaintenance,
     borrowedItemsCount,
+    reservedCount,
     availableTools,
     returnedTodayCount,
 }: WelcomeBannerProps) {
     const borrowedDisplay = borrowedItemsCount === 0 ? 'None' : borrowedItemsCount;
+    const reservedDisplay = reservedCount === 0 ? 'None' : reservedCount;
     const returnedTodayDisplay =
         returnedTodayCount === 0 ? 'None returned today' : `${returnedTodayCount} returned today`;
 
@@ -38,7 +41,7 @@ export function WelcomeBanner({
                     </Link>
                 </div>
 
-                <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-5">
                     <div className="group rounded-2xl bg-white/10 px-4 py-3 shadow-sm transition hover:bg-white/15 hover:shadow">
                         <div className="flex items-center justify-between">
                             <div>
@@ -58,13 +61,61 @@ export function WelcomeBanner({
                                 </svg>
                             </div>
                         </div>
-                        <p className="mt-2 text-[11px] text-blue-100">+8 vs last month</p>
+                        <p className="mt-2 text-[11px] text-blue-100">all categories</p>
+                    </div>
+
+                    <div className="group rounded-2xl bg-emerald-400/25 px-4 py-3 shadow-sm transition hover:bg-emerald-400/35 hover:shadow">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-xs text-emerald-50">Available</p>
+                                <p className="mt-1 text-2xl font-semibold">{availableTools}</p>
+                            </div>
+                            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500">
+                                <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M5 10.5L8.5 14L15 6" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                            </div>
+                        </div>
+                        <p className="mt-2 text-[11px] text-emerald-50">ready to borrow</p>
+                    </div>
+
+                    <div className="group rounded-2xl bg-sky-400/25 px-4 py-3 shadow-sm transition hover:bg-sky-400/35 hover:shadow">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-xs text-sky-50">Borrowed</p>
+                                <p className="mt-1 text-2xl font-semibold">{borrowedDisplay}</p>
+                            </div>
+                            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500">
+                                <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M5 5H15V15H5V5Z" stroke="white" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                                    <path d="M8 8H12" stroke="white" strokeWidth="1.4" strokeLinecap="round" />
+                                </svg>
+                            </div>
+                        </div>
+                        <p className="mt-2 text-[11px] text-sky-50">{returnedTodayDisplay}</p>
+                    </div>
+
+                    <div className="group rounded-2xl bg-violet-400/25 px-4 py-3 shadow-sm transition hover:bg-violet-400/35 hover:shadow">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-xs text-violet-50">Reserved</p>
+                                <p className="mt-1 text-2xl font-semibold">{reservedDisplay}</p>
+                            </div>
+                            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500">
+                                <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <rect x="4" y="5" width="12" height="10" rx="1.5" stroke="white" strokeWidth="1.4" />
+                                    <path d="M4 8.5H16" stroke="white" strokeWidth="1.4" />
+                                    <path d="M8 3V5.5M12 3V5.5" stroke="white" strokeWidth="1.4" strokeLinecap="round" />
+                                </svg>
+                            </div>
+                        </div>
+                        <p className="mt-2 text-[11px] text-violet-50">pending / upcoming</p>
                     </div>
 
                     <div className="group rounded-2xl bg-orange-400/20 px-4 py-3 shadow-sm transition hover:bg-orange-400/30 hover:shadow">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-xs text-orange-50">Under maintenance</p>
+                                <p className="text-xs text-orange-50">Maintenance</p>
                                 <p className="mt-1 text-2xl font-semibold">{toolsUnderMaintenance}</p>
                             </div>
                             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500">
@@ -79,38 +130,7 @@ export function WelcomeBanner({
                                 </svg>
                             </div>
                         </div>
-                        <p className="mt-2 text-[11px] text-orange-50">+1 vs last week</p>
-                    </div>
-
-                    <div className="group rounded-2xl bg-sky-400/25 px-4 py-3 shadow-sm transition hover:bg-sky-400/35 hover:shadow">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-xs text-sky-50">Currently borrowed</p>
-                                <p className="mt-1 text-2xl font-semibold">{borrowedDisplay}</p>
-                            </div>
-                            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500">
-                                <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M5 5H15V15H5V5Z" stroke="white" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-                                    <path d="M8 8H12" stroke="white" strokeWidth="1.4" strokeLinecap="round" />
-                                </svg>
-                            </div>
-                        </div>
-                        <p className="mt-2 text-[11px] text-sky-50">{returnedTodayDisplay}</p>
-                    </div>
-
-                    <div className="group rounded-2xl bg-emerald-400/25 px-4 py-3 shadow-sm transition hover:bg-emerald-400/35 hover:shadow">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-xs text-emerald-50">Available tools</p>
-                                <p className="mt-1 text-2xl font-semibold">{availableTools}</p>
-                            </div>
-                            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500">
-                                <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M5 10.5L8.5 14L15 6" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                                </svg>
-                            </div>
-                        </div>
-                        <p className="mt-2 text-[11px] text-emerald-50">82% utilization</p>
+                        <p className="mt-2 text-[11px] text-orange-50">not borrowable</p>
                     </div>
                 </div>
             </div>

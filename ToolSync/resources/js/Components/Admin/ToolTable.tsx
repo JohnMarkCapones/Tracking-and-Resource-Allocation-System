@@ -10,6 +10,12 @@ export type Tool = {
     category: string;
     status: ToolStatus;
     quantity: number;
+    /** Number of units currently borrowed or pending return. */
+    borrowedCount: number;
+    /** Number of units committed to pending/upcoming reservations. */
+    reservedCount: number;
+    /** Units actually available right now (quantity - borrowed - reserved). */
+    availableCount: number;
     condition: string;
     lastMaintenance: string;
     totalBorrowings: number;
@@ -178,6 +184,7 @@ export function ToolTable({ tools, onEdit, onDelete, selectedIds, onSelectionCha
                                     {sortBy === 'status' && <span>{sortDir === 'asc' ? '↑' : '↓'}</span>}
                                 </button>
                             </th>
+                            <th className="py-3 pr-4 text-center">Qty</th>
                             <th className="py-3 pr-4">Condition</th>
                             <th className="py-3 pr-4">
                                 <button
@@ -220,6 +227,17 @@ export function ToolTable({ tools, onEdit, onDelete, selectedIds, onSelectionCha
                                         >
                                             {tool.status}
                                         </span>
+                                    </td>
+                                    <td className="py-3 pr-4">
+                                        <div className="flex flex-col items-center gap-0.5">
+                                            <span className="font-semibold text-gray-900">{tool.availableCount}/{tool.quantity}</span>
+                                            <span className="text-[10px] text-gray-400 whitespace-nowrap">
+                                                {tool.borrowedCount > 0 && <span className="text-amber-600">{tool.borrowedCount}B</span>}
+                                                {tool.borrowedCount > 0 && tool.reservedCount > 0 && ' · '}
+                                                {tool.reservedCount > 0 && <span className="text-blue-600">{tool.reservedCount}R</span>}
+                                                {tool.borrowedCount === 0 && tool.reservedCount === 0 && '—'}
+                                            </span>
+                                        </div>
                                     </td>
                                     <td className="py-3 pr-4">{tool.condition}</td>
                                     <td className="py-3 pr-4 text-center">{tool.totalBorrowings}</td>

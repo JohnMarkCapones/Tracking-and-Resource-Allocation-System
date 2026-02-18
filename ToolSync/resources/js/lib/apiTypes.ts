@@ -148,6 +148,7 @@ export type DashboardCounts = {
     tools_available_quantity: number;
     tools_maintenance_quantity: number;
     borrowed_active_count: number;
+    reserved_active_count?: number;
     overdue_count: number;
     returned_today_count?: number;
 };

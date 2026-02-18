@@ -8,6 +8,7 @@ use App\Models\Reservation;
 use App\Models\Tool;
 use App\Models\ToolAllocation;
 use App\Models\User;
+use App\Services\ToolAvailabilityService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -80,9 +81,17 @@ class DashboardController extends Controller
         $recentLimit = (int) ($request->input('recent_limit', 5));
         $recentLimit = max(1, min($recentLimit, 50));
 
-        $toolsAvailableQty = (int) Tool::query()->where('status', 'AVAILABLE')->sum('quantity');
         $toolsMaintenanceQty = (int) Tool::query()->where('status', 'MAINTENANCE')->sum('quantity');
         $totalToolsQty = (int) Tool::query()->sum('quantity');
+
+        // Raw sum(quantity WHERE AVAILABLE) is misleading because it ignores
+        // units currently borrowed or reserved. Subtract them for a true count.
+        $rawAvailableQty = (int) Tool::query()->where('status', 'AVAILABLE')->sum('quantity');
+
+        // System-wide reservation count (PENDING + UPCOMING)
+        $reservedActiveCount = Schema::hasTable('reservations')
+            ? (int) Reservation::query()->whereIn('status', ['PENDING', 'UPCOMING'])->count()
+            : 0;
 
         // "Borrowed items" on dashboard = count of active allocation records (BORROWED or PENDING_RETURN).
         // Use allocation count for both admin and user so top cards match Utilization insights and reflect real active borrowings.
@@ -92,6 +101,15 @@ class DashboardController extends Controller
             $activeBorrowQuery->where('user_id', $userId);
         }
         $borrowedActiveCount = (int) (clone $activeBorrowQuery)->count();
+
+        // System-wide borrowed count for availability math (ignoring user scope)
+        $systemBorrowedCount = (int) ToolAllocation::query()
+            ->whereIn('status', ['BORROWED', 'PENDING_RETURN'])
+            ->count();
+
+        // True available = raw DB available quantity minus everything committed
+        $toolsAvailableQty = max(0, $rawAvailableQty - $systemBorrowedCount - $reservedActiveCount);
+
         $overdueCount = (int) (clone $activeBorrowQuery)
             ->where('expected_return_date', '<', now())
             ->count();
@@ -204,6 +222,7 @@ class DashboardController extends Controller
                     'tools_available_quantity' => $toolsAvailableQty,
                     'tools_maintenance_quantity' => $toolsMaintenanceQty,
                     'borrowed_active_count' => $borrowedActiveCount,
+                    'reserved_active_count' => $reservedActiveCount,
                     'overdue_count' => $overdueCount,
                     'returned_today_count' => $returnedTodayCount,
                 ],

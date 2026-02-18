@@ -70,6 +70,7 @@ export default function UserDashboardPage() {
     const [totalTools, setTotalTools] = useState(0);
     const [toolsUnderMaintenance, setToolsUnderMaintenance] = useState(0);
     const [borrowedItemsCount, setBorrowedItemsCount] = useState(0);
+    const [reservedCount, setReservedCount] = useState(0);
     const [returnedTodayCount, setReturnedTodayCount] = useState(0);
     const [availableTools, setAvailableTools] = useState(0);
     const [borrowingHistory, setBorrowingHistory] = useState<BorrowingHistoryItem[]>([]);
@@ -95,6 +96,7 @@ export default function UserDashboardPage() {
             setAvailableTools(counts.tools_available_quantity);
             setToolsUnderMaintenance(counts.tools_maintenance_quantity);
             setBorrowedItemsCount(counts.borrowed_active_count);
+            setReservedCount(counts.reserved_active_count ?? 0);
             setReturnedTodayCount(counts.returned_today_count ?? 0);
             setTotalTools(
                 counts.tools_total_quantity ??
@@ -200,6 +202,7 @@ export default function UserDashboardPage() {
                     totalTools={totalTools}
                     toolsUnderMaintenance={toolsUnderMaintenance}
                     borrowedItemsCount={borrowedItemsCount}
+                    reservedCount={reservedCount}
                     availableTools={availableTools}
                     returnedTodayCount={returnedTodayCount}
                 />

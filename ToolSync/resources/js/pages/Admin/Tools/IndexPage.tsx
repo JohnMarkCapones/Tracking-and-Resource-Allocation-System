@@ -10,6 +10,10 @@ import { apiRequest } from '@/lib/http';
 import { CreateEditModal, type ToolFormData } from './CreateEditModal';
 
 function mapDtoToTool(dto: ToolDto): Tool {
+    const borrowed = dto.borrowed_count ?? 0;
+    const reserved = dto.calculated_reserved_count ?? dto.reserved_count ?? 0;
+    const available = dto.calculated_available_count ?? Math.max(0, dto.quantity - borrowed - reserved);
+
     return {
         id: dto.id,
         name: dto.name,
@@ -17,13 +21,14 @@ function mapDtoToTool(dto: ToolDto): Tool {
         category: dto.category?.name ?? 'Other',
         status: mapToolStatusToUi(dto.status),
         quantity: dto.quantity,
+        borrowedCount: borrowed,
+        reservedCount: reserved,
+        availableCount: available,
         condition: dto.condition ?? 'Good',
         lastMaintenance: 'N/A',
         totalBorrowings: dto.allocations_count ?? 0,
         description: dto.description ?? undefined,
         specifications: (dto.specifications && typeof dto.specifications === 'object') ? dto.specifications : {},
-        // Keep the raw image path from the API so the edit modal
-        // can show the currently configured display image.
         imagePath: dto.image_path,
     };
 }
