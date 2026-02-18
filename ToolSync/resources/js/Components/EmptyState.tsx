@@ -14,15 +14,15 @@ type EmptyStateProps = {
 export function EmptyState({ icon, title, description, action, className = '' }: EmptyStateProps) {
     return (
         <div
-            className={`flex h-40 flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-gray-50 text-center ${className}`}
+            className={`flex h-40 flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-gray-50 text-center dark:border-gray-700 dark:bg-gray-800/50 ${className}`}
         >
             {icon && (
-                <div className="mb-3 text-gray-400" aria-hidden="true">
+                <div className="mb-3 text-gray-400 dark:text-gray-500" aria-hidden="true">
                     {icon}
                 </div>
             )}
-            <p className="text-xs font-medium text-gray-600">{title}</p>
-            {description && <p className="mt-1 max-w-xs text-[11px] text-gray-500">{description}</p>}
+            <p className="text-xs font-medium text-gray-600 dark:text-gray-300">{title}</p>
+            {description && <p className="mt-1 max-w-xs text-[11px] text-gray-500 dark:text-gray-400">{description}</p>}
             {action && (
                 <button
                     type="button"

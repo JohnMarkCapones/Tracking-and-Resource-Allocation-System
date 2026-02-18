@@ -3,15 +3,16 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreToolDeprecationRequest;
+use App\Http\Requests\UpdateToolDeprecationRequest;
 use App\Models\ToolDeprecation;
 use App\Services\ActivityLogger;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 
 class ToolDeprecationController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    public function index(): JsonResponse
     {
         if (! Schema::hasTable('tool_deprecations')) {
             return response()->json(['data' => []]);
@@ -24,10 +25,12 @@ class ToolDeprecationController extends Controller
             ->map(function (ToolDeprecation $d) {
                 return [
                     'id' => $d->id,
+                    'tool_id' => $d->tool_id,
                     'toolName' => $d->tool->name,
                     'toolId' => 'TL-'.$d->tool->id,
                     'reason' => $d->reason,
                     'retireDate' => $d->retire_date->toDateString(),
+                    'replacement_tool_id' => $d->replacement_tool_id,
                     'replacementId' => $d->replacement_tool_id ? 'TL-'.$d->replacement_tool_id : null,
                     'status' => $d->status,
                 ];
@@ -36,14 +39,9 @@ class ToolDeprecationController extends Controller
         return response()->json(['data' => $deprecations]);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(StoreToolDeprecationRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'tool_id' => ['required', 'integer', 'exists:tools,id'],
-            'reason' => ['required', 'string', 'max:255'],
-            'retire_date' => ['required', 'date'],
-            'replacement_tool_id' => ['nullable', 'integer', 'exists:tools,id'],
-        ]);
+        $validated = $request->validated();
 
         $deprecation = ToolDeprecation::create([
             'tool_id' => $validated['tool_id'],
@@ -68,14 +66,9 @@ class ToolDeprecationController extends Controller
         ], 201);
     }
 
-    public function update(Request $request, ToolDeprecation $tool_deprecation): JsonResponse
+    public function update(UpdateToolDeprecationRequest $request, ToolDeprecation $tool_deprecation): JsonResponse
     {
-        $validated = $request->validate([
-            'reason' => ['sometimes', 'string', 'max:255'],
-            'retire_date' => ['sometimes', 'date'],
-            'replacement_tool_id' => ['sometimes', 'nullable', 'integer', 'exists:tools,id'],
-            'status' => ['sometimes', 'string', 'in:pending,approved,retired'],
-        ]);
+        $validated = $request->validated();
 
         $tool_deprecation->update($validated);
 

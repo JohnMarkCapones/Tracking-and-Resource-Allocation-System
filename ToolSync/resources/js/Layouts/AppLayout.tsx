@@ -17,6 +17,7 @@ type AppLayoutProps = PropsWithChildren<{
         | 'admin-dashboard'
         | 'admin-tools'
         | 'admin-categories'
+        | 'admin-approvals'
         | 'admin-allocation-history'
         | 'admin-users'
         | 'admin-analytics'
@@ -132,6 +133,7 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
         | 'dashboard'
         | 'tools'
         | 'categories'
+        | 'approvals'
         | 'history'
         | 'notifications'
         | 'users'
@@ -180,6 +182,12 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                   href: '/admin/users',
                   label: 'User Management',
                   isActive: activeRoute === 'admin-users',
+              },
+              {
+                  key: 'approvals',
+                  href: '/admin/approvals',
+                  label: 'Approvals',
+                  isActive: activeRoute === 'admin-approvals',
               },
               {
                   key: 'notifications',
@@ -405,6 +413,18 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                                                     strokeWidth="1.4"
                                                     strokeLinecap="round"
                                                 />
+                                            </svg>
+                                        )}
+                                        {item.key === 'approvals' && (
+                                            <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                <path
+                                                    d="M5 3H15V14L10 17L5 14V3Z"
+                                                    stroke="currentColor"
+                                                    strokeWidth="1.4"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                />
+                                                <path d="M7.5 9.5L9.5 11.5L13 7.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
                                             </svg>
                                         )}
                                         {item.key === 'favorites' && (

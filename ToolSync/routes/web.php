@@ -35,6 +35,8 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
         ->name('admin.settings');
     Route::get('/admin/maintenance', [AdminDashboardController::class, 'maintenance'])
         ->name('admin.maintenance');
+    Route::get('/admin/approvals', [AdminDashboardController::class, 'approvals'])
+        ->name('admin.approvals');
     Route::get('/admin/reports', [AdminDashboardController::class, 'reports'])
         ->name('admin.reports');
 });

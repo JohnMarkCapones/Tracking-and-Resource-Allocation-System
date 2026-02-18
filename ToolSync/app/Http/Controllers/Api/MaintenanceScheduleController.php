@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreMaintenanceScheduleRequest;
+use App\Http\Requests\UpdateMaintenanceScheduleRequest;
 use App\Models\MaintenanceSchedule;
 use App\Models\Tool;
 use App\Services\ActivityLogger;
@@ -17,6 +19,12 @@ class MaintenanceScheduleController extends Controller
         if (! Schema::hasTable('maintenance_schedules')) {
             return response()->json(['data' => [], 'meta' => ['table_missing' => 'maintenance_schedules']]);
         }
+
+        // Auto-flag overdue: any "scheduled" item whose date has passed.
+        MaintenanceSchedule::query()
+            ->where('status', 'scheduled')
+            ->where('scheduled_date', '<', now()->startOfDay())
+            ->update(['status' => 'overdue']);
 
         $activeStatuses = ['scheduled', 'in_progress', 'overdue'];
         $toolIdsWithActive = MaintenanceSchedule::query()
@@ -44,6 +52,7 @@ class MaintenanceScheduleController extends Controller
 
             return [
                 'id' => $m->id,
+                'tool_id' => $m->tool_id,
                 'toolName' => $tool->name,
                 'toolId' => 'TL-'.$tool->id,
                 'type' => $m->type,
@@ -60,7 +69,7 @@ class MaintenanceScheduleController extends Controller
         return response()->json(['data' => $schedules]);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(StoreMaintenanceScheduleRequest $request): JsonResponse
     {
         if (! Schema::hasTable('maintenance_schedules')) {
             return response()->json([
@@ -68,15 +77,7 @@ class MaintenanceScheduleController extends Controller
             ], 503);
         }
 
-        $validated = $request->validate([
-            'tool_id' => ['required', 'integer', 'exists:tools,id'],
-            'type' => ['required', 'string', 'in:routine,repair,inspection,calibration'],
-            'scheduled_date' => ['required', 'date'],
-            'assignee' => ['required', 'string', 'max:150'],
-            'notes' => ['nullable', 'string'],
-            'usage_count' => ['sometimes', 'integer', 'min:0'],
-            'trigger_threshold' => ['sometimes', 'integer', 'min:1'],
-        ]);
+        $validated = $request->validated();
 
         $schedule = MaintenanceSchedule::create([
             'tool_id' => $validated['tool_id'],
@@ -106,15 +107,9 @@ class MaintenanceScheduleController extends Controller
         ], 201);
     }
 
-    public function update(Request $request, MaintenanceSchedule $maintenance_schedule): JsonResponse
+    public function update(UpdateMaintenanceScheduleRequest $request, MaintenanceSchedule $maintenance_schedule): JsonResponse
     {
-        $validated = $request->validate([
-            'scheduled_date' => ['sometimes', 'date'],
-            'completed_date' => ['sometimes', 'nullable', 'date'],
-            'assignee' => ['sometimes', 'string', 'max:150'],
-            'status' => ['sometimes', 'string', 'in:scheduled,in_progress,completed,overdue'],
-            'notes' => ['sometimes', 'nullable', 'string'],
-        ]);
+        $validated = $request->validated();
 
         $maintenance_schedule->update($validated);
 

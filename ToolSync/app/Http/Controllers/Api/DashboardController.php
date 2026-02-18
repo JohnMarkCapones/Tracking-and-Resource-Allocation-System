@@ -223,4 +223,68 @@ class DashboardController extends Controller
             ],
         ]);
     }
+
+    /**
+     * Get all pending approval requests for admin review.
+     *
+     * Returns both pending borrow/reservation requests and pending return requests.
+     */
+    public function approvals(): JsonResponse
+    {
+        $borrowRequests = Reservation::query()
+            ->with(['tool:id,name,code', 'user:id,name,email'])
+            ->whereIn('status', ['PENDING', 'UPCOMING'])
+            ->orderBy('created_at')
+            ->get()
+            ->map(function (Reservation $r): array {
+                return [
+                    'id' => $r->id,
+                    'type' => 'borrow',
+                    'tool_id' => $r->tool_id,
+                    'tool_name' => $r->tool?->name ?? '—',
+                    'tool_code' => $r->tool?->code ?? null,
+                    'user_id' => $r->user_id,
+                    'user_name' => $r->user?->name ?? '—',
+                    'user_email' => $r->user?->email ?? null,
+                    'start_date' => $r->start_date?->toDateString(),
+                    'end_date' => $r->end_date?->toDateString(),
+                    'status' => $r->status,
+                    'created_at' => $r->created_at?->toIso8601String(),
+                ];
+            })
+            ->values()
+            ->all();
+
+        $returnRequests = ToolAllocation::query()
+            ->with(['tool:id,name,code', 'user:id,name,email'])
+            ->where('status', 'PENDING_RETURN')
+            ->orderBy('updated_at')
+            ->get()
+            ->map(function (ToolAllocation $a): array {
+                return [
+                    'id' => $a->id,
+                    'type' => 'return',
+                    'tool_id' => $a->tool_id,
+                    'tool_name' => $a->tool?->name ?? '—',
+                    'tool_code' => $a->tool?->code ?? null,
+                    'user_id' => $a->user_id,
+                    'user_name' => $a->user?->name ?? '—',
+                    'user_email' => $a->user?->email ?? null,
+                    'borrow_date' => substr((string) $a->getRawOriginal('borrow_date'), 0, 10),
+                    'expected_return_date' => substr((string) $a->getRawOriginal('expected_return_date'), 0, 10),
+                    'note' => $a->note,
+                    'status' => $a->status,
+                    'created_at' => $a->created_at?->toIso8601String(),
+                ];
+            })
+            ->values()
+            ->all();
+
+        return response()->json([
+            'data' => [
+                'borrow_requests' => $borrowRequests,
+                'return_requests' => $returnRequests,
+            ],
+        ]);
+    }
 }

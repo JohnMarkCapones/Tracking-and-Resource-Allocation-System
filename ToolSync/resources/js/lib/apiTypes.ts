@@ -259,6 +259,7 @@ export type SettingsApiResponse = {
 
 export type MaintenanceScheduleApiItem = {
     id: number;
+    tool_id: number;
     toolName: string;
     toolId: string;
     type: string;
@@ -273,12 +274,52 @@ export type MaintenanceScheduleApiItem = {
 
 export type ToolDeprecationApiItem = {
     id: number;
+    tool_id: number;
     toolName: string;
     toolId: string;
     reason: string;
     retireDate: string;
+    replacement_tool_id: number | null;
     replacementId: string | null;
     status: string;
+};
+
+export type ApprovalBorrowRequest = {
+    id: number;
+    type: 'borrow';
+    tool_id: number;
+    tool_name: string;
+    tool_code: string | null;
+    user_id: number;
+    user_name: string;
+    user_email: string | null;
+    start_date: string | null;
+    end_date: string | null;
+    status: string;
+    created_at: string | null;
+};
+
+export type ApprovalReturnRequest = {
+    id: number;
+    type: 'return';
+    tool_id: number;
+    tool_name: string;
+    tool_code: string | null;
+    user_id: number;
+    user_name: string;
+    user_email: string | null;
+    borrow_date: string;
+    expected_return_date: string;
+    note: string | null;
+    status: string;
+    created_at: string | null;
+};
+
+export type ApprovalsApiResponse = {
+    data: {
+        borrow_requests: ApprovalBorrowRequest[];
+        return_requests: ApprovalReturnRequest[];
+    };
 };
 
 export type DepartmentApiItem = { id: number; name: string };

@@ -233,4 +233,9 @@ class AdminDashboardController extends Controller
     {
         return Inertia::render('Admin/Categories/IndexPage');
     }
+
+    public function approvals(): Response
+    {
+        return Inertia::render('Admin/Approvals/IndexPage');
+    }
 }

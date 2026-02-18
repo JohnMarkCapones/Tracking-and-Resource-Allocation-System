@@ -76,6 +76,7 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::put('reservations/{reservation}', [ReservationController::class, 'update']);
 
     Route::middleware('admin')->group(function () {
+        Route::get('admin/approvals', [DashboardController::class, 'approvals']);
         Route::post('reservations/{reservation}/approve', [ReservationController::class, 'approve']);
         Route::post('reservations/{reservation}/decline', [ReservationController::class, 'decline']);
     });

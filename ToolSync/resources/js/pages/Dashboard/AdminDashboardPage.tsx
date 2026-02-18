@@ -512,7 +512,7 @@ export default function AdminDashboardPage() {
                             {pendingApprovals.length > 0 && (
                                 <button
                                     type="button"
-                                    onClick={() => router.visit('/admin/allocation-history')}
+                                    onClick={() => router.visit('/admin/approvals')}
                                     className="mt-3 text-[11px] font-semibold text-blue-600 underline-offset-2 hover:underline"
                                 >
                                     View all
