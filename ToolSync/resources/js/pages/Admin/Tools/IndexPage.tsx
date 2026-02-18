@@ -22,6 +22,9 @@ function mapDtoToTool(dto: ToolDto): Tool {
         totalBorrowings: dto.allocations_count ?? 0,
         description: dto.description ?? undefined,
         specifications: (dto.specifications && typeof dto.specifications === 'object') ? dto.specifications : {},
+        // Keep the raw image path from the API so the edit modal
+        // can show the currently configured display image.
+        imagePath: dto.image_path,
     };
 }
 

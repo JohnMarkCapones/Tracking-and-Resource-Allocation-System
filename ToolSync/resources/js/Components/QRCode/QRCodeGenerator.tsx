@@ -2,15 +2,23 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useRef } from 'react';
 
 type QRCodeGeneratorProps = {
+    /** URL slug for /tools/{slug}. If omitted, toolId is used (may not resolve). */
+    toolSlug?: string | null;
     toolId: string;
     toolName: string;
     size?: number;
     showDownload?: boolean;
 };
 
-export function QRCodeGenerator({ toolId, toolName, size = 200, showDownload = true }: QRCodeGeneratorProps) {
+export function QRCodeGenerator({
+    toolSlug,
+    toolId,
+    toolName,
+    size = 200,
+    showDownload = true,
+}: QRCodeGeneratorProps) {
     const qrRef = useRef<HTMLDivElement>(null);
-    const value = `${window.location.origin}/tools/${toolId}`;
+    const value = `${window.location.origin}/tools/${toolSlug ?? toolId}`;
 
     const handleDownload = () => {
         if (!qrRef.current) return;

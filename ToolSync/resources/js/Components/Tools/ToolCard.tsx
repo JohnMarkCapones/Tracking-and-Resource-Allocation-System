@@ -6,6 +6,8 @@ export type ToolCardStatus = 'Available' | 'Borrowed' | 'Maintenance';
 export type ToolCardData = {
     id: number;
     name: string;
+    /** URL slug for /tools/{slug} (fallback to id if missing) */
+    slug?: string | null;
     toolId: string;
     category: string;
     status: ToolCardStatus;
@@ -13,6 +15,7 @@ export type ToolCardData = {
     quantity: number;
     availableQuantity: number;
     borrowedQuantity: number;
+    reservedQuantity?: number;
     imageUrl?: string;
 };
 
@@ -35,23 +38,41 @@ function statusClasses(status: ToolCardStatus): string {
 }
 
 export function ToolCard({ tool, onRequestBorrow, disableBorrowRequest = false }: ToolCardProps) {
+    const toolHref = `/tools/${tool.slug ?? tool.id}`;
+
     const handleButtonClick = (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
-        
+
         if (onRequestBorrow) {
             onRequestBorrow(tool);
         } else {
-            router.visit(`/tools/${tool.id}?request=1`);
+            router.visit(`${toolHref}?request=1`);
         }
     };
 
-    const quantityLabel = `Qty: ${tool.quantity} total · ${tool.availableQuantity} available${
-        tool.borrowedQuantity > 0 ? ` · ${tool.borrowedQuantity} borrowed` : ''
-    }`;
+    const parts = [`Qty: ${tool.quantity} total`, `${tool.availableQuantity} available`];
+    if (tool.borrowedQuantity > 0) {
+        parts.push(`${tool.borrowedQuantity} borrowed`);
+    }
+    if (tool.reservedQuantity && tool.reservedQuantity > 0) {
+        parts.push(`${tool.reservedQuantity} reserved`);
+    }
+    const quantityLabel = parts.join(' · ');
 
     return (
-        <div className="group rounded-2xl bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md hover:bg-gray-50">
+        <div
+            className="group rounded-2xl bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md hover:bg-gray-50 cursor-pointer"
+            role="button"
+            tabIndex={0}
+            onClick={() => router.visit(toolHref)}
+            onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    router.visit(toolHref);
+                }
+            }}
+        >
             <div className="relative mb-3 aspect-[4/3] overflow-hidden rounded-xl bg-gray-100 pointer-events-none">
                 {tool.imageUrl ? (
                     <img src={tool.imageUrl} alt={tool.name} className="h-full w-full object-cover" />

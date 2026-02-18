@@ -9,6 +9,7 @@ use App\Models\Reservation;
 use App\Models\Tool;
 use App\Models\ToolAllocation;
 use App\Models\ToolStatusLog;
+use App\Services\ToolAvailabilityService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -55,23 +56,97 @@ class ToolController extends Controller
             ->withCount('allocations')
             ->withCount([
                 'allocations as borrowed_count' => function ($q) {
-                    $q->where('status', 'BORROWED');
+                    $q->whereIn('status', ['BORROWED', 'PENDING_RETURN']);
                 },
             ]);
 
-        if ($request->has('status')) {
-            $query->where('status', $request->input('status'));
+        // Add reserved_count if reservations table exists
+        if (Schema::hasTable('reservations')) {
+            $query->withCount([
+                'reservations as reserved_count' => function ($q) {
+                    $q->whereIn('status', ['PENDING', 'UPCOMING']);
+                },
+            ]);
         }
 
-        if ($request->has('category_id')) {
-            $query->where('category_id', $request->input('category_id'));
+        $statusFilter = $request->input('status');
+        if ($statusFilter !== null) {
+            $statuses = is_array($statusFilter) ? $statusFilter : [$statusFilter];
+            $query->whereIn('status', $statuses);
+        }
+
+        $categoryFilter = $request->input('category_id');
+        if ($categoryFilter !== null) {
+            $categoryIds = is_array($categoryFilter) ? $categoryFilter : [$categoryFilter];
+            $query->whereIn('category_id', $categoryIds);
         }
 
         if ($request->has('search')) {
             $query->where('name', 'like', '%'.$request->input('search').'%');
         }
 
+        $randomSeed = $request->input('random_seed');
+        if ($randomSeed !== null && $randomSeed !== '') {
+            // Deterministic pseudo-random ordering so the catalog can appear
+            // shuffled without relying on unstable DB-wide RAND() behavior.
+            // Convert seed string to numeric hash for cross-database compatibility
+            $seedHash = abs(crc32($randomSeed));
+            $connection = $query->getConnection()->getDriverName();
+
+            if ($connection === 'sqlite') {
+                // SQLite doesn't have MD5, use modulo arithmetic with seed hash
+                $query->orderByRaw('(id * ?) % 2147483647', [$seedHash]);
+            } else {
+                // MySQL/MariaDB: use MD5 for deterministic ordering
+                $query->orderByRaw('MD5(CONCAT(id, ?))', [$randomSeed]);
+            }
+        } else {
+            $query->orderBy('name');
+        }
+
+        if ($request->boolean('paginated')) {
+            $perPage = (int) $request->input('per_page', 18);
+            if ($perPage < 1) {
+                $perPage = 1;
+            }
+            if ($perPage > 100) {
+                $perPage = 100;
+            }
+
+            $paginator = $query->paginate($perPage);
+
+            // Add calculated availability to each tool
+            $availabilityService = app(ToolAvailabilityService::class);
+            $items = collect($paginator->items())->map(function (Tool $tool) use ($availabilityService) {
+                $availability = $availabilityService->calculateAvailability($tool->id);
+                $tool->setAttribute('calculated_available_count', $availability['available_count']);
+                $tool->setAttribute('calculated_reserved_count', $availability['reserved_count']);
+
+                return $tool;
+            });
+
+            return response()->json([
+                'data' => $items,
+                'meta' => [
+                    'current_page' => $paginator->currentPage(),
+                    'per_page' => $paginator->perPage(),
+                    'total' => $paginator->total(),
+                    'last_page' => $paginator->lastPage(),
+                ],
+            ]);
+        }
+
         $tools = $query->get();
+
+        // Add calculated availability to each tool
+        $availabilityService = app(ToolAvailabilityService::class);
+        $tools = $tools->map(function (Tool $tool) use ($availabilityService) {
+            $availability = $availabilityService->calculateAvailability($tool->id);
+            $tool->setAttribute('calculated_available_count', $availability['available_count']);
+            $tool->setAttribute('calculated_reserved_count', $availability['reserved_count']);
+
+            return $tool;
+        });
 
         return response()->json([
             'data' => $tools,
@@ -165,6 +240,12 @@ class ToolController extends Controller
     public function show(Tool $tool): JsonResponse
     {
         $tool->load('category');
+
+        // Add calculated availability
+        $availabilityService = app(ToolAvailabilityService::class);
+        $availability = $availabilityService->calculateAvailability($tool->id);
+        $tool->setAttribute('calculated_available_count', $availability['available_count']);
+        $tool->setAttribute('calculated_reserved_count', $availability['reserved_count']);
 
         return response()->json([
             'data' => $tool,

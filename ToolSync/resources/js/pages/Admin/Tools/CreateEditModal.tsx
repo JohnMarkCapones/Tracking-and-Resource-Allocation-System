@@ -38,6 +38,7 @@ const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor', 'Damaged', 'Functional'
 export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, onClose, onSave }: CreateEditModalProps) {
     const isEditing = tool !== null;
     const categoryOptions = categories.length > 0 ? categories : DEFAULT_CATEGORIES;
+    const existingImagePath = tool?.imagePath ?? null;
 
     const [formData, setFormData] = useState<ToolFormData>({
         name: '',
@@ -80,6 +81,14 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
                     ? Object.entries(specs).map(([label, value]) => ({ id: nextSpecId(), label, value }))
                     : [],
             );
+            // When editing an existing tool, show its current image (if any)
+            // so admins understand what is already configured.
+            if (existingImagePath && existingImagePath.trim().length > 0) {
+                const normalized = existingImagePath.startsWith('http')
+                    ? existingImagePath
+                    : `/storage/${existingImagePath.replace(/^\/+/, '')}`;
+                setDisplayImagePreview(normalized);
+            }
         } else {
             setFormData({
                 name: '',
@@ -96,10 +105,13 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
         setErrors({});
         setDisplayImageFile(null);
         setDisplayImagePreview((prev) => {
-            if (prev) URL.revokeObjectURL(prev);
+            // Only revoke object URLs we created for local uploads.
+            if (prev && prev.startsWith('blob:')) {
+                URL.revokeObjectURL(prev);
+            }
             return null;
         });
-    }, [show, tool]);
+    }, [show, tool, existingImagePath]);
 
     const validate = (): boolean => {
         const newErrors: Partial<Record<keyof ToolFormData, string>> = {};

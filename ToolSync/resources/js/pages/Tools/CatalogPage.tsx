@@ -1,33 +1,58 @@
 import { Head, Link, router } from '@inertiajs/react';
 import { format } from 'date-fns';
-import { useState, useMemo, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { EmptyState } from '@/Components/EmptyState';
 import { toast } from '@/Components/Toast';
 import { RequestToolModal } from '@/Components/Tools/RequestToolModal';
 import { ToolCard, type ToolCardData } from '@/Components/Tools/ToolCard';
 import { ToolFilters } from '@/Components/Tools/ToolFilters';
+import { SkeletonCard } from '@/Components/Skeleton';
 import AppLayout from '@/Layouts/AppLayout';
 import type { DashboardApiResponse, ReservationApiItem, ToolDto, ToolCategoryDto } from '@/lib/apiTypes';
 import { mapToolStatusToUi } from '@/lib/apiTypes';
 import { apiRequest } from '@/lib/http';
 
 const MAX_BORROWINGS = 3;
+const PAGE_SIZE = 18;
+
+type ToolsMeta = {
+    current_page: number;
+    per_page: number;
+    total: number;
+    last_page: number;
+};
+
+type ToolsIndexResponse = {
+    data: ToolDto[];
+    meta?: ToolsMeta;
+};
 
 function mapToolToCardData(dto: ToolDto): ToolCardData {
-    const availableQuantity = Math.max(0, Number(dto.quantity ?? 0));
+    // Use calculated availability from backend if available, otherwise calculate manually
+    const calculatedAvailable = dto.calculated_available_count;
+    const calculatedReserved = dto.calculated_reserved_count ?? dto.reserved_count ?? 0;
     const borrowedQuantity = Math.max(0, Number(dto.borrowed_count ?? 0));
+    const totalQuantity = Number(dto.quantity ?? 0);
+
+    // Calculate availability: prefer backend calculation, fallback to manual
+    const availableQuantity =
+        calculatedAvailable !== undefined
+            ? Math.max(0, calculatedAvailable)
+            : Math.max(0, totalQuantity - borrowedQuantity - calculatedReserved);
 
     return {
         id: dto.id,
         name: dto.name,
+        slug: dto.slug ?? null,
         toolId: 'TL-' + dto.id,
         category: dto.category?.name ?? 'Other',
         status: mapToolStatusToUi(dto.status),
         condition: dto.condition ?? 'Good',
-        quantity: availableQuantity + borrowedQuantity,
+        quantity: totalQuantity,
         availableQuantity,
         borrowedQuantity,
+        reservedQuantity: calculatedReserved,
         imageUrl: dto.image_path
             ? dto.image_path.startsWith('http')
                 ? dto.image_path
@@ -41,6 +66,7 @@ export default function CatalogPage() {
 
     const [tools, setTools] = useState<ToolCardData[]>([]);
     const [categories, setCategories] = useState<string[]>([]);
+    const [categoryDtos, setCategoryDtos] = useState<ToolCategoryDto[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
@@ -48,25 +74,145 @@ export default function CatalogPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [activeBorrowingsCount, setActiveBorrowingsCount] = useState(0);
     const [pendingBorrowRequestsCount, setPendingBorrowRequestsCount] = useState(0);
+    const [search, setSearch] = useState('');
+    const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+    const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalTools, setTotalTools] = useState(0);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
+    const [hasMore, setHasMore] = useState(false);
+    const [initialLoaded, setInitialLoaded] = useState(false);
+    const [randomSeed, setRandomSeed] = useState<string | null>(null);
+    const loadMoreRef = useRef<HTMLDivElement | null>(null);
+
+    const borrowSlotsUsed = activeBorrowingsCount + pendingBorrowRequestsCount;
+
+    const fetchTools = async (options?: {
+        page?: number;
+        search?: string;
+        categories?: string[];
+        statuses?: string[];
+        append?: boolean;
+    }) => {
+        const effectivePage = options?.page ?? page;
+        const effectiveSearch = options?.search ?? search;
+        const effectiveCategories = options?.categories ?? selectedCategories;
+        const effectiveStatuses = options?.statuses ?? selectedStatuses;
+        const append = options?.append ?? false;
+        const seed = randomSeed;
+
+        const params = new URLSearchParams();
+        params.set('paginated', '1');
+        params.set('page', String(effectivePage));
+        params.set('per_page', String(PAGE_SIZE));
+
+        if (seed) {
+            params.set('random_seed', seed);
+        }
+
+        if (effectiveSearch.trim()) {
+            params.set('search', effectiveSearch.trim());
+        }
+
+        if (effectiveStatuses.length > 0) {
+            const statusToApi = (s: string): 'AVAILABLE' | 'BORROWED' | 'MAINTENANCE' => {
+                if (s === 'Borrowed') return 'BORROWED';
+                if (s === 'Maintenance') return 'MAINTENANCE';
+                return 'AVAILABLE';
+            };
+
+            for (const status of effectiveStatuses) {
+                params.append('status[]', statusToApi(status));
+            }
+        }
+
+        if (effectiveCategories.length > 0 && categoryDtos.length > 0) {
+            const ids = effectiveCategories
+                .map((name) => categoryDtos.find((c) => c.name === name)?.id)
+                .filter((id): id is number => typeof id === 'number');
+
+            for (const id of ids) {
+                params.append('category_id[]', String(id));
+            }
+        }
+
+        if (append) {
+            setIsLoadingMore(true);
+        } else {
+            setLoading(true);
+        }
+        setError(null);
+
+        try {
+            const res = await apiRequest<ToolsIndexResponse>(`/api/tools?${params.toString()}`);
+            const meta = res.meta;
+
+            setTools((prev) =>
+                append ? [...prev, ...(res.data ?? []).map(mapToolToCardData)] : (res.data ?? []).map(mapToolToCardData),
+            );
+
+            if (meta) {
+                setPage(meta.current_page);
+                setTotalPages(meta.last_page || 1);
+                setTotalTools(meta.total ?? (res.data?.length ?? 0));
+                setHasMore(meta.current_page < (meta.last_page || 1));
+            } else {
+                setPage(effectivePage);
+                setTotalPages(1);
+                setTotalTools(res.data?.length ?? 0);
+                setHasMore(false);
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to load tools');
+        } finally {
+            if (append) {
+                setIsLoadingMore(false);
+            } else {
+                setLoading(false);
+            }
+        }
+    };
 
     useEffect(() => {
         let cancelled = false;
 
-        async function load() {
+        async function loadInitial() {
             setLoading(true);
             setError(null);
             try {
+                const seed = Math.random().toString(36).slice(2);
+                setRandomSeed(seed);
+
                 const [toolsRes, categoriesRes, dashboardRes, reservationsRes] = await Promise.all([
-                    apiRequest<{ data: ToolDto[] }>('/api/tools'),
+                    apiRequest<ToolsIndexResponse>(`/api/tools?paginated=1&page=1&per_page=${PAGE_SIZE}&random_seed=${seed}`),
                     apiRequest<{ data: ToolCategoryDto[] }>('/api/tool-categories'),
                     apiRequest<DashboardApiResponse>('/api/dashboard'),
                     apiRequest<{ data: ReservationApiItem[] }>('/api/reservations'),
                 ]);
                 if (cancelled) return;
+
+                const meta = toolsRes.meta;
                 setTools((toolsRes.data ?? []).map(mapToolToCardData));
-                setCategories((categoriesRes.data ?? []).map((c) => c.name));
+                if (meta) {
+                    setPage(meta.current_page);
+                    setTotalPages(meta.last_page || 1);
+                    setTotalTools(meta.total ?? (toolsRes.data?.length ?? 0));
+                    setHasMore(meta.current_page < (meta.last_page || 1));
+                } else {
+                    setPage(1);
+                    setTotalPages(1);
+                    setTotalTools(toolsRes.data?.length ?? 0);
+                    setHasMore(false);
+                }
+
+                const categoryData = categoriesRes.data ?? [];
+                setCategoryDtos(categoryData);
+                setCategories(categoryData.map((c) => c.name));
+
                 setActiveBorrowingsCount(dashboardRes.data.counts.borrowed_active_count ?? 0);
                 setPendingBorrowRequestsCount((reservationsRes.data ?? []).filter((r) => r.status === 'pending').length);
+                setInitialLoaded(true);
             } catch (err) {
                 if (cancelled) return;
                 setError(err instanceof Error ? err.message : 'Failed to load tools');
@@ -75,42 +221,72 @@ export default function CatalogPage() {
             }
         }
 
-        load();
+        loadInitial();
         return () => {
             cancelled = true;
         };
     }, []);
 
-    const [search, setSearch] = useState('');
-    const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-    const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
-
-    const filteredTools = useMemo(() => {
-        const query = search.trim().toLowerCase();
-
-        return tools.filter((tool) => {
-            if (selectedCategories.length > 0 && !selectedCategories.includes(tool.category)) {
-                return false;
-            }
-
-            if (selectedStatuses.length > 0 && !selectedStatuses.includes(tool.status)) {
-                return false;
-            }
-
-            if (!query) return true;
-
-            const haystack = `${tool.name} ${tool.toolId} ${tool.category}`.toLowerCase();
-            return haystack.includes(query);
-        });
-    }, [tools, search, selectedCategories, selectedStatuses]);
-
     const handleClearAll = () => {
         setSelectedCategories([]);
         setSelectedStatuses([]);
         setSearch('');
+        setPage(1);
+        const seed = Math.random().toString(36).slice(2);
+        setRandomSeed(seed);
+        void fetchTools({ page: 1, search: '', categories: [], statuses: [], append: false });
     };
 
-    const borrowSlotsUsed = activeBorrowingsCount + pendingBorrowRequestsCount;
+    const handleSearchChange = (value: string) => {
+        setSearch(value);
+        setPage(1);
+        const seed = Math.random().toString(36).slice(2);
+        setRandomSeed(seed);
+        void fetchTools({ page: 1, search: value, append: false });
+    };
+
+    const handleCategoriesChange = (nextCategories: string[]) => {
+        setSelectedCategories(nextCategories);
+        setPage(1);
+        const seed = Math.random().toString(36).slice(2);
+        setRandomSeed(seed);
+        void fetchTools({ page: 1, categories: nextCategories, append: false });
+    };
+
+    const handleStatusesChange = (nextStatuses: string[]) => {
+        setSelectedStatuses(nextStatuses);
+        setPage(1);
+        const seed = Math.random().toString(36).slice(2);
+        setRandomSeed(seed);
+        void fetchTools({ page: 1, statuses: nextStatuses, append: false });
+    };
+
+    useEffect(() => {
+        if (!initialLoaded) return;
+        const node = loadMoreRef.current;
+        if (!node) return;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                const entry = entries[0];
+                if (!entry?.isIntersecting) return;
+                if (loading || isLoadingMore) return;
+                if (!hasMore) return;
+
+                const nextPage = page + 1;
+                setPage(nextPage);
+                void fetchTools({ page: nextPage, append: true });
+            },
+            { root: null, rootMargin: '200px 0px', threshold: 0.1 },
+        );
+
+        observer.observe(node);
+
+        return () => {
+            observer.disconnect();
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [initialLoaded, loading, isLoadingMore, hasMore, page]);
 
     const handleRequestBorrow = (tool: ToolCardData) => {
         if (tool.status === 'Available' && borrowSlotsUsed >= MAX_BORROWINGS) {
@@ -171,11 +347,19 @@ export default function CatalogPage() {
             
             // Reload the tools list
             const [toolsRes, dashboardRes, reservationsRes] = await Promise.all([
-                apiRequest<{ data: ToolDto[] }>('/api/tools'),
+                apiRequest<ToolsIndexResponse>(`/api/tools?paginated=1&page=${page}&per_page=${PAGE_SIZE}${randomSeed ? `&random_seed=${randomSeed}` : ''}`),
                 apiRequest<DashboardApiResponse>('/api/dashboard'),
                 apiRequest<{ data: ReservationApiItem[] }>('/api/reservations'),
             ]);
+            const meta = toolsRes.meta;
             setTools((toolsRes.data ?? []).map(mapToolToCardData));
+            if (meta) {
+                setPage(meta.current_page);
+                setTotalPages(meta.last_page || 1);
+                setTotalTools(meta.total ?? (toolsRes.data?.length ?? 0));
+            } else {
+                setTotalTools(toolsRes.data?.length ?? 0);
+            }
             setActiveBorrowingsCount(dashboardRes.data.counts.borrowed_active_count ?? 0);
             setPendingBorrowRequestsCount((reservationsRes.data ?? []).filter((r) => r.status === 'pending').length);
         } catch (error) {
@@ -204,9 +388,13 @@ export default function CatalogPage() {
                         {error}
                     </div>
                 )}
-                {loading && (
-                    <div className="rounded-xl bg-gray-50 px-4 py-8 text-center text-sm text-gray-500 dark:bg-gray-800 dark:text-gray-400">
-                        Loading tools…
+                {loading && !initialLoaded && (
+                    <div className="rounded-xl bg-gray-50 px-4 py-6 text-sm text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                            {Array.from({ length: 6 }).map((_, index) => (
+                                <SkeletonCard key={index} showImage lines={3} />
+                            ))}
+                        </div>
                     </div>
                 )}
                 <section className="flex flex-col gap-4 rounded-3xl bg-white/70 p-4 shadow-sm backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between">
@@ -219,17 +407,17 @@ export default function CatalogPage() {
                             type="search"
                             placeholder="Search tools by name or ID..."
                             value={search}
-                            onChange={(e) => setSearch(e.target.value)}
+                            onChange={(e) => handleSearchChange(e.target.value)}
                             className="w-64 border-none bg-transparent text-sm outline-none placeholder:text-gray-400"
                         />
                     </div>
                     <div className="flex items-center gap-2 text-[11px] text-gray-500">
-                        <span className="font-semibold text-gray-900">{filteredTools.length}</span>
+                        <span className="font-semibold text-gray-900">{totalTools}</span>
                         <span>tools found</span>
                         {tools.filter((t) => t.status === 'Available').length > 0 && (
                             <>
                                 <span className="mx-1 text-gray-300">·</span>
-                                <span className="text-emerald-600">{tools.filter((t) => t.status === 'Available').length} available</span>
+                                <span className="text-emerald-600">{tools.filter((t) => t.status === 'Available').length} available on this page</span>
                             </>
                         )}
                         <span className="mx-2 h-4 w-px bg-gray-200" />
@@ -258,15 +446,15 @@ export default function CatalogPage() {
                         <ToolFilters
                             categories={categories}
                             selectedCategories={selectedCategories}
-                            onCategoriesChange={setSelectedCategories}
+                            onCategoriesChange={handleCategoriesChange}
                             selectedStatuses={selectedStatuses}
-                            onStatusesChange={setSelectedStatuses}
+                            onStatusesChange={handleStatusesChange}
                             onClearAll={handleClearAll}
                         />
                     </div>
 
                     <section className="rounded-3xl bg-white p-5 shadow-sm">
-                        {filteredTools.length === 0 ? (
+                        {tools.length === 0 ? (
                             <EmptyState
                                 icon={
                                     <svg className="h-10 w-10" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -283,7 +471,7 @@ export default function CatalogPage() {
                             />
                         ) : (
                             <div className="grid gap-4 border-t border-gray-100 pt-4 sm:grid-cols-2 xl:grid-cols-3">
-                                {filteredTools.map((tool) => (
+                                {tools.map((tool) => (
                                     <ToolCard
                                         key={tool.id}
                                         tool={tool}
@@ -291,8 +479,13 @@ export default function CatalogPage() {
                                         disableBorrowRequest={tool.status === 'Available' && borrowSlotsUsed >= MAX_BORROWINGS}
                                     />
                                 ))}
+                                {isLoadingMore &&
+                                    Array.from({ length: 3 }).map((_, index) => (
+                                        <SkeletonCard key={`skeleton-${index}`} showImage lines={2} />
+                                    ))}
                             </div>
                         )}
+                        <div ref={loadMoreRef} className="mt-4 h-6 w-full" aria-hidden="true" />
                     </section>
                 </div>
                 )}

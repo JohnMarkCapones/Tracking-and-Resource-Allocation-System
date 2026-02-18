@@ -70,6 +70,7 @@ export default function UserDashboardPage() {
     const [totalTools, setTotalTools] = useState(0);
     const [toolsUnderMaintenance, setToolsUnderMaintenance] = useState(0);
     const [borrowedItemsCount, setBorrowedItemsCount] = useState(0);
+    const [returnedTodayCount, setReturnedTodayCount] = useState(0);
     const [availableTools, setAvailableTools] = useState(0);
     const [borrowingHistory, setBorrowingHistory] = useState<BorrowingHistoryItem[]>([]);
     const [recentActivityRaw, setRecentActivityRaw] = useState<DashboardApiResponse['data']['recent_activity']>([]);
@@ -81,29 +82,6 @@ export default function UserDashboardPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [returnModalItem, setReturnModalItem] = useState<BorrowingHistoryItem | null>(null);
-
-    const handleReturnSubmit = useCallback(
-        async (data: { condition: string; notes: string }) => {
-            if (!returnModalItem?.allocationId) return;
-            const noteParts = [`Condition: ${data.condition}`];
-            if (data.notes.trim()) noteParts.push(`Notes: ${data.notes.trim()}`);
-            try {
-                await apiRequest(`/api/tool-allocations/${returnModalItem.allocationId}`, {
-                    method: 'PUT',
-                    body: { status: 'PENDING_RETURN', note: noteParts.join('\n') },
-                });
-                toast(`${returnModalItem.equipment} return is pending admin verification.`, {
-                    icon: 'ℹ️',
-                    duration: 6000,
-                });
-                setReturnModalItem(null);
-                await loadDashboard(true);
-            } catch (err) {
-                toast.error(err instanceof Error ? err.message : 'Failed to submit return request.');
-            }
-        },
-        [returnModalItem, loadDashboard],
-    );
 
     const loadDashboard = useCallback(async (silent = false) => {
         if (!silent) {
@@ -117,6 +95,7 @@ export default function UserDashboardPage() {
             setAvailableTools(counts.tools_available_quantity);
             setToolsUnderMaintenance(counts.tools_maintenance_quantity);
             setBorrowedItemsCount(counts.borrowed_active_count);
+            setReturnedTodayCount(counts.returned_today_count ?? 0);
             setTotalTools(
                 counts.tools_total_quantity ??
                     (counts.tools_available_quantity +
@@ -142,6 +121,29 @@ export default function UserDashboardPage() {
             if (!silent) setLoading(false);
         }
     }, []);
+
+    const handleReturnSubmit = useCallback(
+        async (data: { condition: string; notes: string }) => {
+            if (!returnModalItem?.allocationId) return;
+            const noteParts = [`Condition: ${data.condition}`];
+            if (data.notes.trim()) noteParts.push(`Notes: ${data.notes.trim()}`);
+            try {
+                await apiRequest(`/api/tool-allocations/${returnModalItem.allocationId}`, {
+                    method: 'PUT',
+                    body: { status: 'PENDING_RETURN', note: noteParts.join('\n') },
+                });
+                toast(`${returnModalItem.equipment} return is pending admin verification.`, {
+                    icon: 'ℹ️',
+                    duration: 6000,
+                });
+                setReturnModalItem(null);
+                await loadDashboard(true);
+            } catch (err) {
+                toast.error(err instanceof Error ? err.message : 'Failed to submit return request.');
+            }
+        },
+        [returnModalItem, loadDashboard],
+    );
 
     useEffect(() => {
         loadDashboard(false);
@@ -199,6 +201,7 @@ export default function UserDashboardPage() {
                     toolsUnderMaintenance={toolsUnderMaintenance}
                     borrowedItemsCount={borrowedItemsCount}
                     availableTools={availableTools}
+                    returnedTodayCount={returnedTodayCount}
                 />
 
                 <section className="space-y-4">

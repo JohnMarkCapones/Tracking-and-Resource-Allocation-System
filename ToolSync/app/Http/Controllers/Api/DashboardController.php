@@ -96,6 +96,15 @@ class DashboardController extends Controller
             ->where('expected_return_date', '<', now())
             ->count();
 
+        // Allocations returned today (status RETURNED, actual_return_date within today).
+        $returnedTodayQuery = ToolAllocation::query()
+            ->where('status', 'RETURNED')
+            ->whereDate('actual_return_date', today());
+        if ($userId) {
+            $returnedTodayQuery->where('user_id', $userId);
+        }
+        $returnedTodayCount = (int) $returnedTodayQuery->count();
+
         $recentAllocationsQuery = ToolAllocation::query()
             ->with(['tool:id,name', 'user:id,name,email'])
             ->orderByDesc('borrow_date');
@@ -196,6 +205,7 @@ class DashboardController extends Controller
                     'tools_maintenance_quantity' => $toolsMaintenanceQty,
                     'borrowed_active_count' => $borrowedActiveCount,
                     'overdue_count' => $overdueCount,
+                    'returned_today_count' => $returnedTodayCount,
                 ],
                 'total_users' => $totalUsers,
                 'pending_approvals_count' => $pendingApprovalsCount,

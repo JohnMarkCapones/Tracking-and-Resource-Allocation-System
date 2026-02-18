@@ -21,6 +21,7 @@ type ToolStatus = 'Available' | 'Borrowed' | 'Maintenance';
 
 type ToolDetail = {
     id: number;
+    slug?: string;
     name: string;
     toolId: string;
     category: string;
@@ -54,12 +55,20 @@ export default function DetailPage() {
     const { tool } = page.props;
     const { addToRecentlyViewed } = useFavoritesStore();
     const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+    /** 'borrow' = Request to Borrow, 'reservation' = Request a Reservation */
+    const [requestIntent, setRequestIntent] = useState<'borrow' | 'reservation'>('reservation');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [unavailableDates, setUnavailableDates] = useState<Array<{ from: Date; to: Date }>>([]);
+
+    const openRequestModal = (intent: 'borrow' | 'reservation') => {
+        setRequestIntent(intent);
+        setIsRequestModalOpen(true);
+    };
 
     useEffect(() => {
         const hasRequestFlag = page.url.includes('request=1');
         if (hasRequestFlag) {
+            setRequestIntent('reservation');
             setIsRequestModalOpen(true);
         }
     }, [page.url]);
@@ -69,11 +78,12 @@ export default function DetailPage() {
         addToRecentlyViewed({
             id: tool.id,
             name: tool.name,
+            slug: tool.slug,
             toolId: tool.toolId,
             category: tool.category,
             imageUrl: tool.imageUrl,
         });
-    }, [tool.id, tool.name, tool.toolId, tool.category, tool.imageUrl, addToRecentlyViewed]);
+    }, [tool.id, tool.name, tool.slug, tool.toolId, tool.category, tool.imageUrl, addToRecentlyViewed]);
 
     const toLocalYmd = (date: Date): string => format(date, 'yyyy-MM-dd');
 
@@ -128,23 +138,10 @@ export default function DetailPage() {
         const endDate = toLocalYmd(data.dateRange.to);
 
         try {
-            if (tool.status === 'Borrowed') {
-                await apiRequest('/api/reservations', {
-                    method: 'POST',
-                    body: {
-                        tool_id: tool.id,
-                        start_date: startDate,
-                        end_date: endDate,
-                        recurring: false,
-                    },
-                });
-                setIsRequestModalOpen(false);
-                toast.success('Reservation created.');
-                router.visit('/reservations');
-                return;
-            }
+            const isBorrowIntent = requestIntent === 'borrow';
 
-            // Available tool: create a borrow request (reservation PENDING) for admin approval
+            // Both paths create a PENDING reservation that requires admin approval.
+            // The borrow_request flag differentiates the wording only.
             await apiRequest<{ message: string }>('/api/reservations', {
                 method: 'POST',
                 body: {
@@ -152,13 +149,17 @@ export default function DetailPage() {
                     start_date: startDate,
                     end_date: endDate,
                     recurring: false,
-                    borrow_request: true,
+                    borrow_request: isBorrowIntent,
                 },
             });
 
             setIsRequestModalOpen(false);
-            toast.success('Borrowing request submitted for approval!');
-            router.reload({ only: ['tool'] });
+            toast.success(
+                isBorrowIntent
+                    ? 'Borrowing request submitted for approval!'
+                    : 'Reservation submitted for approval!',
+            );
+            router.visit('/reservations');
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to submit request.';
             toast.error(message);
@@ -184,7 +185,7 @@ export default function DetailPage() {
             <Head title={tool.name} />
 
             <div className="space-y-6">
-                <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+                <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
                     <div className="space-y-6">
                         <section className="overflow-hidden rounded-3xl bg-white shadow-sm">
                             <div className="aspect-[16/9] bg-gray-100">
@@ -249,13 +250,22 @@ export default function DetailPage() {
                         <AvailabilityCalendar unavailableDates={unavailableDates} />
 
                         {tool.status === 'Available' && (
-                            <button
-                                type="button"
-                                onClick={() => setIsRequestModalOpen(true)}
-                                className="w-full rounded-full bg-blue-600 py-3 text-sm font-semibold text-white shadow-lg hover:bg-blue-700"
-                            >
-                                Request to Borrow
-                            </button>
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={() => openRequestModal('borrow')}
+                                    className="w-full rounded-full bg-blue-600 py-3 text-sm font-semibold text-white shadow-lg hover:bg-blue-700"
+                                >
+                                    Request to Borrow
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => openRequestModal('reservation')}
+                                    className="w-full rounded-full border-2 border-blue-600 py-3 text-sm font-semibold text-blue-600 bg-white hover:bg-blue-50"
+                                >
+                                    Request a Reservation
+                                </button>
+                            </>
                         )}
 
                         {tool.status === 'Borrowed' && (
@@ -266,7 +276,7 @@ export default function DetailPage() {
                                 </div>
                                 <button
                                     type="button"
-                                    onClick={() => setIsRequestModalOpen(true)}
+                                    onClick={() => openRequestModal('reservation')}
                                     className="w-full rounded-full bg-blue-600 py-3 text-sm font-semibold text-white shadow-lg hover:bg-blue-700"
                                 >
                                     Request a Reservation
@@ -295,6 +305,7 @@ export default function DetailPage() {
                 show={isRequestModalOpen}
                 toolName={tool.name}
                 toolId={tool.toolId}
+                intent={requestIntent}
                 submitting={isSubmitting}
                 onClose={() => {
                     if (isSubmitting) {

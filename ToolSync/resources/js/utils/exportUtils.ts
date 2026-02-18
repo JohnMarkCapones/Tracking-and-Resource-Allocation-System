@@ -102,54 +102,88 @@ export async function exportToPDF(
     title: string,
     columns: { key: string; label: string }[],
 ): Promise<void> {
+    if (data.length === 0 || columns.length === 0) {
+        return;
+    }
+
     const { default: jsPDF } = await import('jspdf');
-    const doc = new jsPDF();
-
-    // Title
-    doc.setFontSize(18);
-    doc.text(title, 14, 22);
-
-    // Date
-    doc.setFontSize(10);
-    doc.setTextColor(128);
-    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 30);
-
-    // Table
+    // Use landscape for better horizontal space when many columns are selected.
+    const doc = new jsPDF({ orientation: 'landscape' });
+    const pageWidth = doc.internal.pageSize.width;
+    const pageHeight = doc.internal.pageSize.height;
+    const marginX = 14;
     const startY = 40;
-    const cellPadding = 4;
-    const colWidth = (doc.internal.pageSize.width - 28) / columns.length;
-    const rowHeight = 10;
+    const headerHeight = 10;
+    const rowHeight = 8;
+    const cellPadding = 3;
+    const maxColumnsPerPage = 6;
 
-    // Headers
-    doc.setFontSize(8);
-    doc.setTextColor(255, 255, 255);
-    doc.setFillColor(31, 41, 55);
-    doc.rect(14, startY, doc.internal.pageSize.width - 28, rowHeight, 'F');
+    const renderPageChrome = (): void => {
+        doc.setFontSize(18);
+        doc.setTextColor(0, 0, 0);
+        doc.text(title, marginX, 22);
 
-    columns.forEach((col, i) => {
-        doc.text(col.label, 14 + i * colWidth + cellPadding, startY + 7);
-    });
+        doc.setFontSize(10);
+        doc.setTextColor(128);
+        doc.text(`Generated: ${new Date().toLocaleDateString()}`, marginX, 30);
+    };
 
-    // Rows
-    doc.setTextColor(55, 65, 81);
-    data.forEach((row, rowIndex) => {
-        const y = startY + rowHeight + rowIndex * rowHeight;
+    const renderHeader = (pageColumns: { key: string; label: string }[]): void => {
+        const colWidth = (pageWidth - marginX * 2) / pageColumns.length;
 
-        if (y > doc.internal.pageSize.height - 20) {
-            doc.addPage();
-            return;
-        }
+        doc.setFontSize(8);
+        doc.setTextColor(255, 255, 255);
+        doc.setFillColor(31, 41, 55);
+        doc.rect(marginX, startY, pageWidth - marginX * 2, headerHeight, 'F');
 
-        if (rowIndex % 2 === 0) {
-            doc.setFillColor(249, 250, 251);
-            doc.rect(14, y, doc.internal.pageSize.width - 28, rowHeight, 'F');
-        }
-
-        columns.forEach((col, i) => {
-            const value = String(row[col.key] ?? '').substring(0, 25);
-            doc.text(value, 14 + i * colWidth + cellPadding, y + 7);
+        pageColumns.forEach((col, index) => {
+            doc.text(col.label, marginX + index * colWidth + cellPadding, startY + 7, {
+                maxWidth: colWidth - cellPadding * 2,
+            });
         });
-    });
+    };
+
+    renderPageChrome();
+
+    // Split columns into smaller groups so each page stays readable instead of cramming all columns into one table.
+    for (let colStart = 0; colStart < columns.length; colStart += maxColumnsPerPage) {
+        const pageColumns = columns.slice(colStart, colStart + maxColumnsPerPage);
+        const colWidth = (pageWidth - marginX * 2) / pageColumns.length;
+
+        if (colStart > 0) {
+            doc.addPage();
+            renderPageChrome();
+        }
+
+        renderHeader(pageColumns);
+        doc.setTextColor(55, 65, 81);
+
+        let y = startY + headerHeight;
+        data.forEach((row, rowIndex) => {
+            if (y > pageHeight - 20) {
+                doc.addPage();
+                renderPageChrome();
+                renderHeader(pageColumns);
+                y = startY + headerHeight;
+            }
+
+            if (rowIndex % 2 === 0) {
+                doc.setFillColor(249, 250, 251);
+                doc.rect(marginX, y, pageWidth - marginX * 2, rowHeight, 'F');
+            }
+
+            pageColumns.forEach((col, index) => {
+                const rawValue = String(row[col.key] ?? '');
+                const truncated = rawValue.length > 40 ? `${rawValue.substring(0, 37)}…` : rawValue;
+
+                doc.text(truncated, marginX + index * colWidth + cellPadding, y + 5, {
+                    maxWidth: colWidth - cellPadding * 2,
+                });
+            });
+
+            y += rowHeight;
+        });
+    }
 
     doc.save(`${filename}.pdf`);
 }

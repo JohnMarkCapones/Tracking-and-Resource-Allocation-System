@@ -1,5 +1,5 @@
 import type { InputHTMLAttributes } from 'react';
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, useEffect, useRef, useState } from 'react';
 
 const EyeIcon = ({ className }: { className?: string }) => (
     <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden="true">
@@ -18,10 +18,6 @@ export default forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement
     function PasswordInput({ className = '', isFocused = false, ...props }, ref) {
         const [visible, setVisible] = useState(false);
         const localRef = useRef<HTMLInputElement>(null);
-
-        useImperativeHandle(ref, () => ({
-            focus: () => localRef.current?.focus(),
-        }));
 
         useEffect(() => {
             if (isFocused) {

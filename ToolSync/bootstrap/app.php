@@ -27,4 +27,12 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
+    })
+    ->withSchedule(function (\Illuminate\Console\Scheduling\Schedule $schedule): void {
+        // Activate UPCOMING reservations daily at midnight
+        $schedule->command('reservations:activate')
+            ->daily()
+            ->at('00:00')
+            ->withoutOverlapping()
+            ->runInBackground();
     })->create();

@@ -3,6 +3,7 @@ import { QRCodeSVG } from 'qrcode.react';
 type Tool = {
     id: number;
     name: string;
+    slug?: string | null;
     toolId: string;
 };
 
@@ -20,7 +21,7 @@ export function BulkQRGenerator({ tools, onClose }: BulkQRGeneratorProps) {
             .map(
                 (tool) => `
             <div class="qr-item">
-                <div class="qr-placeholder" data-url="${window.location.origin}/tools/${tool.id}">[QR: ${tool.toolId}]</div>
+                <div class="qr-placeholder" data-url="${window.location.origin}/tools/${tool.slug ?? tool.id}">[QR: ${tool.toolId}]</div>
                 <div class="label">${tool.name}</div>
                 <div class="id">ID: ${tool.toolId}</div>
             </div>
@@ -74,7 +75,7 @@ export function BulkQRGenerator({ tools, onClose }: BulkQRGeneratorProps) {
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {tools.map((tool) => (
                     <div key={tool.id} className="flex flex-col items-center rounded-xl bg-white p-4 shadow-sm dark:bg-gray-800">
-                        <QRCodeSVG value={`${window.location.origin}/tools/${tool.id}`} size={120} level="H" includeMargin={true} />
+                        <QRCodeSVG value={`${window.location.origin}/tools/${tool.slug ?? tool.id}`} size={120} level="H" includeMargin={true} />
                         <p className="mt-2 text-center text-xs font-medium text-gray-900 dark:text-white">{tool.name}</p>
                         <p className="text-center text-[10px] text-gray-500 dark:text-gray-400">ID: {tool.toolId}</p>
                     </div>

@@ -5,6 +5,7 @@ export type ToolStatus = 'Available' | 'Borrowed' | 'Maintenance';
 export type Tool = {
     id: number;
     name: string;
+    /** Human-friendly tool identifier (code or TL-{id}). */
     toolId: string;
     category: string;
     status: ToolStatus;
@@ -16,6 +17,11 @@ export type Tool = {
     description?: string;
     /** Key-value specs (e.g. Processor, Memory); optional in list view */
     specifications?: Record<string, string>;
+    /**
+     * Relative image path from the API (e.g. "images/tools/foo.png").
+     * Used by admin edit modal to show the current display image.
+     */
+    imagePath?: string | null;
 };
 
 type ToolTableProps = {

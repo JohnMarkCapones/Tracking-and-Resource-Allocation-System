@@ -11,6 +11,8 @@ export type ToolDto = {
     id: number;
     code?: string | null;
     name: string;
+    /** URL-safe slug from tool name (e.g. "macbook-pro-14") for /tools/{slug} */
+    slug?: string | null;
     description: string | null;
     image_path: string | null;
     category_id: number;
@@ -24,6 +26,12 @@ export type ToolDto = {
     allocations_count?: number;
     /** Number of currently borrowed allocations for this tool. */
     borrowed_count?: number;
+    /** Number of active reservations (PENDING, UPCOMING) for this tool. */
+    reserved_count?: number;
+    /** Calculated available count (quantity - borrowed - reserved). */
+    calculated_available_count?: number;
+    /** Calculated reserved count (same as reserved_count but from service). */
+    calculated_reserved_count?: number;
     /** Key-value specs (e.g. Processor, Memory) shown on tool detail. */
     specifications?: Record<string, string> | null;
 };
@@ -80,6 +88,7 @@ export type AllocationDto = {
     tool: {
         id: number;
         name: string;
+        slug?: string | null;
         category?: {
             id: number;
             name: string;
@@ -97,6 +106,7 @@ export type BorrowingStatusUi = 'Active' | 'Pending' | 'Returned' | 'Overdue';
 export type BorrowingCardTool = {
     id: number;
     name: string;
+    slug?: string | null;
     toolId: string;
     category: string;
 };
@@ -139,6 +149,7 @@ export type DashboardCounts = {
     tools_maintenance_quantity: number;
     borrowed_active_count: number;
     overdue_count: number;
+    returned_today_count?: number;
 };
 
 export type DashboardRecentActivityItem = {
@@ -315,6 +326,7 @@ export type UsageHeatmapApiResponse = {
 export type FavoriteApiItem = {
     id: number;
     name: string;
+    slug?: string | null;
     toolId: string;
     category: string;
     imageUrl?: string | null;

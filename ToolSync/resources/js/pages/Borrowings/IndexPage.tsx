@@ -37,8 +37,9 @@ function allocationToBorrowing(a: AllocationDto): Borrowing {
         tool: {
             id: a.tool?.id ?? a.tool_id,
             name: a.tool?.name ?? `Tool #${a.tool_id}`,
+            slug: a.tool?.slug ?? undefined,
             toolId: 'TL-' + (a.tool?.id ?? a.tool_id),
-            category: 'Other',
+            category: a.tool?.category?.name ?? 'Other',
         },
         borrowDate,
         dueDate,

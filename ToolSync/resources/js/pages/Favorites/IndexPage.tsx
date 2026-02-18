@@ -14,14 +14,17 @@ type FavoritesApiResponse = { data: FavoriteApiItem[] };
 export default function IndexPage() {
     const { favorites, recentlyViewed, clearRecentlyViewed, setFavorites } = useFavoritesStore();
 
+    const toolHref = (tool: ToolCardData) => `/tools/${tool.slug ?? tool.id}`;
+
     const handleRequestBorrow = (tool: ToolCardData) => {
-        router.visit(`/tools/${tool.id}?request=1`);
+        router.visit(`${toolHref(tool)}?request=1`);
     };
 
     // Convert favorite tools to ToolCard format
     const favoriteTools: ToolCardData[] = favorites.map((tool) => ({
         id: tool.id,
         name: tool.name,
+        slug: tool.slug ?? undefined,
         toolId: tool.toolId,
         category: tool.category,
         status: tool.status as 'Available' | 'Borrowed' | 'Maintenance',
@@ -43,6 +46,7 @@ export default function IndexPage() {
                     (res.data ?? []).map((t) => ({
                         id: t.id,
                         name: t.name,
+                        slug: t.slug ?? undefined,
                         toolId: t.toolId,
                         category: t.category,
                         imageUrl: t.imageUrl,
@@ -141,7 +145,7 @@ export default function IndexPage() {
                             {recentlyViewed.map((tool) => (
                                 <Link
                                     key={tool.id}
-                                    href={`/tools/${tool.id}`}
+                                    href={`/tools/${tool.slug ?? tool.id}`}
                                     className="flex-shrink-0 rounded-xl bg-white p-3 shadow-sm transition-shadow hover:shadow-md dark:bg-gray-800"
                                     style={{ minWidth: '160px' }}
                                 >

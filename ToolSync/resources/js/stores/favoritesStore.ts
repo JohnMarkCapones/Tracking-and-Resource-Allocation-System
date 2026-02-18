@@ -4,6 +4,7 @@ import { persist } from 'zustand/middleware';
 type FavoriteTool = {
     id: number;
     name: string;
+    slug?: string | null;
     toolId: string;
     category: string;
     imageUrl?: string | null;

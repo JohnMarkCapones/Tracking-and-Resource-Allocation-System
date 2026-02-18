@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreToolAllocationRequest;
 use App\Http\Requests\UpdateToolAllocationRequest;
+use App\Models\Reservation;
 use App\Models\SystemSetting;
 use App\Models\Tool;
 use App\Models\ToolAllocation;
@@ -14,6 +15,7 @@ use App\Notifications\InAppSystemNotification;
 use App\Services\ActivityLogger;
 use App\Services\AutoApprovalEvaluator;
 use App\Services\DateValidationService;
+use App\Services\ToolAvailabilityService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -179,18 +181,39 @@ class ToolAllocationController extends Controller
             }
         }
 
+        // Check for conflicting reservations before creating allocation
+        $availabilityService = app(ToolAvailabilityService::class);
+        $availabilityCheck = $availabilityService->checkAvailability((int) $validated['tool_id'], $borrowDate, $expectedReturn);
+        if (! $availabilityCheck['available']) {
+            return response()->json([
+                'message' => $availabilityCheck['reason'] ?? 'Tool is not available for the selected date range.',
+            ], 409);
+        }
+
         // Pass the validated Y-m-d strings directly. MySQL will store them as
         // "2026-02-10 00:00:00" with no timezone conversion, so the calendar date
         // is always preserved exactly as the user selected it.
         $createPayload = $validated;
 
-        $allocation = DB::transaction(function () use ($createPayload, $validated, $request): ToolAllocation {
+        $allocation = DB::transaction(function () use ($createPayload, $validated, $request, $borrowDate, $expectedReturn): ToolAllocation {
             /** @var Tool $tool */
             $tool = Tool::query()->lockForUpdate()->findOrFail((int) $validated['tool_id']);
 
             if ($tool->status !== 'AVAILABLE' || $tool->quantity < 1) {
                 abort(response()->json([
                     'message' => 'Tool is not available for borrowing.',
+                ], 409));
+            }
+
+            // Double-check reservation conflicts after locking
+            $availabilityService = app(ToolAvailabilityService::class);
+            $conflictingReservations = $availabilityService->getConflictingReservations($tool->id, $borrowDate, $expectedReturn);
+            $conflictingAllocations = $availabilityService->getConflictingAllocations($tool->id, $borrowDate, $expectedReturn);
+            $committedCount = $conflictingReservations->count() + $conflictingAllocations->count();
+
+            if ($committedCount >= $tool->quantity) {
+                abort(response()->json([
+                    'message' => 'Tool is already fully allocated or reserved for the selected date range.',
                 ], 409));
             }
 

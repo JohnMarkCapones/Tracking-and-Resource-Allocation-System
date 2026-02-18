@@ -8,6 +8,7 @@ export type Borrowing = {
     tool: {
         id: number;
         name: string;
+        slug?: string | null;
         toolId: string;
         category: string;
     };
@@ -65,7 +66,7 @@ export function BorrowingCard({ borrowing, onReturn, returnRequested = false }: 
                 <div className="flex-1">
                     <div className="flex items-center gap-2">
                         <Link
-                            href={`/tools/${borrowing.tool.id}`}
+                            href={`/tools/${borrowing.tool.slug ?? borrowing.tool.id}`}
                             className="text-sm font-semibold text-gray-900 hover:text-blue-600 hover:underline"
                         >
                             {borrowing.tool.name}

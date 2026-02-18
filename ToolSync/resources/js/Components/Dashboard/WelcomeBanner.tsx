@@ -6,10 +6,20 @@ type WelcomeBannerProps = {
     toolsUnderMaintenance: number;
     borrowedItemsCount: number;
     availableTools: number;
+    returnedTodayCount: number;
 };
 
-export function WelcomeBanner({ userName, totalTools, toolsUnderMaintenance, borrowedItemsCount, availableTools }: WelcomeBannerProps) {
+export function WelcomeBanner({
+    userName,
+    totalTools,
+    toolsUnderMaintenance,
+    borrowedItemsCount,
+    availableTools,
+    returnedTodayCount,
+}: WelcomeBannerProps) {
     const borrowedDisplay = borrowedItemsCount === 0 ? 'None' : borrowedItemsCount;
+    const returnedTodayDisplay =
+        returnedTodayCount === 0 ? 'None returned today' : `${returnedTodayCount} returned today`;
 
     return (
         <section className="rounded-3xl bg-gradient-to-r from-blue-900 via-blue-700 to-blue-500 px-8 py-6 text-white shadow-md">
@@ -75,7 +85,7 @@ export function WelcomeBanner({ userName, totalTools, toolsUnderMaintenance, bor
                     <div className="group rounded-2xl bg-sky-400/25 px-4 py-3 shadow-sm transition hover:bg-sky-400/35 hover:shadow">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-xs text-sky-50">Borrowed items</p>
+                                <p className="text-xs text-sky-50">Currently borrowed</p>
                                 <p className="mt-1 text-2xl font-semibold">{borrowedDisplay}</p>
                             </div>
                             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500">
@@ -85,7 +95,7 @@ export function WelcomeBanner({ userName, totalTools, toolsUnderMaintenance, bor
                                 </svg>
                             </div>
                         </div>
-                        <p className="mt-2 text-[11px] text-sky-50">-3 returned today</p>
+                        <p className="mt-2 text-[11px] text-sky-50">{returnedTodayDisplay}</p>
                     </div>
 
                     <div className="group rounded-2xl bg-emerald-400/25 px-4 py-3 shadow-sm transition hover:bg-emerald-400/35 hover:shadow">

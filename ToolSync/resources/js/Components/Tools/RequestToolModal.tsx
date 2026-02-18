@@ -8,13 +8,30 @@ type RequestToolModalProps = {
     show: boolean;
     toolName: string;
     toolId: string;
+    /** 'borrow' = Request to Borrow, 'reservation' = Request a Reservation */
+    intent?: 'borrow' | 'reservation';
     onClose: () => void;
     onSubmit: (data: { dateRange: DateRange; purpose: string }) => void;
     /** When true, disables submit to prevent spamming multiple requests. */
     submitting?: boolean;
 };
 
-export function RequestToolModal({ show, toolName, toolId, onClose, onSubmit, submitting = false }: RequestToolModalProps) {
+export function RequestToolModal({
+    show,
+    toolName,
+    toolId,
+    intent = 'reservation',
+    onClose,
+    onSubmit,
+    submitting = false,
+}: RequestToolModalProps) {
+    const isBorrow = intent === 'borrow';
+    const title = isBorrow ? 'Request to Borrow' : 'Request a Reservation';
+    const purposeLabel = isBorrow ? 'Purpose of borrowing' : 'Purpose of reservation';
+    const purposePlaceholder = isBorrow
+        ? 'Briefly describe why you need to borrow this tool...'
+        : 'Briefly describe why you need this reservation...';
+    const submitLabel = isBorrow ? 'Submit Borrow Request' : 'Submit Reservation';
     const [dateRange, setDateRange] = useState<DateRange | undefined>();
     const [purpose, setPurpose] = useState('');
     const [error, setError] = useState('');
@@ -49,7 +66,7 @@ export function RequestToolModal({ show, toolName, toolId, onClose, onSubmit, su
         }
 
         if (!purpose.trim()) {
-            setError('Please enter the purpose of borrowing');
+            setError(isBorrow ? 'Please enter the purpose of borrowing.' : 'Please enter the purpose of your reservation.');
             return;
         }
 
@@ -67,7 +84,7 @@ export function RequestToolModal({ show, toolName, toolId, onClose, onSubmit, su
         <Modal show={show} maxWidth="md" onClose={handleClose}>
             <div className="overflow-hidden rounded-lg">
                 <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-6 py-4 text-white">
-                    <h2 className="text-sm font-semibold">Request to Borrow</h2>
+                    <h2 className="text-sm font-semibold">{title}</h2>
                     <p className="mt-1 text-[11px] text-blue-100">
                         {toolName} ({toolId})
                     </p>
@@ -142,7 +159,7 @@ export function RequestToolModal({ show, toolName, toolId, onClose, onSubmit, su
 
                         <div>
                             <label htmlFor="purpose" className="mb-1 block text-[11px] font-semibold tracking-wide text-gray-500 uppercase">
-                                Purpose
+                                {purposeLabel}
                             </label>
                             <textarea
                                 id="purpose"
@@ -150,7 +167,7 @@ export function RequestToolModal({ show, toolName, toolId, onClose, onSubmit, su
                                 onChange={(e) => setPurpose(e.target.value)}
                                 rows={3}
                                 className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                                placeholder="Briefly describe why you need this tool..."
+                                placeholder={purposePlaceholder}
                             />
                         </div>
 
@@ -171,7 +188,7 @@ export function RequestToolModal({ show, toolName, toolId, onClose, onSubmit, su
                             disabled={submitting}
                             className="rounded-full bg-blue-600 px-4 py-1.5 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                            {submitting ? 'Submitting…' : 'Submit Request'}
+                            {submitting ? 'Submitting…' : submitLabel}
                         </button>
                     </div>
                 </form>

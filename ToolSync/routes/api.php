@@ -8,7 +8,9 @@ use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\FavoriteController;
 use App\Http\Controllers\Api\MaintenanceScheduleController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\RecentToolViewController;
 use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\ReportTemplateController;
 use App\Http\Controllers\Api\ReservationController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\ToolAllocationController;
@@ -65,6 +67,9 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::get('favorites', [FavoriteController::class, 'index']);
     Route::post('favorites', [FavoriteController::class, 'store']);
     Route::delete('favorites/{tool}', [FavoriteController::class, 'destroy']);
+    Route::get('recently-viewed-tools', [RecentToolViewController::class, 'index']);
+    Route::post('recently-viewed-tools', [RecentToolViewController::class, 'store']);
+    Route::delete('recently-viewed-tools', [RecentToolViewController::class, 'destroyAll']);
 
     Route::get('reservations', [ReservationController::class, 'index']);
     Route::post('reservations', [ReservationController::class, 'store']);
@@ -89,6 +94,9 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
         Route::get('settings', [SettingsController::class, 'index']);
         Route::put('settings', [SettingsController::class, 'update']);
         Route::post('reports/data', [ReportController::class, 'data']);
+        Route::get('report-templates', [ReportTemplateController::class, 'index']);
+        Route::post('report-templates', [ReportTemplateController::class, 'store']);
+        Route::patch('report-templates/{reportTemplate}', [ReportTemplateController::class, 'update']);
         Route::apiResource('maintenance-schedules', MaintenanceScheduleController::class);
         Route::apiResource('tool-deprecations', ToolDeprecationController::class);
         Route::apiResource('departments', DepartmentController::class);

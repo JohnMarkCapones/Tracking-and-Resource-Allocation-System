@@ -109,13 +109,14 @@ class ToolController extends Controller
         ]);
     }
 
-    public function show(int $id): Response
+    public function show(string $slug): Response
     {
         /** @var Tool $dbTool */
         $dbTool = Tool::query()
             ->with('category')
             ->withCount('allocations')
-            ->findOrFail($id);
+            ->where('slug', $slug)
+            ->firstOrFail();
 
         $status = match ($dbTool->status) {
             'BORROWED' => 'Borrowed',
@@ -129,6 +130,7 @@ class ToolController extends Controller
 
         $tool = [
             'id' => $dbTool->id,
+            'slug' => $dbTool->slug,
             'name' => $dbTool->name,
             'toolId' => $toolIdDisplay,
             'category' => $dbTool->category?->name ?? 'Other',

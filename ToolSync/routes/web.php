@@ -1,6 +1,5 @@
 <?php
 
-
 use App\Http\Controllers\AdminDashboardController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ProfileController;
@@ -43,8 +42,9 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
 Route::get('/tools', [ToolController::class, 'catalog'])
     ->name('tools.catalog');
 
-Route::get('/tools/{id}', [ToolController::class, 'show'])
-    ->name('tools.show');
+Route::get('/tools/{slug}', [ToolController::class, 'show'])
+    ->name('tools.show')
+    ->where('slug', '[a-z0-9]+(?:-[a-z0-9]+)*');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])
@@ -59,15 +59,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/reservations', function () {
         return Inertia::render('Reservations/IndexPage');
     })->name('reservations');
-    Route::get('/messages', function () {
-        return Inertia::render('Messages/IndexPage');
-    })->name('messages');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
-
-
 
 require __DIR__.'/auth.php';
