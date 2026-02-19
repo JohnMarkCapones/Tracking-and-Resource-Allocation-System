@@ -16,7 +16,9 @@
       "Bash(npm install:*)",
       "Bash(npm run types:*)",
       "Bash(npm run lint:*)",
-      "Bash(npm run format:*)"
+      "Bash(npm run format:*)",
+      "Bash(vendor/bin/pint:*)",
+      "Bash(git stash:*)"
     ]
   }
 }

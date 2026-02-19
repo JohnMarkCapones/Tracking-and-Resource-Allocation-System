@@ -5,15 +5,12 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreToolAllocationRequest;
 use App\Http\Requests\UpdateToolAllocationRequest;
-use App\Models\Reservation;
-use App\Models\SystemSetting;
 use App\Models\Tool;
 use App\Models\ToolAllocation;
 use App\Models\ToolStatusLog;
 use App\Models\User;
 use App\Notifications\InAppSystemNotification;
 use App\Services\ActivityLogger;
-use App\Services\AutoApprovalEvaluator;
 use App\Services\DateValidationService;
 use App\Services\ToolAvailabilityService;
 use Carbon\Carbon;
@@ -130,17 +127,20 @@ class ToolAllocationController extends Controller
      *   "message": "Tool is not available for borrowing."
      * }
      */
+    /**
+     * Admin-only: directly create a tool allocation (bypasses the reservation approval flow).
+     * Regular users must go through POST /api/reservations → admin approve.
+     */
     public function store(StoreToolAllocationRequest $request): JsonResponse
     {
-        $validated = $request->validated();
         $actor = $request->user();
-
-        if ($actor && ! $actor->isAdmin()) {
-            $validated['user_id'] = $actor->id;
+        if (! $actor || ! $actor->isAdmin()) {
+            return response()->json([
+                'message' => 'Only admins can directly create tool allocations. Users should submit a borrow request instead.',
+            ], 403);
         }
 
-        // DEBUG: log what arrives from the frontend
-        \Log::info('BORROW DEBUG - validated input', $validated);
+        $validated = $request->validated();
 
         $borrowDate = Carbon::parse($validated['borrow_date']);
         $expectedReturn = Carbon::parse($validated['expected_return_date']);
@@ -152,36 +152,6 @@ class ToolAllocationController extends Controller
             ], 422);
         }
 
-        $borrower = User::query()->findOrFail((int) $validated['user_id']);
-        $maxBorrowings = (int) (SystemSetting::query()->where('key', 'max_borrowings')->value('value') ?? 3);
-        $maxDuration = (int) (SystemSetting::query()->where('key', 'max_duration')->value('value') ?? 14);
-        $currentBorrowed = ToolAllocation::query()
-            ->where('user_id', $borrower->id)
-            ->whereIn('status', ['BORROWED', 'PENDING_RETURN'])
-            ->count();
-        $durationDays = $borrowDate->diffInDays($expectedReturn) + 1;
-        $evaluator = app(AutoApprovalEvaluator::class);
-        $bypassLimits = $evaluator->passesAnyRule($borrower, [
-            'user_id' => $borrower->id,
-            'borrow_date' => $validated['borrow_date'],
-            'expected_return_date' => $validated['expected_return_date'],
-            'tool_id' => (int) $validated['tool_id'],
-        ]);
-
-        if (! $bypassLimits) {
-            if ($currentBorrowed >= $maxBorrowings) {
-                return response()->json([
-                    'message' => "You have reached the maximum concurrent borrowings ({$maxBorrowings}). Return a tool before borrowing another.",
-                ], 422);
-            }
-            if ($durationDays > $maxDuration) {
-                return response()->json([
-                    'message' => "Borrow duration cannot exceed {$maxDuration} days. Requested: {$durationDays} days.",
-                ], 422);
-            }
-        }
-
-        // Check for conflicting reservations before creating allocation
         $availabilityService = app(ToolAvailabilityService::class);
         $availabilityCheck = $availabilityService->checkAvailability((int) $validated['tool_id'], $borrowDate, $expectedReturn);
         if (! $availabilityCheck['available']) {
@@ -190,12 +160,7 @@ class ToolAllocationController extends Controller
             ], 409);
         }
 
-        // Pass the validated Y-m-d strings directly. MySQL will store them as
-        // "2026-02-10 00:00:00" with no timezone conversion, so the calendar date
-        // is always preserved exactly as the user selected it.
-        $createPayload = $validated;
-
-        $allocation = DB::transaction(function () use ($createPayload, $validated, $request, $borrowDate, $expectedReturn): ToolAllocation {
+        $allocation = DB::transaction(function () use ($validated, $request, $borrowDate, $expectedReturn): ToolAllocation {
             /** @var Tool $tool */
             $tool = Tool::query()->lockForUpdate()->findOrFail((int) $validated['tool_id']);
 
@@ -205,7 +170,6 @@ class ToolAllocationController extends Controller
                 ], 409));
             }
 
-            // Double-check reservation conflicts after locking
             $availabilityService = app(ToolAvailabilityService::class);
             $conflictingReservations = $availabilityService->getConflictingReservations($tool->id, $borrowDate, $expectedReturn);
             $conflictingAllocations = $availabilityService->getConflictingAllocations($tool->id, $borrowDate, $expectedReturn);
@@ -219,15 +183,8 @@ class ToolAllocationController extends Controller
 
             $oldStatus = $tool->status;
 
-            $allocation = ToolAllocation::create($createPayload);
+            $allocation = ToolAllocation::create($validated);
             $allocation->refresh();
-
-            // DEBUG: log what actually got stored
-            $rawRow = \DB::table('tool_allocations')->where('id', $allocation->id)->first();
-            \Log::info('BORROW DEBUG - raw DB row', [
-                'borrow_date' => $rawRow->borrow_date,
-                'expected_return_date' => $rawRow->expected_return_date,
-            ]);
 
             $tool->quantity = max(0, (int) $tool->quantity - 1);
             if ($tool->quantity === 0 && $tool->status === 'AVAILABLE') {
@@ -252,7 +209,7 @@ class ToolAllocationController extends Controller
             'tool_allocation.created',
             'ToolAllocation',
             $allocation->id,
-            "Tool allocation #{$allocation->id} created for tool #{$allocation->tool_id}.",
+            "Tool allocation #{$allocation->id} created by admin for tool #{$allocation->tool_id}.",
             ['tool_id' => $allocation->tool_id, 'user_id' => $allocation->user_id],
             $request->user()?->id
         );
@@ -263,19 +220,9 @@ class ToolAllocationController extends Controller
         $allocation->user?->notify(new InAppSystemNotification(
             'success',
             'Borrowing confirmed',
-            "Your borrowing for {$toolName} has been created.",
+            "Your borrowing for {$toolName} has been created by an admin.",
             '/borrowings'
         ));
-
-        $adminRecipients = User::query()->where('role', 'ADMIN')->get();
-        if ($adminRecipients->isNotEmpty()) {
-            Notification::send($adminRecipients, new InAppSystemNotification(
-                'info',
-                'New borrowing activity',
-                "{$allocation->user?->name} borrowed {$toolName}.",
-                '/admin/allocation-history'
-            ));
-        }
 
         return response()->json([
             'message' => 'Tool allocation created successfully.',
@@ -406,6 +353,7 @@ class ToolAllocationController extends Controller
             $validated = [
                 'status' => 'PENDING_RETURN',
                 'note' => $validated['note'] ?? $toolAllocation->note,
+                'condition' => $validated['condition'] ?? null,
             ];
         }
 
@@ -418,7 +366,9 @@ class ToolAllocationController extends Controller
 
         $oldAllocationStatus = $toolAllocation->status;
 
-        $returnedCondition = $this->extractConditionFromNote(($validated['note'] ?? null) ?: $toolAllocation->note);
+        // Prefer the dedicated condition field; fall back to parsing the note for backwards compatibility.
+        $returnedCondition = $validated['condition']
+            ?? $this->extractConditionFromNote(($validated['note'] ?? null) ?: $toolAllocation->note);
 
         DB::transaction(function () use ($validated, $request, $toolAllocation, $oldAllocationStatus, $returnedCondition): void {
             if (($validated['status'] ?? null) === 'RETURNED' && empty($validated['actual_return_date'])) {

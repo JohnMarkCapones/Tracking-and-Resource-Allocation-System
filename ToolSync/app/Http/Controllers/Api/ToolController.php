@@ -12,6 +12,7 @@ use App\Models\ToolStatusLog;
 use App\Services\ToolAvailabilityService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -115,15 +116,7 @@ class ToolController extends Controller
 
             $paginator = $query->paginate($perPage);
 
-            // Add calculated availability to each tool
-            $availabilityService = app(ToolAvailabilityService::class);
-            $items = collect($paginator->items())->map(function (Tool $tool) use ($availabilityService) {
-                $availability = $availabilityService->calculateAvailability($tool->id);
-                $tool->setAttribute('calculated_available_count', $availability['available_count']);
-                $tool->setAttribute('calculated_reserved_count', $availability['reserved_count']);
-
-                return $tool;
-            });
+            $items = $this->attachAvailabilityInBulk(collect($paginator->items()));
 
             return response()->json([
                 'data' => $items,
@@ -136,21 +129,55 @@ class ToolController extends Controller
             ]);
         }
 
-        $tools = $query->get();
-
-        // Add calculated availability to each tool
-        $availabilityService = app(ToolAvailabilityService::class);
-        $tools = $tools->map(function (Tool $tool) use ($availabilityService) {
-            $availability = $availabilityService->calculateAvailability($tool->id);
-            $tool->setAttribute('calculated_available_count', $availability['available_count']);
-            $tool->setAttribute('calculated_reserved_count', $availability['reserved_count']);
-
-            return $tool;
-        });
+        $tools = $this->attachAvailabilityInBulk($query->get());
 
         return response()->json([
             'data' => $tools,
         ]);
+    }
+
+    /**
+     * Bulk-load availability counts for a collection of tools using 2 queries total
+     * instead of 2 queries per tool (avoids N+1).
+     *
+     * @param  Collection<int, Tool>  $tools
+     * @return Collection<int, Tool>
+     */
+    private function attachAvailabilityInBulk(Collection $tools): Collection
+    {
+        if ($tools->isEmpty()) {
+            return $tools;
+        }
+
+        $toolIds = $tools->pluck('id');
+
+        $borrowedCounts = ToolAllocation::query()
+            ->whereIn('tool_id', $toolIds)
+            ->whereIn('status', ['BORROWED', 'PENDING_RETURN'])
+            ->selectRaw('tool_id, COUNT(*) as count')
+            ->groupBy('tool_id')
+            ->pluck('count', 'tool_id');
+
+        $reservedCounts = collect();
+        if (Schema::hasTable('reservations')) {
+            $reservedCounts = Reservation::query()
+                ->whereIn('tool_id', $toolIds)
+                ->whereIn('status', ['PENDING', 'UPCOMING'])
+                ->selectRaw('tool_id, COUNT(*) as count')
+                ->groupBy('tool_id')
+                ->pluck('count', 'tool_id');
+        }
+
+        return $tools->map(function (Tool $tool) use ($borrowedCounts, $reservedCounts): Tool {
+            $borrowed = (int) ($borrowedCounts[$tool->id] ?? 0);
+            $reserved = (int) ($reservedCounts[$tool->id] ?? 0);
+            $available = max(0, (int) $tool->quantity - $borrowed - $reserved);
+
+            $tool->setAttribute('calculated_available_count', $available);
+            $tool->setAttribute('calculated_reserved_count', $reserved);
+
+            return $tool;
+        });
     }
 
     /**

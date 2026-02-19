@@ -55,20 +55,11 @@ export default function DetailPage() {
     const { tool } = page.props;
     const { addToRecentlyViewed } = useFavoritesStore();
     const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
-    /** 'borrow' = Request to Borrow, 'reservation' = Request a Reservation */
-    const [requestIntent, setRequestIntent] = useState<'borrow' | 'reservation'>('reservation');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [unavailableDates, setUnavailableDates] = useState<Array<{ from: Date; to: Date }>>([]);
 
-    const openRequestModal = (intent: 'borrow' | 'reservation') => {
-        setRequestIntent(intent);
-        setIsRequestModalOpen(true);
-    };
-
     useEffect(() => {
-        const hasRequestFlag = page.url.includes('request=1');
-        if (hasRequestFlag) {
-            setRequestIntent('reservation');
+        if (page.url.includes('request=1')) {
             setIsRequestModalOpen(true);
         }
     }, [page.url]);
@@ -134,31 +125,19 @@ export default function DetailPage() {
 
         setIsSubmitting(true);
 
-        const startDate = toLocalYmd(data.dateRange.from);
-        const endDate = toLocalYmd(data.dateRange.to);
-
         try {
-            const isBorrowIntent = requestIntent === 'borrow';
-
-            // Both paths create a PENDING reservation that requires admin approval.
-            // The borrow_request flag differentiates the wording only.
             await apiRequest<{ message: string }>('/api/reservations', {
                 method: 'POST',
                 body: {
                     tool_id: tool.id,
-                    start_date: startDate,
-                    end_date: endDate,
+                    start_date: toLocalYmd(data.dateRange.from),
+                    end_date: toLocalYmd(data.dateRange.to),
                     recurring: false,
-                    borrow_request: isBorrowIntent,
                 },
             });
 
             setIsRequestModalOpen(false);
-            toast.success(
-                isBorrowIntent
-                    ? 'Borrowing request submitted for approval!'
-                    : 'Reservation submitted for approval!',
-            );
+            toast.success('Borrow request submitted for approval!');
             router.visit('/reservations');
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to submit request.';
@@ -250,22 +229,13 @@ export default function DetailPage() {
                         <AvailabilityCalendar unavailableDates={unavailableDates} />
 
                         {tool.status === 'Available' && (
-                            <>
-                                <button
-                                    type="button"
-                                    onClick={() => openRequestModal('borrow')}
-                                    className="w-full rounded-full bg-blue-600 py-3 text-sm font-semibold text-white shadow-lg hover:bg-blue-700"
-                                >
-                                    Request to Borrow
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => openRequestModal('reservation')}
-                                    className="w-full rounded-full border-2 border-blue-600 py-3 text-sm font-semibold text-blue-600 bg-white hover:bg-blue-50"
-                                >
-                                    Request a Reservation
-                                </button>
-                            </>
+                            <button
+                                type="button"
+                                onClick={() => setIsRequestModalOpen(true)}
+                                className="w-full rounded-full bg-blue-600 py-3 text-sm font-semibold text-white shadow-lg hover:bg-blue-700"
+                            >
+                                Request to Borrow
+                            </button>
                         )}
 
                         {tool.status === 'Borrowed' && (
@@ -276,10 +246,10 @@ export default function DetailPage() {
                                 </div>
                                 <button
                                     type="button"
-                                    onClick={() => openRequestModal('reservation')}
+                                    onClick={() => setIsRequestModalOpen(true)}
                                     className="w-full rounded-full bg-blue-600 py-3 text-sm font-semibold text-white shadow-lg hover:bg-blue-700"
                                 >
-                                    Request a Reservation
+                                    Request to Borrow
                                 </button>
                             </>
                         )}
@@ -305,7 +275,6 @@ export default function DetailPage() {
                 show={isRequestModalOpen}
                 toolName={tool.name}
                 toolId={tool.toolId}
-                intent={requestIntent}
                 submitting={isSubmitting}
                 onClose={() => {
                     if (isSubmitting) {

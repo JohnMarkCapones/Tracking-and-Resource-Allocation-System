@@ -23,6 +23,9 @@ type ToolCardProps = {
     tool: ToolCardData;
     onRequestBorrow?: (tool: ToolCardData) => void;
     disableBorrowRequest?: boolean;
+    selectable?: boolean;
+    selected?: boolean;
+    onSelectChange?: (tool: ToolCardData, selected: boolean) => void;
 };
 
 function statusClasses(status: ToolCardStatus): string {
@@ -37,7 +40,14 @@ function statusClasses(status: ToolCardStatus): string {
     return 'bg-rose-50 text-rose-700';
 }
 
-export function ToolCard({ tool, onRequestBorrow, disableBorrowRequest = false }: ToolCardProps) {
+export function ToolCard({
+    tool,
+    onRequestBorrow,
+    disableBorrowRequest = false,
+    selectable = false,
+    selected = false,
+    onSelectChange,
+}: ToolCardProps) {
     const toolHref = `/tools/${tool.slug ?? tool.id}`;
 
     const handleButtonClick = (e: React.MouseEvent) => {
@@ -49,6 +59,12 @@ export function ToolCard({ tool, onRequestBorrow, disableBorrowRequest = false }
         } else {
             router.visit(`${toolHref}?request=1`);
         }
+    };
+
+    const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onSelectChange?.(tool, e.target.checked);
     };
 
     const parts = [`Qty: ${tool.quantity} total`, `${tool.availableQuantity} available`];
@@ -86,6 +102,22 @@ export function ToolCard({ tool, onRequestBorrow, disableBorrowRequest = false }
                         </svg>
                     </div>
                 )}
+                {selectable && (
+                    <div
+                        className="absolute top-2 left-2 z-10 pointer-events-auto"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <label className="flex cursor-pointer items-center gap-1.5 rounded-full bg-white/90 px-2 py-1 shadow-sm hover:bg-white">
+                            <input
+                                type="checkbox"
+                                checked={selected}
+                                onChange={handleCheckboxChange}
+                                className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="text-[10px] font-medium text-gray-700">Select</span>
+                        </label>
+                    </div>
+                )}
                 <div className="absolute top-2 right-2 flex items-center gap-1.5 pointer-events-auto">
                     <FavoriteButton tool={tool} size="sm" />
                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusClasses(tool.status)}`}>{tool.status}</span>
@@ -120,7 +152,7 @@ export function ToolCard({ tool, onRequestBorrow, disableBorrowRequest = false }
                     className="mt-3 w-full rounded-full bg-blue-600 py-1.5 text-[11px] font-semibold text-white hover:bg-blue-700"
                     onClick={handleButtonClick}
                 >
-                    Request a Reservation
+                    Request to Borrow
                 </button>
             )}
         </div>

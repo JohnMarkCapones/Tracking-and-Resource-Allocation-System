@@ -55,9 +55,10 @@ test('POST /api/tool-allocations without auth returns 401', function () {
     $response->assertUnauthorized();
 });
 
-test('POST /api/tool-allocations with auth and valid payload (frontend format) returns 201', function () {
+test('POST /api/tool-allocations with admin and valid payload returns 201', function () {
+    $admin = User::factory()->create(['role' => 'ADMIN']);
     $user = User::factory()->create(['role' => 'USER']);
-    Sanctum::actingAs($user);
+    Sanctum::actingAs($admin);
 
     $category = ToolCategory::create(['name' => 'Laptops']);
     $tool = Tool::create([
@@ -104,9 +105,35 @@ test('POST /api/tool-allocations with auth and valid payload (frontend format) r
     expect($tool->quantity)->toBe(1);
 });
 
-test('POST /api/tool-allocations with invalid tool_id returns 422', function () {
+test('POST /api/tool-allocations as non-admin returns 403', function () {
     $user = User::factory()->create(['role' => 'USER']);
     Sanctum::actingAs($user);
+
+    $category = ToolCategory::create(['name' => 'IT']);
+    $tool = Tool::create([
+        'name' => 'Laptop',
+        'description' => null,
+        'image_path' => null,
+        'category_id' => $category->id,
+        'status' => 'AVAILABLE',
+        'quantity' => 1,
+    ]);
+
+    $response = $this->postJson('/api/tool-allocations', [
+        'tool_id' => $tool->id,
+        'user_id' => $user->id,
+        'borrow_date' => now()->addDays(1)->toDateString(),
+        'expected_return_date' => now()->addDays(3)->toDateString(),
+        'note' => 'Test',
+    ]);
+
+    $response->assertForbidden();
+});
+
+test('POST /api/tool-allocations with invalid tool_id returns 422', function () {
+    $admin = User::factory()->create(['role' => 'ADMIN']);
+    $user = User::factory()->create(['role' => 'USER']);
+    Sanctum::actingAs($admin);
 
     $response = $this->postJson('/api/tool-allocations', [
         'tool_id' => 99999,
@@ -121,8 +148,9 @@ test('POST /api/tool-allocations with invalid tool_id returns 422', function () 
 });
 
 test('POST /api/tool-allocations when tool is not available returns 409', function () {
+    $admin = User::factory()->create(['role' => 'ADMIN']);
     $user = User::factory()->create(['role' => 'USER']);
-    Sanctum::actingAs($user);
+    Sanctum::actingAs($admin);
 
     $category = ToolCategory::create(['name' => 'IT']);
     $tool = Tool::create([
@@ -198,15 +226,64 @@ test('POST /api/reservations with auth and valid payload (frontend format) retur
     ]);
 
     $response->assertCreated()
-        ->assertJsonPath('message', 'Reservation created successfully.')
+        ->assertJsonPath('message', 'Borrow request submitted for approval.')
         ->assertJsonPath('data.tool_id', $tool->id)
         ->assertJsonPath('data.user_id', $user->id)
-        ->assertJsonPath('data.status', 'UPCOMING');
+        ->assertJsonPath('data.status', 'PENDING');
 
     $this->assertDatabaseHas('reservations', [
         'tool_id' => $tool->id,
         'user_id' => $user->id,
-        'status' => 'UPCOMING',
+        'status' => 'PENDING',
+    ]);
+});
+
+test('POST /api/reservations/batch creates multiple borrow requests', function () {
+    $user = User::factory()->create(['role' => 'USER']);
+    Sanctum::actingAs($user);
+
+    $category = ToolCategory::create(['name' => 'IT']);
+    $tool1 = Tool::create([
+        'name' => 'Laptop A',
+        'description' => null,
+        'image_path' => null,
+        'category_id' => $category->id,
+        'status' => 'AVAILABLE',
+        'quantity' => 1,
+    ]);
+    $tool2 = Tool::create([
+        'name' => 'Laptop B',
+        'description' => null,
+        'image_path' => null,
+        'category_id' => $category->id,
+        'status' => 'AVAILABLE',
+        'quantity' => 1,
+    ]);
+
+    $startDate = now()->addDays(2)->toDateString();
+    $endDate = now()->addDays(5)->toDateString();
+
+    $response = $this->postJson('/api/reservations/batch', [
+        'tool_ids' => [$tool1->id, $tool2->id],
+        'start_date' => $startDate,
+        'end_date' => $endDate,
+    ]);
+
+    $response->assertCreated()
+        ->assertJsonPath('message', '2 borrow request(s) submitted for approval.');
+
+    $data = $response->json('data');
+    expect($data)->toHaveCount(2);
+
+    $this->assertDatabaseHas('reservations', [
+        'tool_id' => $tool1->id,
+        'user_id' => $user->id,
+        'status' => 'PENDING',
+    ]);
+    $this->assertDatabaseHas('reservations', [
+        'tool_id' => $tool2->id,
+        'user_id' => $user->id,
+        'status' => 'PENDING',
     ]);
 });
 
@@ -226,8 +303,9 @@ test('POST /api/reservations with invalid tool_id returns 422', function () {
 });
 
 test('full flow: borrow then reserve mirrors frontend behavior', function () {
+    $admin = User::factory()->create(['role' => 'ADMIN']);
     $user = User::factory()->create(['role' => 'USER']);
-    Sanctum::actingAs($user);
+    Sanctum::actingAs($admin);
 
     $category = ToolCategory::create(['name' => 'IT']);
     $tool = Tool::create([
@@ -239,7 +317,7 @@ test('full flow: borrow then reserve mirrors frontend behavior', function () {
         'quantity' => 1,
     ]);
 
-    // 1) Request to borrow (like "Request to Borrow" on detail page when Available)
+    // 1) Admin directly creates allocation (POST /api/tool-allocations is admin-only)
     $borrowStart = now()->addDays(1)->toDateString();
     $borrowEnd = now()->addDays(4)->toDateString();
 
@@ -256,7 +334,8 @@ test('full flow: borrow then reserve mirrors frontend behavior', function () {
     expect($tool->status)->toBe('BORROWED');
     expect($tool->quantity)->toBe(0);
 
-    // 2) Request a reservation (like "Request a Reservation" when tool is Borrowed)
+    // 2) User tries to reserve (tool is BORROWED with quantity 0)
+    Sanctum::actingAs($user);
     // Note: With new validation, tool must be AVAILABLE with quantity > 0 to create reservation
     // This test now verifies that BORROWED tools with quantity 0 cannot be reserved
     $reserveStart = now()->addDays(10)->toDateString();

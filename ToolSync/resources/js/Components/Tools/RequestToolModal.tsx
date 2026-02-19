@@ -1,72 +1,53 @@
-import { format } from 'date-fns';
+import { format, startOfDay } from 'date-fns';
 import { useState } from 'react';
 import { DayPicker, getDefaultClassNames, type DateRange } from 'react-day-picker';
 import Modal from '@/Components/Modal';
+import type { ToolCardData } from '@/Components/Tools/ToolCard';
 import 'react-day-picker/style.css';
 
 type RequestToolModalProps = {
     show: boolean;
-    toolName: string;
-    toolId: string;
-    /** 'borrow' = Request to Borrow, 'reservation' = Request a Reservation */
-    intent?: 'borrow' | 'reservation';
+    toolName?: string;
+    toolId?: string;
+    tools?: ToolCardData[];
     onClose: () => void;
     onSubmit: (data: { dateRange: DateRange; purpose: string }) => void;
-    /** When true, disables submit to prevent spamming multiple requests. */
     submitting?: boolean;
 };
 
 export function RequestToolModal({
     show,
-    toolName,
-    toolId,
-    intent = 'reservation',
+    toolName = '',
+    toolId = '',
+    tools,
     onClose,
     onSubmit,
     submitting = false,
 }: RequestToolModalProps) {
-    const isBorrow = intent === 'borrow';
-    const title = isBorrow ? 'Request to Borrow' : 'Request a Reservation';
-    const purposeLabel = isBorrow ? 'Purpose of borrowing' : 'Purpose of reservation';
-    const purposePlaceholder = isBorrow
-        ? 'Briefly describe why you need to borrow this tool...'
-        : 'Briefly describe why you need this reservation...';
-    const submitLabel = isBorrow ? 'Submit Borrow Request' : 'Submit Reservation';
     const [dateRange, setDateRange] = useState<DateRange | undefined>();
     const [purpose, setPurpose] = useState('');
     const [error, setError] = useState('');
-
-    const handleDateSelect = (selectedDate: Date | undefined) => {
-        if (!selectedDate) {
-            setDateRange(undefined);
-            return;
-        }
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const endDate = new Date(selectedDate);
-        endDate.setHours(0, 0, 0, 0);
-
-        // Always create a range from today to the selected date
-        setDateRange({ from: today, to: endDate });
-    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
         if (submitting) {
-            // Guard against double-submit while a request is already in-flight.
             return;
         }
         setError('');
 
         if (!dateRange?.from || !dateRange?.to) {
-            setError('Please select a date range');
+            setError('Please select a start and end date');
+            return;
+        }
+
+        if (dateRange.from > dateRange.to) {
+            setError('End date must be on or after start date');
             return;
         }
 
         if (!purpose.trim()) {
-            setError(isBorrow ? 'Please enter the purpose of borrowing.' : 'Please enter the purpose of your reservation.');
+            setError('Please enter the purpose of borrowing.');
             return;
         }
 
@@ -80,43 +61,39 @@ export function RequestToolModal({
         onClose();
     };
 
+    const isBatch = tools && tools.length > 0;
+    const displayTitle = isBatch ? `Request to Borrow (${tools.length} items)` : 'Request to Borrow';
+    const displaySubtitle = isBatch
+        ? tools.map((t: ToolCardData) => `${t.name} (${t.toolId})`).join(', ')
+        : `${toolName} (${toolId})`;
+
     return (
         <Modal show={show} maxWidth="md" onClose={handleClose}>
             <div className="overflow-hidden rounded-lg">
                 <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-6 py-4 text-white">
-                    <h2 className="text-sm font-semibold">{title}</h2>
-                    <p className="mt-1 text-[11px] text-blue-100">
-                        {toolName} ({toolId})
+                    <h2 className="text-sm font-semibold">{displayTitle}</h2>
+                    <p className="mt-1 max-h-16 overflow-y-auto text-[11px] text-blue-100">
+                        {displaySubtitle}
                     </p>
                 </div>
 
                 <form onSubmit={handleSubmit}>
                     <div className="space-y-4 bg-white px-6 py-5">
                         <div>
-                            <label className="mb-2 block text-[11px] font-semibold tracking-wide text-gray-500 uppercase">Select Dates</label>
+                            <label className="mb-2 block text-[11px] font-semibold tracking-wide text-gray-500 uppercase">
+                                Select date range (click start date, then end date)
+                            </label>
                             <div className="rounded-xl border border-gray-200 p-3">
-                                {/*
-                                 * Use the same DayPicker v9 styling as the tool detail calendar,
-                                 * so arrows, spacing, and selection feel consistent across the app.
-                                 */}
                                 <DayPicker
-                                    mode="single"
-                                    selected={dateRange?.to}
-                                    onSelect={handleDateSelect}
+                                    mode="range"
+                                    selected={dateRange}
+                                    onSelect={setDateRange}
                                     numberOfMonths={1}
-                                    disabled={{ before: new Date() }}
-                                    modifiers={{ 
-                                        range_start: dateRange?.from ? [dateRange.from] : [],
-                                        range_end: dateRange?.to ? [dateRange.to] : [],
-                                        range_middle: dateRange?.from && dateRange?.to ? (date) => {
-                                            if (!dateRange.from || !dateRange.to) return false;
-                                            return date > dateRange.from && date < dateRange.to;
-                                        } : []
-                                    }}
+                                    disabled={{ before: startOfDay(new Date()) }}
                                     modifiersClassNames={{
                                         range_start: 'bg-blue-600 text-white hover:bg-blue-700 rounded-full',
                                         range_end: 'bg-blue-600 text-white hover:bg-blue-700 rounded-full',
-                                        range_middle: 'bg-blue-50 text-blue-900'
+                                        range_middle: 'bg-blue-50 text-blue-900 rounded-none',
                                     }}
                                     navLayout="around"
                                     classNames={(() => {
@@ -147,19 +124,28 @@ export function RequestToolModal({
                                     }}
                                 />
                             </div>
-                            {dateRange?.from && dateRange?.to && (
+                            {dateRange?.from && (
                                 <p className="mt-2 text-[11px] text-gray-600">
-                                    Selected:{' '}
-                                    <span className="font-medium">
-                                        {format(dateRange.from, 'MMM d, yyyy')} - {format(dateRange.to, 'MMM d, yyyy')}
-                                    </span>
+                                    {dateRange.to ? (
+                                        <>
+                                            Selected:{' '}
+                                            <span className="font-medium">
+                                                {format(dateRange.from, 'MMM d, yyyy')} – {format(dateRange.to, 'MMM d, yyyy')}
+                                            </span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            Start: <span className="font-medium">{format(dateRange.from, 'MMM d, yyyy')}</span>
+                                            {' '}— click end date
+                                        </>
+                                    )}
                                 </p>
                             )}
                         </div>
 
                         <div>
                             <label htmlFor="purpose" className="mb-1 block text-[11px] font-semibold tracking-wide text-gray-500 uppercase">
-                                {purposeLabel}
+                                Purpose of borrowing
                             </label>
                             <textarea
                                 id="purpose"
@@ -167,7 +153,7 @@ export function RequestToolModal({
                                 onChange={(e) => setPurpose(e.target.value)}
                                 rows={3}
                                 className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                                placeholder={purposePlaceholder}
+                                placeholder="Briefly describe why you need to borrow this tool..."
                             />
                         </div>
 
@@ -185,10 +171,10 @@ export function RequestToolModal({
                         </button>
                         <button
                             type="submit"
-                            disabled={submitting}
+                            disabled={submitting || !dateRange?.from || !dateRange?.to}
                             className="rounded-full bg-blue-600 px-4 py-1.5 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                            {submitting ? 'Submitting…' : submitLabel}
+                            {submitting ? 'Submitting…' : 'Submit Borrow Request'}
                         </button>
                     </div>
                 </form>

@@ -17,6 +17,7 @@ class ToolAllocation extends Model
         'expected_return_date',
         'actual_return_date',
         'note',
+        'condition',
         'status',
     ];
 

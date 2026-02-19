@@ -73,6 +73,7 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
 
     Route::get('reservations', [ReservationController::class, 'index']);
     Route::post('reservations', [ReservationController::class, 'store']);
+    Route::post('reservations/batch', [ReservationController::class, 'storeBatch']);
     Route::put('reservations/{reservation}', [ReservationController::class, 'update']);
 
     Route::middleware('admin')->group(function () {

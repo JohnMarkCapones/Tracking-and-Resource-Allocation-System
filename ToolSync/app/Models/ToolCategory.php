@@ -15,6 +15,7 @@ class ToolCategory extends Model
 
     protected $fillable = [
         'name',
+        'max_borrowings',
     ];
 
     public function tools(): HasMany

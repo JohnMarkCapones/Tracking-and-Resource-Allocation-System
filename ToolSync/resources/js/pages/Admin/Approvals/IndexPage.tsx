@@ -1,5 +1,5 @@
 import { Head } from '@inertiajs/react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EmptyState } from '@/Components/EmptyState';
 import { toast } from '@/Components/Toast';
 import AppLayout from '@/Layouts/AppLayout';
@@ -11,6 +11,8 @@ import type {
 import { apiRequest } from '@/lib/http';
 
 type Tab = 'borrow' | 'return';
+
+const POLL_INTERVAL_MS = 30_000;
 
 function formatDate(dateStr: string | null): string {
     if (!dateStr) return '—';
@@ -42,23 +44,36 @@ export default function IndexPage() {
     const [error, setError] = useState<string | null>(null);
     const [actionId, setActionId] = useState<string | null>(null);
     const [search, setSearch] = useState('');
+    const [selectedBorrowIds, setSelectedBorrowIds] = useState<Set<number>>(new Set());
+    const [selectedReturnIds, setSelectedReturnIds] = useState<Set<number>>(new Set());
+    const [bulkActing, setBulkActing] = useState(false);
+    const lastCountRef = useRef<number>(-1);
 
-    const loadApprovals = useCallback(async () => {
-        setLoading(true);
+    const loadApprovals = useCallback(async (silent = false) => {
+        if (!silent) setLoading(true);
         setError(null);
         try {
             const res = await apiRequest<ApprovalsApiResponse>('/api/admin/approvals');
+            const newCount = res.data.borrow_requests.length + res.data.return_requests.length;
+            if (lastCountRef.current !== -1 && newCount > lastCountRef.current) {
+                toast(`${newCount - lastCountRef.current} new request(s) arrived.`, { duration: 4000 });
+            }
+            lastCountRef.current = newCount;
             setBorrowRequests(res.data.borrow_requests);
             setReturnRequests(res.data.return_requests);
+            setSelectedBorrowIds(new Set());
+            setSelectedReturnIds(new Set());
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to load approvals');
+            if (!silent) setError(err instanceof Error ? err.message : 'Failed to load approvals');
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     }, []);
 
     useEffect(() => {
         loadApprovals();
+        const intervalId = setInterval(() => loadApprovals(true), POLL_INTERVAL_MS);
+        return () => clearInterval(intervalId);
     }, [loadApprovals]);
 
     const handleApproveBorrow = useCallback(
@@ -67,7 +82,7 @@ export default function IndexPage() {
             try {
                 await apiRequest(`/api/reservations/${id}/approve`, { method: 'POST' });
                 toast.success('Borrow request approved.');
-                await loadApprovals();
+                await loadApprovals(true);
             } catch (err) {
                 toast.error(err instanceof Error ? err.message : 'Failed to approve');
             } finally {
@@ -83,7 +98,7 @@ export default function IndexPage() {
             try {
                 await apiRequest(`/api/reservations/${id}/decline`, { method: 'POST' });
                 toast.success('Borrow request declined.');
-                await loadApprovals();
+                await loadApprovals(true);
             } catch (err) {
                 toast.error(err instanceof Error ? err.message : 'Failed to decline');
             } finally {
@@ -102,7 +117,7 @@ export default function IndexPage() {
                     body: { status: 'RETURNED' },
                 });
                 toast.success('Return approved. Tool marked as returned.');
-                await loadApprovals();
+                await loadApprovals(true);
             } catch (err) {
                 toast.error(err instanceof Error ? err.message : 'Failed to approve return');
             } finally {
@@ -121,7 +136,7 @@ export default function IndexPage() {
                     body: { status: 'BORROWED' },
                 });
                 toast.success('Return request declined. Tool stays on borrower.');
-                await loadApprovals();
+                await loadApprovals(true);
             } catch (err) {
                 toast.error(err instanceof Error ? err.message : 'Failed to decline return');
             } finally {
@@ -130,6 +145,99 @@ export default function IndexPage() {
         },
         [loadApprovals],
     );
+
+    // Bulk actions
+    const handleBulkApproveBorrow = async () => {
+        if (selectedBorrowIds.size === 0) return;
+        setBulkActing(true);
+        let succeeded = 0;
+        let failed = 0;
+        for (const id of selectedBorrowIds) {
+            try {
+                await apiRequest(`/api/reservations/${id}/approve`, { method: 'POST' });
+                succeeded++;
+            } catch {
+                failed++;
+            }
+        }
+        setBulkActing(false);
+        if (succeeded > 0) toast.success(`${succeeded} borrow request(s) approved.`);
+        if (failed > 0) toast.error(`${failed} request(s) could not be approved.`);
+        await loadApprovals(true);
+    };
+
+    const handleBulkDeclineBorrow = async () => {
+        if (selectedBorrowIds.size === 0) return;
+        setBulkActing(true);
+        let succeeded = 0;
+        let failed = 0;
+        for (const id of selectedBorrowIds) {
+            try {
+                await apiRequest(`/api/reservations/${id}/decline`, { method: 'POST' });
+                succeeded++;
+            } catch {
+                failed++;
+            }
+        }
+        setBulkActing(false);
+        if (succeeded > 0) toast.success(`${succeeded} borrow request(s) declined.`);
+        if (failed > 0) toast.error(`${failed} request(s) could not be declined.`);
+        await loadApprovals(true);
+    };
+
+    const handleBulkApproveReturn = async () => {
+        if (selectedReturnIds.size === 0) return;
+        setBulkActing(true);
+        let succeeded = 0;
+        let failed = 0;
+        for (const id of selectedReturnIds) {
+            try {
+                await apiRequest(`/api/tool-allocations/${id}`, { method: 'PUT', body: { status: 'RETURNED' } });
+                succeeded++;
+            } catch {
+                failed++;
+            }
+        }
+        setBulkActing(false);
+        if (succeeded > 0) toast.success(`${succeeded} return(s) approved.`);
+        if (failed > 0) toast.error(`${failed} return(s) could not be approved.`);
+        await loadApprovals(true);
+    };
+
+    const handleBulkDeclineReturn = async () => {
+        if (selectedReturnIds.size === 0) return;
+        setBulkActing(true);
+        let succeeded = 0;
+        let failed = 0;
+        for (const id of selectedReturnIds) {
+            try {
+                await apiRequest(`/api/tool-allocations/${id}`, { method: 'PUT', body: { status: 'BORROWED' } });
+                succeeded++;
+            } catch {
+                failed++;
+            }
+        }
+        setBulkActing(false);
+        if (succeeded > 0) toast.success(`${succeeded} return(s) declined.`);
+        if (failed > 0) toast.error(`${failed} return(s) could not be declined.`);
+        await loadApprovals(true);
+    };
+
+    const toggleBorrowSelect = (id: number) =>
+        setSelectedBorrowIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+
+    const toggleReturnSelect = (id: number) =>
+        setSelectedReturnIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
 
     const query = search.toLowerCase().trim();
 
@@ -159,6 +267,27 @@ export default function IndexPage() {
         [returnRequests, query],
     );
 
+    const allBorrowSelected =
+        filteredBorrow.length > 0 && filteredBorrow.every((r) => selectedBorrowIds.has(r.id));
+    const allReturnSelected =
+        filteredReturn.length > 0 && filteredReturn.every((r) => selectedReturnIds.has(r.id));
+
+    const toggleAllBorrow = () => {
+        if (allBorrowSelected) {
+            setSelectedBorrowIds(new Set());
+        } else {
+            setSelectedBorrowIds(new Set(filteredBorrow.map((r) => r.id)));
+        }
+    };
+
+    const toggleAllReturn = () => {
+        if (allReturnSelected) {
+            setSelectedReturnIds(new Set());
+        } else {
+            setSelectedReturnIds(new Set(filteredReturn.map((r) => r.id)));
+        }
+    };
+
     const totalPending = borrowRequests.length + returnRequests.length;
 
     return (
@@ -184,6 +313,7 @@ export default function IndexPage() {
                                 ? 'No pending requests at this time.'
                                 : `${totalPending} request${totalPending !== 1 ? 's' : ''} awaiting your review.`}
                         </p>
+                        <p className="mt-0.5 text-[10px] text-gray-400">Auto-refreshes every 30 seconds</p>
                     </div>
                     <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs text-gray-500">
@@ -201,7 +331,7 @@ export default function IndexPage() {
                         </div>
                         <button
                             type="button"
-                            onClick={loadApprovals}
+                            onClick={() => loadApprovals()}
                             disabled={loading}
                             className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
                         >
@@ -267,6 +397,36 @@ export default function IndexPage() {
                         {/* Borrow requests tab */}
                         {tab === 'borrow' && (
                             <section className="space-y-3">
+                                {selectedBorrowIds.size > 0 && (
+                                    <div className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-2">
+                                        <span className="text-[11px] font-semibold text-blue-700">
+                                            {selectedBorrowIds.size} selected
+                                        </span>
+                                        <button
+                                            type="button"
+                                            disabled={bulkActing}
+                                            onClick={handleBulkApproveBorrow}
+                                            className="rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                                        >
+                                            {bulkActing ? '...' : 'Approve all'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            disabled={bulkActing}
+                                            onClick={handleBulkDeclineBorrow}
+                                            className="rounded-full border border-gray-300 px-3 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-60"
+                                        >
+                                            Decline all
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setSelectedBorrowIds(new Set())}
+                                            className="ml-auto text-[11px] text-gray-500 hover:text-gray-700"
+                                        >
+                                            Clear selection
+                                        </button>
+                                    </div>
+                                )}
                                 {filteredBorrow.length === 0 ? (
                                     <EmptyState
                                         icon={
@@ -289,6 +449,15 @@ export default function IndexPage() {
                                         <table className="w-full text-left text-xs">
                                             <thead>
                                                 <tr className="border-b border-gray-100 bg-gray-50 text-[11px] font-semibold tracking-wide text-gray-500 uppercase">
+                                                    <th className="px-4 py-3">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={allBorrowSelected}
+                                                            onChange={toggleAllBorrow}
+                                                            className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600"
+                                                            aria-label="Select all borrow requests"
+                                                        />
+                                                    </th>
                                                     <th className="px-4 py-3">Tool</th>
                                                     <th className="px-4 py-3">Requested by</th>
                                                     <th className="hidden px-4 py-3 md:table-cell">Date range</th>
@@ -301,7 +470,9 @@ export default function IndexPage() {
                                                     <BorrowRow
                                                         key={req.id}
                                                         request={req}
-                                                        isActing={actionId === `borrow-${req.id}`}
+                                                        isActing={actionId === `borrow-${req.id}` || bulkActing}
+                                                        selected={selectedBorrowIds.has(req.id)}
+                                                        onSelect={() => toggleBorrowSelect(req.id)}
                                                         onApprove={() => handleApproveBorrow(req.id)}
                                                         onDecline={() => handleDeclineBorrow(req.id)}
                                                     />
@@ -316,6 +487,36 @@ export default function IndexPage() {
                         {/* Return requests tab */}
                         {tab === 'return' && (
                             <section className="space-y-3">
+                                {selectedReturnIds.size > 0 && (
+                                    <div className="flex items-center gap-2 rounded-xl border border-amber-100 bg-amber-50 px-4 py-2">
+                                        <span className="text-[11px] font-semibold text-amber-700">
+                                            {selectedReturnIds.size} selected
+                                        </span>
+                                        <button
+                                            type="button"
+                                            disabled={bulkActing}
+                                            onClick={handleBulkApproveReturn}
+                                            className="rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                                        >
+                                            {bulkActing ? '...' : 'Approve all'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            disabled={bulkActing}
+                                            onClick={handleBulkDeclineReturn}
+                                            className="rounded-full border border-gray-300 px-3 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-60"
+                                        >
+                                            Decline all
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setSelectedReturnIds(new Set())}
+                                            className="ml-auto text-[11px] text-gray-500 hover:text-gray-700"
+                                        >
+                                            Clear selection
+                                        </button>
+                                    </div>
+                                )}
                                 {filteredReturn.length === 0 ? (
                                     <EmptyState
                                         icon={
@@ -337,10 +538,19 @@ export default function IndexPage() {
                                         <table className="w-full text-left text-xs">
                                             <thead>
                                                 <tr className="border-b border-gray-100 bg-gray-50 text-[11px] font-semibold tracking-wide text-gray-500 uppercase">
+                                                    <th className="px-4 py-3">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={allReturnSelected}
+                                                            onChange={toggleAllReturn}
+                                                            className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600"
+                                                            aria-label="Select all return requests"
+                                                        />
+                                                    </th>
                                                     <th className="px-4 py-3">Tool</th>
                                                     <th className="px-4 py-3">Borrower</th>
                                                     <th className="hidden px-4 py-3 md:table-cell">Borrow period</th>
-                                                    <th className="hidden px-4 py-3 sm:table-cell">Note</th>
+                                                    <th className="hidden px-4 py-3 sm:table-cell">Condition / Note</th>
                                                     <th className="px-4 py-3 text-right">Actions</th>
                                                 </tr>
                                             </thead>
@@ -349,7 +559,9 @@ export default function IndexPage() {
                                                     <ReturnRow
                                                         key={req.id}
                                                         request={req}
-                                                        isActing={actionId === `return-${req.id}`}
+                                                        isActing={actionId === `return-${req.id}` || bulkActing}
+                                                        selected={selectedReturnIds.has(req.id)}
+                                                        onSelect={() => toggleReturnSelect(req.id)}
                                                         onApprove={() => handleApproveReturn(req.id)}
                                                         onDecline={() => handleDeclineReturn(req.id)}
                                                     />
@@ -370,18 +582,30 @@ export default function IndexPage() {
 function BorrowRow({
     request,
     isActing,
+    selected,
+    onSelect,
     onApprove,
     onDecline,
 }: {
     request: ApprovalBorrowRequest;
     isActing: boolean;
+    selected: boolean;
+    onSelect: () => void;
     onApprove: () => void;
     onDecline: () => void;
 }) {
     const toolCode = request.tool_code?.trim() ? request.tool_code : `TL-${request.tool_id}`;
 
     return (
-        <tr className="hover:bg-gray-50/50">
+        <tr className={`hover:bg-gray-50/50 ${selected ? 'bg-blue-50/40' : ''}`}>
+            <td className="px-4 py-3">
+                <input
+                    type="checkbox"
+                    checked={selected}
+                    onChange={onSelect}
+                    className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600"
+                />
+            </td>
             <td className="px-4 py-3">
                 <p className="font-semibold text-gray-900">{request.tool_name}</p>
                 <p className="text-[11px] text-gray-500">{toolCode}</p>
@@ -427,18 +651,30 @@ function BorrowRow({
 function ReturnRow({
     request,
     isActing,
+    selected,
+    onSelect,
     onApprove,
     onDecline,
 }: {
     request: ApprovalReturnRequest;
     isActing: boolean;
+    selected: boolean;
+    onSelect: () => void;
     onApprove: () => void;
     onDecline: () => void;
 }) {
     const toolCode = request.tool_code?.trim() ? request.tool_code : `TL-${request.tool_id}`;
 
     return (
-        <tr className="hover:bg-gray-50/50">
+        <tr className={`hover:bg-gray-50/50 ${selected ? 'bg-amber-50/40' : ''}`}>
+            <td className="px-4 py-3">
+                <input
+                    type="checkbox"
+                    checked={selected}
+                    onChange={onSelect}
+                    className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600"
+                />
+            </td>
             <td className="px-4 py-3">
                 <p className="font-semibold text-gray-900">{request.tool_name}</p>
                 <p className="text-[11px] text-gray-500">{toolCode}</p>

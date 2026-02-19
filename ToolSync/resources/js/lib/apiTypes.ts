@@ -26,11 +26,11 @@ export type ToolDto = {
     allocations_count?: number;
     /** Number of currently borrowed allocations for this tool. */
     borrowed_count?: number;
-    /** Number of active reservations (PENDING, UPCOMING) for this tool. */
+    /** Number of pending borrow requests for this tool. */
     reserved_count?: number;
     /** Calculated available count (quantity - borrowed - reserved). */
     calculated_available_count?: number;
-    /** Calculated reserved count (same as reserved_count but from service). */
+    /** Calculated reserved count (pending borrow requests from service). */
     calculated_reserved_count?: number;
     /** Key-value specs (e.g. Processor, Memory) shown on tool detail. */
     specifications?: Record<string, string> | null;
@@ -83,6 +83,7 @@ export type AllocationDto = {
     actual_return_date: string | null;
     status: AllocationStatusApi;
     note: string | null;
+    condition: string | null;
     created_at: string;
     updated_at: string;
     tool: {

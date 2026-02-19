@@ -8,7 +8,6 @@ use App\Models\Reservation;
 use App\Models\Tool;
 use App\Models\ToolAllocation;
 use App\Models\User;
-use App\Services\ToolAvailabilityService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -88,9 +87,8 @@ class DashboardController extends Controller
         // units currently borrowed or reserved. Subtract them for a true count.
         $rawAvailableQty = (int) Tool::query()->where('status', 'AVAILABLE')->sum('quantity');
 
-        // System-wide reservation count (PENDING + UPCOMING)
         $reservedActiveCount = Schema::hasTable('reservations')
-            ? (int) Reservation::query()->whereIn('status', ['PENDING', 'UPCOMING'])->count()
+            ? (int) Reservation::query()->where('status', 'PENDING')->count()
             : 0;
 
         // "Borrowed items" on dashboard = count of active allocation records (BORROWED or PENDING_RETURN).
@@ -183,7 +181,7 @@ class DashboardController extends Controller
         if (Schema::hasTable('reservations')) {
             $pendingReservationsQuery = Reservation::query()
                 ->with(['tool:id,name', 'user:id,name,email'])
-                ->whereIn('status', ['PENDING', 'UPCOMING']);
+                ->where('status', 'PENDING');
             $pendingApprovalsCount = (int) (clone $pendingReservationsQuery)->count();
             $pendingApprovals = (clone $pendingReservationsQuery)
                 ->orderBy('created_at')
@@ -252,7 +250,7 @@ class DashboardController extends Controller
     {
         $borrowRequests = Reservation::query()
             ->with(['tool:id,name,code', 'user:id,name,email'])
-            ->whereIn('status', ['PENDING', 'UPCOMING'])
+            ->where('status', 'PENDING')
             ->orderBy('created_at')
             ->get()
             ->map(function (Reservation $r): array {

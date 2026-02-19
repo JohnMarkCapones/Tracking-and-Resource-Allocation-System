@@ -102,17 +102,13 @@ export default function IndexPage() {
     const handleReturnSubmit = async (data: { condition: string; notes: string }) => {
         if (!returnModalBorrowing) return;
 
-        const noteParts = [`Condition: ${data.condition}`];
-        if (data.notes.trim()) {
-            noteParts.push(`Notes: ${data.notes.trim()}`);
-        }
-
         try {
             await apiRequest(`/api/tool-allocations/${returnModalBorrowing.id}`, {
                 method: 'PUT',
                 body: {
                     status: 'PENDING_RETURN',
-                    note: noteParts.join('\n'),
+                    condition: data.condition,
+                    note: data.notes.trim() || null,
                 },
             });
 

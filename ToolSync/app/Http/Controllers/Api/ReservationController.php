@@ -7,6 +7,7 @@ use App\Models\Reservation;
 use App\Models\SystemSetting;
 use App\Models\Tool;
 use App\Models\ToolAllocation;
+use App\Models\ToolCategory;
 use App\Models\User;
 use App\Notifications\InAppSystemNotification;
 use App\Services\ActivityLogger;
@@ -22,6 +23,17 @@ use Illuminate\Support\Facades\Notification;
 class ReservationController extends Controller
 {
     private const MAX_BORROWINGS_DEFAULT = 3;
+
+    private function resolveMaxBorrowings(int $categoryId): int
+    {
+        /** @var ToolCategory|null $category */
+        $category = ToolCategory::query()->find($categoryId);
+        if ($category !== null && $category->max_borrowings !== null) {
+            return (int) $category->max_borrowings;
+        }
+
+        return (int) (SystemSetting::query()->where('key', 'max_borrowings')->value('value') ?? self::MAX_BORROWINGS_DEFAULT);
+    }
 
     private function activeBorrowSlotsUsed(int $userId): int
     {
@@ -78,7 +90,6 @@ class ReservationController extends Controller
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             'recurring' => ['sometimes', 'boolean'],
             'recurrence_pattern' => ['sometimes', 'nullable', 'string', 'max:50'],
-            'borrow_request' => ['sometimes', 'boolean'],
         ]);
 
         $from = Carbon::parse($validated['start_date']);
@@ -90,43 +101,11 @@ class ReservationController extends Controller
             ], 422);
         }
 
-        // Validate tool exists and is available
-        $tool = Tool::query()->find((int) $validated['tool_id']);
-        if (! $tool) {
-            return response()->json([
-                'message' => 'Tool not found.',
-            ], 404);
-        }
-
-        if ($tool->status !== 'AVAILABLE' || $tool->quantity < 1) {
-            return response()->json([
-                'message' => 'Tool is not available for reservation.',
-            ], 409);
-        }
-
-        // Prevent spamming: block multiple overlapping reservations / borrow requests
-        // for the same tool by the same user while a previous one is still active.
-        $availabilityService = app(ToolAvailabilityService::class);
-        if ($user && $availabilityService->hasUserOverlappingReservation((int) $validated['tool_id'], $user->id, $from, $to)) {
-            return response()->json([
-                'message' => 'You already have a pending or active reservation for this tool in the selected date range.',
-            ], 422);
-        }
-
-        // Check for conflicts with other users' reservations and allocations
-        $availabilityCheck = $availabilityService->checkAvailability((int) $validated['tool_id'], $from, $to);
-        if (! $availabilityCheck['available']) {
-            return response()->json([
-                'message' => $availabilityCheck['reason'] ?? 'Tool is not available for the selected date range.',
-            ], 409);
-        }
-
-        $isBorrowRequest = ! empty($validated['borrow_request']);
-
-        // Both borrows and reservations require admin approval (PENDING).
-        // The flag is kept only for response/notification wording.
+        // Pre-check max borrowings before entering the transaction (avoids holding lock unnecessarily).
         if ($user) {
-            $maxBorrowings = (int) (SystemSetting::query()->where('key', 'max_borrowings')->value('value') ?? self::MAX_BORROWINGS_DEFAULT);
+            $toolIdForLimit = (int) $validated['tool_id'];
+            $categoryId = Tool::query()->where('id', $toolIdForLimit)->value('category_id');
+            $maxBorrowings = $categoryId !== null ? $this->resolveMaxBorrowings((int) $categoryId) : self::MAX_BORROWINGS_DEFAULT;
             $activeSlotsUsed = $this->activeBorrowSlotsUsed($user->id);
             if ($activeSlotsUsed >= $maxBorrowings) {
                 return response()->json([
@@ -135,86 +114,230 @@ class ReservationController extends Controller
             }
         }
 
-        $reservation = Reservation::create([
-            'tool_id' => (int) $validated['tool_id'],
-            'user_id' => $user?->id,
-            'start_date' => $validated['start_date'],
-            'end_date' => $validated['end_date'],
-            'status' => 'PENDING',
-            'recurring' => (int) ($validated['recurring'] ?? 0),
-            'recurrence_pattern' => $validated['recurrence_pattern'] ?? null,
-        ]);
+        // Wrap availability check + creation in a transaction with a row-level lock to prevent
+        // two simultaneous requests both passing the availability check (race condition).
+        $reservation = DB::transaction(function () use ($validated, $user, $from, $to): Reservation {
+            /** @var Tool|null $tool */
+            $tool = Tool::query()->lockForUpdate()->find((int) $validated['tool_id']);
+
+            if (! $tool) {
+                abort(response()->json(['message' => 'Tool not found.'], 404));
+            }
+
+            if ($tool->status !== 'AVAILABLE' || $tool->quantity < 1) {
+                abort(response()->json(['message' => 'Tool is not available for reservation.'], 409));
+            }
+
+            $availabilityService = app(ToolAvailabilityService::class);
+
+            if ($user && $availabilityService->hasUserOverlappingReservation($tool->id, $user->id, $from, $to)) {
+                abort(response()->json([
+                    'message' => 'You already have a pending borrow request for this tool in the selected date range.',
+                ], 422));
+            }
+
+            $availabilityCheck = $availabilityService->checkAvailability($tool->id, $from, $to);
+            if (! $availabilityCheck['available']) {
+                $conflictingRanges = $availabilityService->getConflictingDateRanges($tool->id, $from, $to);
+                abort(response()->json([
+                    'message' => $availabilityCheck['reason'] ?? 'Tool is not available for the selected date range.',
+                    'conflicting_ranges' => $conflictingRanges,
+                ], 409));
+            }
+
+            return Reservation::create([
+                'tool_id' => $tool->id,
+                'user_id' => $user?->id,
+                'start_date' => $validated['start_date'],
+                'end_date' => $validated['end_date'],
+                'status' => 'PENDING',
+                'recurring' => (int) ($validated['recurring'] ?? 0),
+                'recurrence_pattern' => $validated['recurrence_pattern'] ?? null,
+            ]);
+        });
 
         ActivityLogger::log(
             'reservation.created',
             'Reservation',
             $reservation->id,
-            "Reservation #{$reservation->id} created for tool #{$reservation->tool_id}.",
+            "Borrow request #{$reservation->id} created for tool #{$reservation->tool_id}.",
             ['tool_id' => $reservation->tool_id],
             $user?->id
         );
 
-        // Always notify admins so they can approve or decline.
         $reservation->load(['tool', 'user']);
         $toolName = $reservation->tool?->name ?? "Tool #{$reservation->tool_id}";
+        $startDate = Carbon::parse($validated['start_date'])->format('M d, Y');
+        $endDate = Carbon::parse($validated['end_date'])->format('M d, Y');
+
         $adminRecipients = User::query()->where('role', 'ADMIN')->get();
         if ($adminRecipients->isNotEmpty()) {
-            $startDate = Carbon::parse($validated['start_date'])->format('M d, Y');
-            $endDate = Carbon::parse($validated['end_date'])->format('M d, Y');
-
-            $notificationBody = $isBorrowRequest
-                ? "{$reservation->user?->name} requested to borrow {$toolName}. Approve or decline below."
-                : "{$reservation->user?->name} requested to reserve {$toolName} for {$startDate} – {$endDate}. Approve or decline below.";
-
             Notification::send($adminRecipients, new InAppSystemNotification(
                 'info',
                 'Borrowing request pending',
-                $notificationBody,
+                "{$reservation->user?->name} requested to borrow {$toolName} for {$startDate} – {$endDate}. Approve or decline below.",
                 '/notifications',
                 ['reservation_id' => $reservation->id]
             ));
         }
 
-        $message = $isBorrowRequest
-            ? 'Borrowing request submitted for approval.'
-            : 'Reservation submitted for approval.';
-
         return response()->json([
-            'message' => $message,
+            'message' => 'Borrow request submitted for approval.',
             'data' => $reservation,
         ], 201);
     }
 
+    /**
+     * Create multiple borrow requests in one batch (same date range for all tools).
+     */
+    public function storeBatch(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'tool_ids' => ['required', 'array'],
+            'tool_ids.*' => ['required', 'integer', 'exists:tools,id'],
+            'start_date' => ['required', 'date'],
+            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+        ]);
+
+        $toolIds = array_unique(array_map('intval', $validated['tool_ids']));
+        if (count($toolIds) === 0) {
+            return response()->json([
+                'message' => 'At least one tool is required.',
+            ], 422);
+        }
+
+        $from = Carbon::parse($validated['start_date']);
+        $to = Carbon::parse($validated['end_date']);
+        $dateErrors = app(DateValidationService::class)->validateRangeForBooking($from, $to);
+        if ($dateErrors !== []) {
+            return response()->json([
+                'message' => implode(' ', $dateErrors),
+            ], 422);
+        }
+
+        $maxBorrowings = (int) (SystemSetting::query()->where('key', 'max_borrowings')->value('value') ?? self::MAX_BORROWINGS_DEFAULT);
+        $activeSlotsUsed = $user ? $this->activeBorrowSlotsUsed($user->id) : 0;
+        if ($activeSlotsUsed + count($toolIds) > $maxBorrowings) {
+            return response()->json([
+                'message' => "You can only have up to {$maxBorrowings} concurrent borrow/request slots. You have {$activeSlotsUsed} in use. Requesting ".count($toolIds).' more would exceed the limit.',
+            ], 422);
+        }
+
+        $availabilityService = app(ToolAvailabilityService::class);
+        $errors = [];
+
+        foreach ($toolIds as $toolId) {
+            $tool = Tool::query()->find($toolId);
+            if (! $tool || $tool->status !== 'AVAILABLE' || $tool->quantity < 1) {
+                $errors[] = "Tool #{$toolId} is not available for borrowing.";
+
+                continue;
+            }
+            if ($user && $availabilityService->hasUserOverlappingReservation($toolId, $user->id, $from, $to)) {
+                $errors[] = "You already have a pending request for {$tool->name} in this date range.";
+
+                continue;
+            }
+            $check = $availabilityService->checkAvailability($toolId, $from, $to);
+            if (! $check['available']) {
+                $errors[] = "{$tool->name}: {$check['reason']}";
+            }
+        }
+
+        if ($errors !== []) {
+            return response()->json([
+                'message' => 'Some tools are not available: '.implode(' ', $errors),
+            ], 409);
+        }
+
+        $reservations = DB::transaction(function () use ($toolIds, $validated, $user): array {
+            $created = [];
+            foreach ($toolIds as $toolId) {
+                $reservation = Reservation::create([
+                    'tool_id' => $toolId,
+                    'user_id' => $user?->id,
+                    'start_date' => $validated['start_date'],
+                    'end_date' => $validated['end_date'],
+                    'status' => 'PENDING',
+                    'recurring' => 0,
+                    'recurrence_pattern' => null,
+                ]);
+                $reservation->load(['tool', 'user']);
+                $created[] = $reservation;
+
+                ActivityLogger::log(
+                    'reservation.created',
+                    'Reservation',
+                    $reservation->id,
+                    "Borrow request #{$reservation->id} created for tool #{$toolId}.",
+                    ['tool_id' => $toolId],
+                    $user?->id
+                );
+            }
+
+            return $created;
+        });
+
+        $startDate = Carbon::parse($validated['start_date'])->format('M d, Y');
+        $endDate = Carbon::parse($validated['end_date'])->format('M d, Y');
+        $toolNames = collect($reservations)->map(fn ($r) => $r->tool?->name ?? "Tool #{$r->tool_id}")->join(', ');
+
+        $adminRecipients = User::query()->where('role', 'ADMIN')->get();
+        if ($adminRecipients->isNotEmpty()) {
+            Notification::send($adminRecipients, new InAppSystemNotification(
+                'info',
+                'Borrowing requests pending',
+                "{$user?->name} requested to borrow ".count($reservations)." tool(s) for {$startDate} – {$endDate}: {$toolNames}.",
+                '/notifications',
+                ['reservation_ids' => collect($reservations)->pluck('id')->all()]
+            ));
+        }
+
+        return response()->json([
+            'message' => count($reservations).' borrow request(s) submitted for approval.',
+            'data' => $reservations,
+        ], 201);
+    }
+
+    /**
+     * User can only cancel their own PENDING borrow requests.
+     */
     public function update(Request $request, Reservation $reservation): JsonResponse
     {
         $user = $request->user();
 
         if ($reservation->user_id !== $user?->id) {
             return response()->json([
-                'message' => 'You are not allowed to modify this reservation.',
+                'message' => 'You are not allowed to modify this borrow request.',
             ], 403);
         }
 
         $validated = $request->validate([
-            'status' => ['sometimes', 'in:UPCOMING,ACTIVE,COMPLETED,CANCELLED'],
+            'status' => ['required', 'in:CANCELLED'],
         ]);
+
+        if ($reservation->status !== 'PENDING') {
+            return response()->json([
+                'message' => 'Only pending borrow requests can be cancelled.',
+            ], 422);
+        }
 
         $oldStatus = $reservation->status;
         $reservation->update($validated);
 
-        if (isset($validated['status']) && $oldStatus !== $reservation->status) {
-            ActivityLogger::log(
-                'reservation.updated',
-                'Reservation',
-                $reservation->id,
-                "Reservation #{$reservation->id} status changed from {$oldStatus} to {$reservation->status}.",
-                ['old_status' => $oldStatus, 'new_status' => $reservation->status],
-                $user?->id
-            );
-        }
+        ActivityLogger::log(
+            'reservation.cancelled',
+            'Reservation',
+            $reservation->id,
+            "Borrow request #{$reservation->id} cancelled by user.",
+            ['old_status' => $oldStatus, 'new_status' => $reservation->status],
+            $user?->id
+        );
 
         return response()->json([
-            'message' => 'Reservation updated successfully.',
+            'message' => 'Borrow request cancelled.',
             'data' => $reservation,
         ]);
     }
@@ -229,7 +352,7 @@ class ReservationController extends Controller
             return response()->json(['message' => 'Only admins can approve borrow requests.'], 403);
         }
 
-        if (! in_array($reservation->status, ['PENDING', 'UPCOMING'], true)) {
+        if ($reservation->status !== 'PENDING') {
             return response()->json([
                 'message' => 'This request is no longer pending approval.',
                 'data' => $reservation->load(['tool', 'user']),
@@ -359,7 +482,7 @@ class ReservationController extends Controller
             return response()->json(['message' => 'Only admins can decline borrow requests.'], 403);
         }
 
-        if (! in_array($reservation->status, ['PENDING', 'UPCOMING'], true)) {
+        if ($reservation->status !== 'PENDING') {
             return response()->json([
                 'message' => 'This request is no longer pending.',
                 'data' => $reservation->load(['tool', 'user']),

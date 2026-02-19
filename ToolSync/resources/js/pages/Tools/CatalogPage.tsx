@@ -71,6 +71,7 @@ export default function CatalogPage() {
     const [error, setError] = useState<string | null>(null);
     const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
     const [selectedTool, setSelectedTool] = useState<ToolCardData | null>(null);
+    const [selectedToolIds, setSelectedToolIds] = useState<Set<number>>(new Set());
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [activeBorrowingsCount, setActiveBorrowingsCount] = useState(0);
     const [pendingBorrowRequestsCount, setPendingBorrowRequestsCount] = useState(0);
@@ -294,58 +295,76 @@ export default function CatalogPage() {
             return;
         }
         setSelectedTool(tool);
+        setSelectedToolIds(new Set());
+        setIsRequestModalOpen(true);
+    };
+
+    const handleSelectChange = (tool: ToolCardData, selected: boolean) => {
+        setSelectedToolIds((prev) => {
+            const next = new Set(prev);
+            if (selected) next.add(tool.id);
+            else next.delete(tool.id);
+            return next;
+        });
+    };
+
+    const selectedTools = tools.filter((t) => selectedToolIds.has(t.id));
+
+    const handleBatchRequestClick = () => {
+        if (selectedTools.length === 0) return;
+        if (borrowSlotsUsed + selectedTools.length > MAX_BORROWINGS) {
+            toast.error(`You can only have up to ${MAX_BORROWINGS} active borrow/request slots. You have ${borrowSlotsUsed} in use.`);
+            return;
+        }
+        setSelectedTool(null);
         setIsRequestModalOpen(true);
     };
 
     const handleRequestSubmit = async (data: { dateRange: DateRange; purpose: string }) => {
-        if (!selectedTool || !data.dateRange.from || !data.dateRange.to) {
+        if (!data.dateRange.from || !data.dateRange.to) {
             toast.error('Please select a valid date range.');
+            return;
+        }
+
+        const toolsToRequest = selectedTools.length > 0 ? selectedTools : selectedTool ? [selectedTool] : [];
+        if (toolsToRequest.length === 0) {
+            toast.error('No tools selected.');
             return;
         }
 
         setIsSubmitting(true);
 
-        const startDate = toLocalYmd(data.dateRange.from);
-        const endDate = toLocalYmd(data.dateRange.to);
-
         try {
-            if (selectedTool.status === 'Borrowed') {
-                await apiRequest('/api/reservations', {
+            const startDate = toLocalYmd(data.dateRange.from);
+            const endDate = toLocalYmd(data.dateRange.to);
+
+            if (toolsToRequest.length > 1) {
+                await apiRequest<{ message: string }>('/api/reservations/batch', {
                     method: 'POST',
                     body: {
-                        tool_id: selectedTool.id,
+                        tool_ids: toolsToRequest.map((t) => t.id),
+                        start_date: startDate,
+                        end_date: endDate,
+                    },
+                });
+                toast.success(`${toolsToRequest.length} borrow request(s) submitted for approval!`);
+                setSelectedToolIds(new Set());
+            } else {
+                await apiRequest<{ message: string }>('/api/reservations', {
+                    method: 'POST',
+                    body: {
+                        tool_id: toolsToRequest[0].id,
                         start_date: startDate,
                         end_date: endDate,
                         recurring: false,
                     },
                 });
-                setIsRequestModalOpen(false);
-                toast.success('Reservation created successfully!');
-                router.visit('/reservations');
-                return;
+                toast.success('Borrow request submitted for approval!');
             }
-
-            if (borrowSlotsUsed >= MAX_BORROWINGS) {
-                toast.error(`You can only have up to ${MAX_BORROWINGS} active borrow/request slots at a time.`);
-                return;
-            }
-
-            // Available tool: create a borrow request (reservation PENDING) for admin approval
-            await apiRequest<{ message: string }>('/api/reservations', {
-                method: 'POST',
-                body: {
-                    tool_id: selectedTool.id,
-                    start_date: startDate,
-                    end_date: endDate,
-                    recurring: false,
-                    borrow_request: true,
-                },
-            });
 
             setIsRequestModalOpen(false);
-            toast.success('Borrowing request submitted for approval!');
-            
-            // Reload the tools list
+            setSelectedTool(null);
+
             const [toolsRes, dashboardRes, reservationsRes] = await Promise.all([
                 apiRequest<ToolsIndexResponse>(`/api/tools?paginated=1&page=${page}&per_page=${PAGE_SIZE}${randomSeed ? `&random_seed=${randomSeed}` : ''}`),
                 apiRequest<DashboardApiResponse>('/api/dashboard'),
@@ -491,16 +510,15 @@ export default function CatalogPage() {
                 )}
             </div>
 
-            {selectedTool && (
+            {(selectedTool || selectedTools.length > 0) && (
                 <RequestToolModal
                     show={isRequestModalOpen}
-                    toolName={selectedTool.name}
-                    toolId={selectedTool.toolId}
+                    toolName={selectedTool?.name}
+                    toolId={selectedTool?.toolId}
+                    tools={selectedTools.length > 0 ? selectedTools : undefined}
                     submitting={isSubmitting}
                     onClose={() => {
-                        if (isSubmitting) {
-                            return;
-                        }
+                        if (isSubmitting) return;
                         setIsRequestModalOpen(false);
                         setSelectedTool(null);
                     }}

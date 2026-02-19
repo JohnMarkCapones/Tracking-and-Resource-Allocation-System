@@ -13,7 +13,7 @@ type Reservation = {
     toolId: string;
     startDate: string;
     endDate: string;
-    status: 'upcoming' | 'active' | 'completed' | 'cancelled';
+    status: 'pending' | 'completed' | 'cancelled';
     recurring?: boolean;
     recurrencePattern?: string;
 };
@@ -21,27 +21,31 @@ type Reservation = {
 type ReservationsApiResponse = { data: ReservationApiItem[] };
 
 function mapApiToReservation(r: ReservationApiItem): Reservation {
-    const status = r.status.toLowerCase() as Reservation['status'];
+    const raw = r.status.toLowerCase();
+    // Normalize legacy statuses (upcoming/active) to pending
+    const status: Reservation['status'] =
+        raw === 'completed' ? 'completed' :
+        raw === 'cancelled' ? 'cancelled' :
+        'pending';
     return {
         id: r.id,
         toolName: r.toolName,
         toolId: r.toolId,
         startDate: r.startDate,
         endDate: r.endDate,
-        status: status === 'upcoming' || status === 'active' || status === 'completed' || status === 'cancelled' ? status : 'upcoming',
+        status,
         recurring: r.recurring,
         recurrencePattern: r.recurrencePattern ?? undefined,
     };
 }
 
 const STATUS_STYLES: Record<string, string> = {
-    upcoming: 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-    active: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+    pending: 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
     completed: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
     cancelled: 'bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
 };
 
-type FilterStatus = 'all' | 'upcoming' | 'active' | 'completed' | 'cancelled';
+type FilterStatus = 'all' | 'pending' | 'completed' | 'cancelled';
 
 // Calendar helpers
 const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -114,7 +118,7 @@ export default function IndexPage() {
     const nextMonth = () => setCurrentMonth(new Date(year, month + 1, 1));
 
     const getReservationsForDay = (date: Date) => {
-        return reservations.filter((r) => (r.status === 'upcoming' || r.status === 'active') && isInRange(date, r.startDate, r.endDate));
+        return reservations.filter((r) => r.status === 'pending' && isInRange(date, r.startDate, r.endDate));
     };
 
     const handleConfirmCancel = async () => {
@@ -128,9 +132,9 @@ export default function IndexPage() {
             setReservations((prev) =>
                 prev.map((r) => (r.id === reservationToCancel.id ? { ...r, status: 'cancelled' as const } : r)),
             );
-            toast.success(`Reservation for ${reservationToCancel.toolName} has been cancelled.`);
+            toast.success(`Borrow request for ${reservationToCancel.toolName} has been cancelled.`);
         } catch {
-            toast.error('Could not cancel reservation');
+            toast.error('Could not cancel borrow request');
         }
         setReservationToCancel(null);
     };
@@ -141,13 +145,13 @@ export default function IndexPage() {
             header={
                 <>
                     <Breadcrumb className="mb-2">
-                        <Breadcrumb.Item isCurrent>Reservations</Breadcrumb.Item>
+                        <Breadcrumb.Item isCurrent>Borrow Requests</Breadcrumb.Item>
                     </Breadcrumb>
-                    <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">My Reservations</h1>
+                    <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">My Borrow Requests</h1>
                 </>
             }
         >
-            <Head title="Reservations" />
+            <Head title="Borrow Requests" />
 
             {loading && (
                 <div className="rounded-3xl bg-white px-5 py-12 text-center text-gray-500 shadow-sm dark:bg-gray-800 dark:text-gray-400">
@@ -234,7 +238,7 @@ export default function IndexPage() {
                 <section>
                     <div className="mb-4 flex items-center justify-between">
                         <div className="inline-flex items-center gap-1 rounded-full bg-white px-1 py-1 text-[11px] shadow-sm dark:bg-gray-800">
-                            {(['all', 'upcoming', 'active', 'completed', 'cancelled'] as const).map((status) => (
+                            {(['all', 'pending', 'completed', 'cancelled'] as const).map((status) => (
                                 <button
                                     key={status}
                                     type="button"
@@ -261,8 +265,8 @@ export default function IndexPage() {
                                     <path d="M26 4V10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                                 </svg>
                             }
-                            title="No reservations found"
-                            description="You don't have any reservations matching this filter."
+                            title="No borrow requests found"
+                            description="You don't have any borrow requests matching this filter."
                         />
                     ) : (
                         <div className="space-y-3">
@@ -312,7 +316,7 @@ export default function IndexPage() {
                                         >
                                             {reservation.status}
                                         </span>
-                                        {reservation.status === 'upcoming' && (
+                                        {reservation.status === 'pending' && (
                                             <button
                                                 type="button"
                                                 onClick={() => setReservationToCancel(reservation)}
@@ -333,9 +337,9 @@ export default function IndexPage() {
             {reservationToCancel && (
                 <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30">
                     <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-900">
-                        <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Cancel reservation?</h2>
+                        <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Cancel borrow request?</h2>
                         <p className="mt-2 text-[11px] text-gray-600 dark:text-gray-300">
-                            Are you sure you want to cancel your reservation for{' '}
+                            Are you sure you want to cancel your borrow request for{' '}
                             <span className="font-semibold">{reservationToCancel.toolName}</span> ({reservationToCancel.toolId})? This action
                             will free up the reserved dates for other users.
                         </p>
@@ -345,7 +349,7 @@ export default function IndexPage() {
                                 onClick={() => setReservationToCancel(null)}
                                 className="rounded-full border border-gray-200 px-4 py-1.5 text-[11px] font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
                             >
-                                Keep reservation
+                                Keep request
                             </button>
                             <button
                                 type="button"

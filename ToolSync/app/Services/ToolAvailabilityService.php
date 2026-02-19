@@ -16,8 +16,7 @@ class ToolAvailabilityService
      * Check if a tool is available for the given date range, considering:
      * - Tool status and quantity
      * - Existing allocations (BORROWED, PENDING_RETURN)
-     * - Existing reservations (PENDING, UPCOMING)
-     * Note: ACTIVE reservations have already created allocations, so they're counted in allocations
+     * - Existing reservations (PENDING — awaiting admin approval)
      *
      * @param  int|null  $excludeReservationId  Optional reservation ID to exclude from conflict check
      * @return array{available: bool, reason: string|null}
@@ -177,8 +176,7 @@ class ToolAvailabilityService
             ->whereIn('status', ['BORROWED', 'PENDING_RETURN'])
             ->count();
 
-        // Count active reservations (PENDING, UPCOMING)
-        // Note: ACTIVE reservations have already created allocations, so they're counted in borrowed_count
+        // Count pending borrow requests (awaiting admin approval)
         $reservedCount = Reservation::query()
             ->where('tool_id', $toolId)
             ->whereIn('status', ['PENDING', 'UPCOMING'])
@@ -195,6 +193,35 @@ class ToolAvailabilityService
             'reserved_count' => $reservedCount,
             'available_count' => $availableCount,
         ];
+    }
+
+    /**
+     * Return the date ranges that conflict with the requested period.
+     * Used to give users specific feedback about why their request was blocked.
+     *
+     * @return array<int, array{from: string, to: string, type: string}>
+     */
+    public function getConflictingDateRanges(int $toolId, Carbon $startDate, Carbon $endDate): array
+    {
+        $ranges = [];
+
+        foreach ($this->getConflictingAllocations($toolId, $startDate, $endDate) as $allocation) {
+            $ranges[] = [
+                'from' => substr((string) $allocation->getRawOriginal('borrow_date'), 0, 10),
+                'to' => substr((string) $allocation->getRawOriginal('expected_return_date'), 0, 10),
+                'type' => 'allocation',
+            ];
+        }
+
+        foreach ($this->getConflictingReservations($toolId, $startDate, $endDate) as $reservation) {
+            $ranges[] = [
+                'from' => $reservation->start_date->toDateString(),
+                'to' => $reservation->end_date->toDateString(),
+                'type' => 'reservation',
+            ];
+        }
+
+        return $ranges;
     }
 
     /**
