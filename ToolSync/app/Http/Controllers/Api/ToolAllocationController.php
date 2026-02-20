@@ -5,20 +5,27 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreToolAllocationRequest;
 use App\Http\Requests\UpdateToolAllocationRequest;
+use App\Models\Reservation;
+use App\Models\SystemSetting;
 use App\Models\Tool;
 use App\Models\ToolAllocation;
+use App\Models\ToolConditionHistory;
 use App\Models\ToolStatusLog;
 use App\Models\User;
 use App\Notifications\InAppSystemNotification;
 use App\Services\ActivityLogger;
+use App\Services\AutoApprovalEvaluator;
 use App\Services\DateValidationService;
 use App\Services\ToolAvailabilityService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * @group Tool Allocations
@@ -127,20 +134,17 @@ class ToolAllocationController extends Controller
      *   "message": "Tool is not available for borrowing."
      * }
      */
-    /**
-     * Admin-only: directly create a tool allocation (bypasses the reservation approval flow).
-     * Regular users must go through POST /api/reservations → admin approve.
-     */
     public function store(StoreToolAllocationRequest $request): JsonResponse
     {
+        $validated = $request->validated();
         $actor = $request->user();
-        if (! $actor || ! $actor->isAdmin()) {
-            return response()->json([
-                'message' => 'Only admins can directly create tool allocations. Users should submit a borrow request instead.',
-            ], 403);
+
+        if ($actor && ! $actor->isAdmin()) {
+            $validated['user_id'] = $actor->id;
         }
 
-        $validated = $request->validated();
+        // DEBUG: log what arrives from the frontend
+        \Log::info('BORROW DEBUG - validated input', $validated);
 
         $borrowDate = Carbon::parse($validated['borrow_date']);
         $expectedReturn = Carbon::parse($validated['expected_return_date']);
@@ -152,6 +156,36 @@ class ToolAllocationController extends Controller
             ], 422);
         }
 
+        $borrower = User::query()->findOrFail((int) $validated['user_id']);
+        $maxBorrowings = (int) (SystemSetting::query()->where('key', 'max_borrowings')->value('value') ?? 3);
+        $maxDuration = (int) (SystemSetting::query()->where('key', 'max_duration')->value('value') ?? 14);
+        $currentBorrowed = ToolAllocation::query()
+            ->where('user_id', $borrower->id)
+            ->whereIn('status', ['BORROWED', 'PENDING_RETURN'])
+            ->count();
+        $durationDays = $borrowDate->diffInDays($expectedReturn) + 1;
+        $evaluator = app(AutoApprovalEvaluator::class);
+        $bypassLimits = $evaluator->passesAnyRule($borrower, [
+            'user_id' => $borrower->id,
+            'borrow_date' => $validated['borrow_date'],
+            'expected_return_date' => $validated['expected_return_date'],
+            'tool_id' => (int) $validated['tool_id'],
+        ]);
+
+        if (! $bypassLimits) {
+            if ($currentBorrowed >= $maxBorrowings) {
+                return response()->json([
+                    'message' => "You have reached the maximum concurrent borrowings ({$maxBorrowings}). Return a tool before borrowing another.",
+                ], 422);
+            }
+            if ($durationDays > $maxDuration) {
+                return response()->json([
+                    'message' => "Borrow duration cannot exceed {$maxDuration} days. Requested: {$durationDays} days.",
+                ], 422);
+            }
+        }
+
+        // Check for conflicting reservations before creating allocation
         $availabilityService = app(ToolAvailabilityService::class);
         $availabilityCheck = $availabilityService->checkAvailability((int) $validated['tool_id'], $borrowDate, $expectedReturn);
         if (! $availabilityCheck['available']) {
@@ -160,7 +194,12 @@ class ToolAllocationController extends Controller
             ], 409);
         }
 
-        $allocation = DB::transaction(function () use ($validated, $request, $borrowDate, $expectedReturn): ToolAllocation {
+        // Pass the validated Y-m-d strings directly. MySQL will store them as
+        // "2026-02-10 00:00:00" with no timezone conversion, so the calendar date
+        // is always preserved exactly as the user selected it.
+        $createPayload = $validated;
+
+        $allocation = DB::transaction(function () use ($createPayload, $validated, $request, $borrowDate, $expectedReturn): ToolAllocation {
             /** @var Tool $tool */
             $tool = Tool::query()->lockForUpdate()->findOrFail((int) $validated['tool_id']);
 
@@ -170,6 +209,7 @@ class ToolAllocationController extends Controller
                 ], 409));
             }
 
+            // Double-check reservation conflicts after locking
             $availabilityService = app(ToolAvailabilityService::class);
             $conflictingReservations = $availabilityService->getConflictingReservations($tool->id, $borrowDate, $expectedReturn);
             $conflictingAllocations = $availabilityService->getConflictingAllocations($tool->id, $borrowDate, $expectedReturn);
@@ -183,8 +223,15 @@ class ToolAllocationController extends Controller
 
             $oldStatus = $tool->status;
 
-            $allocation = ToolAllocation::create($validated);
+            $allocation = ToolAllocation::create($createPayload);
             $allocation->refresh();
+
+            // DEBUG: log what actually got stored
+            $rawRow = \DB::table('tool_allocations')->where('id', $allocation->id)->first();
+            \Log::info('BORROW DEBUG - raw DB row', [
+                'borrow_date' => $rawRow->borrow_date,
+                'expected_return_date' => $rawRow->expected_return_date,
+            ]);
 
             $tool->quantity = max(0, (int) $tool->quantity - 1);
             if ($tool->quantity === 0 && $tool->status === 'AVAILABLE') {
@@ -209,7 +256,7 @@ class ToolAllocationController extends Controller
             'tool_allocation.created',
             'ToolAllocation',
             $allocation->id,
-            "Tool allocation #{$allocation->id} created by admin for tool #{$allocation->tool_id}.",
+            "Tool allocation #{$allocation->id} created for tool #{$allocation->tool_id}.",
             ['tool_id' => $allocation->tool_id, 'user_id' => $allocation->user_id],
             $request->user()?->id
         );
@@ -220,9 +267,19 @@ class ToolAllocationController extends Controller
         $allocation->user?->notify(new InAppSystemNotification(
             'success',
             'Borrowing confirmed',
-            "Your borrowing for {$toolName} has been created by an admin.",
+            "Your borrowing for {$toolName} has been created.",
             '/borrowings'
         ));
+
+        $adminRecipients = User::query()->where('role', 'ADMIN')->get();
+        if ($adminRecipients->isNotEmpty()) {
+            Notification::send($adminRecipients, new InAppSystemNotification(
+                'info',
+                'New borrowing activity',
+                "{$allocation->user?->name} borrowed {$toolName}.",
+                '/admin/allocation-history'
+            ));
+        }
 
         return response()->json([
             'message' => 'Tool allocation created successfully.',
@@ -349,12 +406,117 @@ class ToolAllocationController extends Controller
         }
 
         $validated = $request->validated();
+        $hasConditionHistoryTable = Schema::hasTable('tool_condition_histories');
+        $existingHistory = $hasConditionHistoryTable ? $toolAllocation->conditionHistory()->first() : null;
+        $historyBorrowerPayload = null;
+        $historyAdminPayload = null;
+
         if (! $actor->isAdmin()) {
+            $reportedCondition = $validated['reported_condition']
+                ?? $this->extractConditionFromNote($validated['note'] ?? null)
+                ?? 'Good';
+
+            $uploadedBorrowerImages = $this->collectUploadedImages($request, 'return_proof_images');
+            if ($request->hasFile('return_proof_image')) {
+                $singleBorrowerImage = $request->file('return_proof_image');
+                if ($singleBorrowerImage instanceof UploadedFile) {
+                    $uploadedBorrowerImages[] = $singleBorrowerImage;
+                }
+            }
+
+            $existingBorrowerImages = $this->normalizeImagePaths(
+                $existingHistory?->borrower_images ?? $toolAllocation->return_proof_image_path
+            );
+            $borrowerImagePaths = $existingBorrowerImages;
+            if ($uploadedBorrowerImages !== []) {
+                $borrowerImagePaths = $this->storeConditionImages($uploadedBorrowerImages, $toolAllocation, 'borrower');
+                $this->deleteStoredImages($existingBorrowerImages);
+            }
+
+            $returnProofPath = $borrowerImagePaths[0] ?? null;
+            if ($this->borrowerConditionRequiresProof($reportedCondition) && ! $returnProofPath) {
+                return response()->json([
+                    'message' => 'Photo proof is required when returning a tool in Fair, Poor, or Damaged condition.',
+                ], 422);
+            }
+
             $validated = [
                 'status' => 'PENDING_RETURN',
                 'note' => $validated['note'] ?? $toolAllocation->note,
-                'condition' => $validated['condition'] ?? null,
+                'reported_condition' => $reportedCondition,
+                'return_proof_image_path' => $returnProofPath,
+                'admin_condition' => null,
+                'admin_review_note' => null,
+                'admin_reviewed_at' => null,
             ];
+
+            if ($hasConditionHistoryTable && $existingHistory && $existingHistory->admin_images) {
+                $this->deleteStoredImages($this->normalizeImagePaths($existingHistory->admin_images));
+            }
+
+            if ($hasConditionHistoryTable) {
+                $historyBorrowerPayload = [
+                    'tool_id' => $toolAllocation->tool_id,
+                    'allocation_id' => $toolAllocation->id,
+                    'borrower_id' => $toolAllocation->user_id,
+                    'borrower_condition' => $reportedCondition,
+                    'borrower_notes' => $validated['note'] ?? $toolAllocation->note,
+                    'borrower_images' => $borrowerImagePaths !== [] ? $borrowerImagePaths : null,
+                    'admin_id' => null,
+                    'admin_condition' => null,
+                    'admin_notes' => null,
+                    'admin_images' => null,
+                    'admin_reviewed_at' => null,
+                ];
+            }
+        }
+
+        if ($actor->isAdmin() && ($validated['status'] ?? null) === 'RETURNED') {
+            $adminCondition = is_string($validated['admin_condition'] ?? null)
+                ? trim((string) $validated['admin_condition'])
+                : '';
+            if ($adminCondition === '') {
+                return response()->json([
+                    'message' => 'Admin condition grade is required before approving a return.',
+                ], 422);
+            }
+
+            $adminReviewNote = is_string($validated['admin_review_note'] ?? null)
+                ? trim((string) $validated['admin_review_note'])
+                : '';
+            if ($adminReviewNote === '') {
+                return response()->json([
+                    'message' => 'Admin review note is required before approving a return.',
+                ], 422);
+            }
+
+            $validated['admin_condition'] = $adminCondition;
+            $validated['admin_review_note'] = $adminReviewNote;
+            $validated['admin_reviewed_at'] = now();
+
+            $uploadedAdminImages = $this->collectUploadedImages($request, 'admin_proof_images');
+            $existingAdminImages = $this->normalizeImagePaths($existingHistory?->admin_images);
+            $adminImagePaths = $existingAdminImages;
+            if ($uploadedAdminImages !== []) {
+                $adminImagePaths = $this->storeConditionImages($uploadedAdminImages, $toolAllocation, 'admin');
+                $this->deleteStoredImages($existingAdminImages);
+            }
+
+            if ($this->adminConditionRequiresProof($validated['admin_condition']) && $adminImagePaths === []) {
+                return response()->json([
+                    'message' => 'Admin verification photos are required when grading Poor or Damaged.',
+                ], 422);
+            }
+
+            if ($hasConditionHistoryTable) {
+                $historyAdminPayload = [
+                    'admin_id' => $actor->id,
+                    'admin_condition' => $validated['admin_condition'],
+                    'admin_notes' => $validated['admin_review_note'],
+                    'admin_images' => $adminImagePaths !== [] ? $adminImagePaths : null,
+                    'admin_reviewed_at' => $validated['admin_reviewed_at'],
+                ];
+            }
         }
 
         if ($toolAllocation->status === 'RETURNED') {
@@ -366,16 +528,57 @@ class ToolAllocationController extends Controller
 
         $oldAllocationStatus = $toolAllocation->status;
 
-        // Prefer the dedicated condition field; fall back to parsing the note for backwards compatibility.
-        $returnedCondition = $validated['condition']
-            ?? $this->extractConditionFromNote(($validated['note'] ?? null) ?: $toolAllocation->note);
+        $returnedCondition = null;
+        if (($validated['status'] ?? null) === 'RETURNED') {
+            $returnedCondition = $validated['admin_condition']
+                ?? $toolAllocation->admin_condition
+                ?? $toolAllocation->reported_condition
+                ?? $this->extractConditionFromNote(($validated['note'] ?? null) ?: $toolAllocation->note);
+        }
 
-        DB::transaction(function () use ($validated, $request, $toolAllocation, $oldAllocationStatus, $returnedCondition): void {
+        DB::transaction(function () use (
+            $validated,
+            $request,
+            $toolAllocation,
+            $oldAllocationStatus,
+            $returnedCondition,
+            $historyBorrowerPayload,
+            $historyAdminPayload
+        ): void {
             if (($validated['status'] ?? null) === 'RETURNED' && empty($validated['actual_return_date'])) {
                 $validated['actual_return_date'] = now();
             }
 
             $toolAllocation->update($validated);
+
+            if (is_array($historyBorrowerPayload)) {
+                ToolConditionHistory::query()->updateOrCreate(
+                    ['allocation_id' => $toolAllocation->id],
+                    $historyBorrowerPayload
+                );
+            }
+
+            if (is_array($historyAdminPayload)) {
+                $history = ToolConditionHistory::query()->firstOrNew([
+                    'allocation_id' => $toolAllocation->id,
+                ]);
+
+                if (! $history->exists) {
+                    $history->fill([
+                        'tool_id' => $toolAllocation->tool_id,
+                        'allocation_id' => $toolAllocation->id,
+                        'borrower_id' => $toolAllocation->user_id,
+                        'borrower_condition' => $toolAllocation->reported_condition
+                            ?? $this->extractConditionFromNote($toolAllocation->note)
+                            ?? 'Good',
+                        'borrower_notes' => $toolAllocation->note,
+                        'borrower_images' => $this->normalizeImagePaths($toolAllocation->return_proof_image_path),
+                    ]);
+                }
+
+                $history->fill($historyAdminPayload);
+                $history->save();
+            }
 
             if (in_array($oldAllocationStatus, ['BORROWED', 'PENDING_RETURN'], true) && $toolAllocation->status === 'RETURNED') {
                 /** @var Tool $tool */
@@ -434,10 +637,11 @@ class ToolAllocationController extends Controller
 
             $adminRecipients = User::query()->where('role', 'ADMIN')->get();
             if ($adminRecipients->isNotEmpty()) {
+                $proofSuffix = $toolAllocation->return_proof_image_path ? ' Photo evidence is attached.' : '';
                 Notification::send($adminRecipients, new InAppSystemNotification(
                     'alert',
                     'Return approval needed',
-                    "{$toolAllocation->user?->name} requested to return {$toolName}. Approve or decline below.",
+                    "{$toolAllocation->user?->name} requested to return {$toolName}. Approve or decline below.{$proofSuffix}",
                     '/notifications',
                     ['allocation_id' => $toolAllocation->id]
                 ));
@@ -515,6 +719,87 @@ class ToolAllocationController extends Controller
         ]);
     }
 
+    /**
+     * @return array<int, UploadedFile>
+     */
+    private function collectUploadedImages(Request $request, string $key): array
+    {
+        $files = $request->file($key, []);
+        if ($files instanceof UploadedFile) {
+            return [$files];
+        }
+
+        if (! is_array($files)) {
+            return [];
+        }
+
+        $validFiles = [];
+        foreach ($files as $file) {
+            if ($file instanceof UploadedFile) {
+                $validFiles[] = $file;
+            }
+        }
+
+        return $validFiles;
+    }
+
+    /**
+     * @param array<int, UploadedFile> $files
+     * @return array<int, string>
+     */
+    private function storeConditionImages(array $files, ToolAllocation $allocation, string $actorType): array
+    {
+        $year = now()->format('Y');
+        $month = now()->format('m');
+        $baseDirectory = "images/tool-conditions/{$year}/{$month}/tool-{$allocation->tool_id}/allocation-{$allocation->id}/{$actorType}";
+        $storedPaths = [];
+
+        foreach ($files as $file) {
+            $extension = strtolower($file->getClientOriginalExtension() ?: 'jpg');
+            $fileName = $actorType.'-'.now()->format('YmdHis').'-'.bin2hex(random_bytes(5)).'.'.$extension;
+            $storedPaths[] = $file->storeAs($baseDirectory, $fileName, 'public');
+        }
+
+        return $storedPaths;
+    }
+
+    /**
+     * @param array<int, string> $paths
+     */
+    private function deleteStoredImages(array $paths): void
+    {
+        foreach ($paths as $path) {
+            if (is_string($path) && trim($path) !== '') {
+                Storage::disk('public')->delete($path);
+            }
+        }
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function normalizeImagePaths(mixed $value): array
+    {
+        if (is_string($value)) {
+            $trimmed = trim($value);
+
+            return $trimmed !== '' ? [$trimmed] : [];
+        }
+
+        if (! is_array($value)) {
+            return [];
+        }
+
+        $paths = [];
+        foreach ($value as $item) {
+            if (is_string($item) && trim($item) !== '') {
+                $paths[] = trim($item);
+            }
+        }
+
+        return $paths;
+    }
+
     private function extractConditionFromNote(?string $note): ?string
     {
         if (! is_string($note) || trim($note) === '') {
@@ -533,6 +818,24 @@ class ToolAllocationController extends Controller
         }
 
         return null;
+    }
+
+    private function borrowerConditionRequiresProof(?string $condition): bool
+    {
+        if (! is_string($condition) || trim($condition) === '') {
+            return false;
+        }
+
+        return in_array(strtolower(trim($condition)), ['fair', 'poor', 'damaged'], true);
+    }
+
+    private function adminConditionRequiresProof(?string $condition): bool
+    {
+        if (! is_string($condition) || trim($condition) === '') {
+            return false;
+        }
+
+        return in_array(strtolower(trim($condition)), ['poor', 'damaged'], true);
     }
 
     /**

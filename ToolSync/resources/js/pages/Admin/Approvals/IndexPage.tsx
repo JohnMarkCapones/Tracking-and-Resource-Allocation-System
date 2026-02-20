@@ -1,6 +1,7 @@
 import { Head } from '@inertiajs/react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { EmptyState } from '@/Components/EmptyState';
+import Modal from '@/Components/Modal';
 import { toast } from '@/Components/Toast';
 import AppLayout from '@/Layouts/AppLayout';
 import type {
@@ -11,11 +12,12 @@ import type {
 import { apiRequest } from '@/lib/http';
 
 type Tab = 'borrow' | 'return';
+type ReturnCondition = 'Excellent' | 'Good' | 'Fair' | 'Poor' | 'Damaged' | 'Functional';
 
-const POLL_INTERVAL_MS = 30_000;
+const RETURN_CONDITIONS: ReturnCondition[] = ['Excellent', 'Good', 'Fair', 'Poor', 'Damaged', 'Functional'];
 
 function formatDate(dateStr: string | null): string {
-    if (!dateStr) return '—';
+    if (!dateStr) return '-';
     return new Date(dateStr).toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
@@ -36,6 +38,18 @@ function timeAgo(dateStr: string | null): string {
     return `${days}d ago`;
 }
 
+function isReturnCondition(value: string | null | undefined): value is ReturnCondition {
+    return RETURN_CONDITIONS.includes((value ?? '') as ReturnCondition);
+}
+
+function conditionTone(condition: string | null | undefined): string {
+    const key = (condition ?? '').toLowerCase();
+    if (key === 'damaged') return 'bg-rose-100 text-rose-700';
+    if (key === 'poor') return 'bg-amber-100 text-amber-700';
+    if (key === 'excellent') return 'bg-emerald-100 text-emerald-700';
+    return 'bg-slate-100 text-slate-700';
+}
+
 export default function IndexPage() {
     const [tab, setTab] = useState<Tab>('borrow');
     const [borrowRequests, setBorrowRequests] = useState<ApprovalBorrowRequest[]>([]);
@@ -44,37 +58,37 @@ export default function IndexPage() {
     const [error, setError] = useState<string | null>(null);
     const [actionId, setActionId] = useState<string | null>(null);
     const [search, setSearch] = useState('');
-    const [selectedBorrowIds, setSelectedBorrowIds] = useState<Set<number>>(new Set());
-    const [selectedReturnIds, setSelectedReturnIds] = useState<Set<number>>(new Set());
-    const [bulkActing, setBulkActing] = useState(false);
-    const lastCountRef = useRef<number>(-1);
 
-    const loadApprovals = useCallback(async (silent = false) => {
-        if (!silent) setLoading(true);
+    const [reviewRequest, setReviewRequest] = useState<ApprovalReturnRequest | null>(null);
+    const [reviewCondition, setReviewCondition] = useState<ReturnCondition | null>(null);
+    const [reviewNote, setReviewNote] = useState('');
+    const [reviewAdminImages, setReviewAdminImages] = useState<File[]>([]);
+    const [reviewAdminImagePreviews, setReviewAdminImagePreviews] = useState<string[]>([]);
+    const [reviewError, setReviewError] = useState<string | null>(null);
+
+    const loadApprovals = useCallback(async () => {
+        setLoading(true);
         setError(null);
         try {
             const res = await apiRequest<ApprovalsApiResponse>('/api/admin/approvals');
-            const newCount = res.data.borrow_requests.length + res.data.return_requests.length;
-            if (lastCountRef.current !== -1 && newCount > lastCountRef.current) {
-                toast(`${newCount - lastCountRef.current} new request(s) arrived.`, { duration: 4000 });
-            }
-            lastCountRef.current = newCount;
             setBorrowRequests(res.data.borrow_requests);
             setReturnRequests(res.data.return_requests);
-            setSelectedBorrowIds(new Set());
-            setSelectedReturnIds(new Set());
         } catch (err) {
-            if (!silent) setError(err instanceof Error ? err.message : 'Failed to load approvals');
+            setError(err instanceof Error ? err.message : 'Failed to load approvals');
         } finally {
-            if (!silent) setLoading(false);
+            setLoading(false);
         }
     }, []);
 
     useEffect(() => {
         loadApprovals();
-        const intervalId = setInterval(() => loadApprovals(true), POLL_INTERVAL_MS);
-        return () => clearInterval(intervalId);
     }, [loadApprovals]);
+
+    useEffect(() => {
+        return () => {
+            reviewAdminImagePreviews.forEach((url) => URL.revokeObjectURL(url));
+        };
+    }, [reviewAdminImagePreviews]);
 
     const handleApproveBorrow = useCallback(
         async (id: number) => {
@@ -82,7 +96,7 @@ export default function IndexPage() {
             try {
                 await apiRequest(`/api/reservations/${id}/approve`, { method: 'POST' });
                 toast.success('Borrow request approved.');
-                await loadApprovals(true);
+                await loadApprovals();
             } catch (err) {
                 toast.error(err instanceof Error ? err.message : 'Failed to approve');
             } finally {
@@ -98,7 +112,7 @@ export default function IndexPage() {
             try {
                 await apiRequest(`/api/reservations/${id}/decline`, { method: 'POST' });
                 toast.success('Borrow request declined.');
-                await loadApprovals(true);
+                await loadApprovals();
             } catch (err) {
                 toast.error(err instanceof Error ? err.message : 'Failed to decline');
             } finally {
@@ -107,25 +121,90 @@ export default function IndexPage() {
         },
         [loadApprovals],
     );
+    const handleOpenReturnReview = useCallback((request: ApprovalReturnRequest) => {
+        setReviewRequest(request);
+        setReviewCondition(isReturnCondition(request.admin_condition) ? request.admin_condition : null);
+        setReviewNote(request.admin_review_note ?? '');
+        setReviewAdminImages([]);
+        setReviewAdminImagePreviews((prev) => {
+            prev.forEach((url) => URL.revokeObjectURL(url));
+            return [];
+        });
+        setReviewError(null);
+    }, []);
 
-    const handleApproveReturn = useCallback(
-        async (id: number) => {
-            setActionId(`return-${id}`);
-            try {
-                await apiRequest(`/api/tool-allocations/${id}`, {
-                    method: 'PUT',
-                    body: { status: 'RETURNED' },
-                });
-                toast.success('Return approved. Tool marked as returned.');
-                await loadApprovals(true);
-            } catch (err) {
-                toast.error(err instanceof Error ? err.message : 'Failed to approve return');
-            } finally {
-                setActionId(null);
+    const handleCloseReturnReview = useCallback(() => {
+        setReviewRequest(null);
+        setReviewCondition(null);
+        setReviewNote('');
+        setReviewAdminImages([]);
+        setReviewAdminImagePreviews((prev) => {
+            prev.forEach((url) => URL.revokeObjectURL(url));
+            return [];
+        });
+        setReviewError(null);
+    }, []);
+
+    const handleAdminImagesChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(event.target.files ?? []);
+        setReviewAdminImages(files);
+        setReviewAdminImagePreviews((prev) => {
+            prev.forEach((url) => URL.revokeObjectURL(url));
+            return files.map((file) => URL.createObjectURL(file));
+        });
+        setReviewError(null);
+    }, []);
+
+    const handleApproveReturn = useCallback(async () => {
+        if (!reviewRequest) return;
+
+        const noteValue = reviewNote.trim();
+        const isAdminPhotoRequired = reviewCondition === 'Poor' || reviewCondition === 'Damaged';
+        const existingAdminImageCount = reviewRequest.admin_image_urls.length;
+
+        if (!reviewCondition) {
+            setReviewError('Please select an admin condition grade before approval.');
+            return;
+        }
+
+        if (!noteValue) {
+            setReviewError('Please provide admin review notes before approval.');
+            return;
+        }
+
+        if (isAdminPhotoRequired && reviewAdminImages.length === 0 && existingAdminImageCount === 0) {
+            setReviewError('Admin verification photos are required when grading Poor or Damaged.');
+            return;
+        }
+
+        setActionId(`return-${reviewRequest.id}`);
+        setReviewError(null);
+
+        try {
+            const payload = new FormData();
+            payload.append('_method', 'PUT');
+            payload.append('status', 'RETURNED');
+            payload.append('admin_condition', reviewCondition);
+            payload.append('admin_review_note', noteValue);
+            for (const file of reviewAdminImages) {
+                payload.append('admin_proof_images[]', file);
             }
-        },
-        [loadApprovals],
-    );
+
+            await apiRequest(`/api/tool-allocations/${reviewRequest.id}`, {
+                method: 'POST',
+                body: payload,
+            });
+            toast.success('Return approved and condition recorded.');
+            handleCloseReturnReview();
+            await loadApprovals();
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : 'Failed to approve return';
+            setReviewError(msg);
+            toast.error(msg);
+        } finally {
+            setActionId(null);
+        }
+    }, [reviewRequest, reviewCondition, reviewNote, reviewAdminImages, loadApprovals, handleCloseReturnReview]);
 
     const handleDeclineReturn = useCallback(
         async (id: number) => {
@@ -135,109 +214,19 @@ export default function IndexPage() {
                     method: 'PUT',
                     body: { status: 'BORROWED' },
                 });
+                if (reviewRequest?.id === id) {
+                    handleCloseReturnReview();
+                }
                 toast.success('Return request declined. Tool stays on borrower.');
-                await loadApprovals(true);
+                await loadApprovals();
             } catch (err) {
                 toast.error(err instanceof Error ? err.message : 'Failed to decline return');
             } finally {
                 setActionId(null);
             }
         },
-        [loadApprovals],
+        [loadApprovals, reviewRequest, handleCloseReturnReview],
     );
-
-    // Bulk actions
-    const handleBulkApproveBorrow = async () => {
-        if (selectedBorrowIds.size === 0) return;
-        setBulkActing(true);
-        let succeeded = 0;
-        let failed = 0;
-        for (const id of selectedBorrowIds) {
-            try {
-                await apiRequest(`/api/reservations/${id}/approve`, { method: 'POST' });
-                succeeded++;
-            } catch {
-                failed++;
-            }
-        }
-        setBulkActing(false);
-        if (succeeded > 0) toast.success(`${succeeded} borrow request(s) approved.`);
-        if (failed > 0) toast.error(`${failed} request(s) could not be approved.`);
-        await loadApprovals(true);
-    };
-
-    const handleBulkDeclineBorrow = async () => {
-        if (selectedBorrowIds.size === 0) return;
-        setBulkActing(true);
-        let succeeded = 0;
-        let failed = 0;
-        for (const id of selectedBorrowIds) {
-            try {
-                await apiRequest(`/api/reservations/${id}/decline`, { method: 'POST' });
-                succeeded++;
-            } catch {
-                failed++;
-            }
-        }
-        setBulkActing(false);
-        if (succeeded > 0) toast.success(`${succeeded} borrow request(s) declined.`);
-        if (failed > 0) toast.error(`${failed} request(s) could not be declined.`);
-        await loadApprovals(true);
-    };
-
-    const handleBulkApproveReturn = async () => {
-        if (selectedReturnIds.size === 0) return;
-        setBulkActing(true);
-        let succeeded = 0;
-        let failed = 0;
-        for (const id of selectedReturnIds) {
-            try {
-                await apiRequest(`/api/tool-allocations/${id}`, { method: 'PUT', body: { status: 'RETURNED' } });
-                succeeded++;
-            } catch {
-                failed++;
-            }
-        }
-        setBulkActing(false);
-        if (succeeded > 0) toast.success(`${succeeded} return(s) approved.`);
-        if (failed > 0) toast.error(`${failed} return(s) could not be approved.`);
-        await loadApprovals(true);
-    };
-
-    const handleBulkDeclineReturn = async () => {
-        if (selectedReturnIds.size === 0) return;
-        setBulkActing(true);
-        let succeeded = 0;
-        let failed = 0;
-        for (const id of selectedReturnIds) {
-            try {
-                await apiRequest(`/api/tool-allocations/${id}`, { method: 'PUT', body: { status: 'BORROWED' } });
-                succeeded++;
-            } catch {
-                failed++;
-            }
-        }
-        setBulkActing(false);
-        if (succeeded > 0) toast.success(`${succeeded} return(s) declined.`);
-        if (failed > 0) toast.error(`${failed} return(s) could not be declined.`);
-        await loadApprovals(true);
-    };
-
-    const toggleBorrowSelect = (id: number) =>
-        setSelectedBorrowIds((prev) => {
-            const next = new Set(prev);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
-            return next;
-        });
-
-    const toggleReturnSelect = (id: number) =>
-        setSelectedReturnIds((prev) => {
-            const next = new Set(prev);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
-            return next;
-        });
 
     const query = search.toLowerCase().trim();
 
@@ -267,28 +256,19 @@ export default function IndexPage() {
         [returnRequests, query],
     );
 
-    const allBorrowSelected =
-        filteredBorrow.length > 0 && filteredBorrow.every((r) => selectedBorrowIds.has(r.id));
-    const allReturnSelected =
-        filteredReturn.length > 0 && filteredReturn.every((r) => selectedReturnIds.has(r.id));
-
-    const toggleAllBorrow = () => {
-        if (allBorrowSelected) {
-            setSelectedBorrowIds(new Set());
-        } else {
-            setSelectedBorrowIds(new Set(filteredBorrow.map((r) => r.id)));
-        }
-    };
-
-    const toggleAllReturn = () => {
-        if (allReturnSelected) {
-            setSelectedReturnIds(new Set());
-        } else {
-            setSelectedReturnIds(new Set(filteredReturn.map((r) => r.id)));
-        }
-    };
-
     const totalPending = borrowRequests.length + returnRequests.length;
+    const reviewBorrowerImages = reviewRequest
+        ? reviewRequest.borrower_image_urls.length > 0
+            ? reviewRequest.borrower_image_urls
+            : reviewRequest.return_proof_image_url
+              ? [reviewRequest.return_proof_image_url]
+              : []
+        : [];
+    const reviewHasExistingAdminImages = (reviewRequest?.admin_image_urls.length ?? 0) > 0;
+    const reviewRequiresAdminPhotos = reviewCondition === 'Poor' || reviewCondition === 'Damaged';
+    const reviewCanApprove = Boolean(reviewCondition) &&
+        reviewNote.trim().length > 0 &&
+        (!reviewRequiresAdminPhotos || reviewAdminImages.length > 0 || reviewHasExistingAdminImages);
 
     return (
         <AppLayout
@@ -304,7 +284,6 @@ export default function IndexPage() {
             <Head title="Approvals" />
 
             <div className="space-y-6">
-                {/* Summary strip */}
                 <section className="flex flex-col gap-3 rounded-3xl bg-white/70 p-4 shadow-sm backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <p className="text-xs font-medium text-gray-500">Pending requests</p>
@@ -313,7 +292,6 @@ export default function IndexPage() {
                                 ? 'No pending requests at this time.'
                                 : `${totalPending} request${totalPending !== 1 ? 's' : ''} awaiting your review.`}
                         </p>
-                        <p className="mt-0.5 text-[10px] text-gray-400">Auto-refreshes every 30 seconds</p>
                     </div>
                     <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs text-gray-500">
@@ -331,7 +309,7 @@ export default function IndexPage() {
                         </div>
                         <button
                             type="button"
-                            onClick={() => loadApprovals()}
+                            onClick={loadApprovals}
                             disabled={loading}
                             className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
                         >
@@ -359,10 +337,8 @@ export default function IndexPage() {
                         Loading approvals...
                     </div>
                 )}
-
                 {!loading && (
                     <>
-                        {/* Tab switcher */}
                         <div className="flex items-center gap-1 rounded-full bg-white px-1 py-1 text-[11px] text-gray-600 shadow-sm">
                             <button
                                 type="button"
@@ -394,39 +370,8 @@ export default function IndexPage() {
                             </button>
                         </div>
 
-                        {/* Borrow requests tab */}
                         {tab === 'borrow' && (
                             <section className="space-y-3">
-                                {selectedBorrowIds.size > 0 && (
-                                    <div className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-2">
-                                        <span className="text-[11px] font-semibold text-blue-700">
-                                            {selectedBorrowIds.size} selected
-                                        </span>
-                                        <button
-                                            type="button"
-                                            disabled={bulkActing}
-                                            onClick={handleBulkApproveBorrow}
-                                            className="rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
-                                        >
-                                            {bulkActing ? '...' : 'Approve all'}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            disabled={bulkActing}
-                                            onClick={handleBulkDeclineBorrow}
-                                            className="rounded-full border border-gray-300 px-3 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-60"
-                                        >
-                                            Decline all
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setSelectedBorrowIds(new Set())}
-                                            className="ml-auto text-[11px] text-gray-500 hover:text-gray-700"
-                                        >
-                                            Clear selection
-                                        </button>
-                                    </div>
-                                )}
                                 {filteredBorrow.length === 0 ? (
                                     <EmptyState
                                         icon={
@@ -449,15 +394,6 @@ export default function IndexPage() {
                                         <table className="w-full text-left text-xs">
                                             <thead>
                                                 <tr className="border-b border-gray-100 bg-gray-50 text-[11px] font-semibold tracking-wide text-gray-500 uppercase">
-                                                    <th className="px-4 py-3">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={allBorrowSelected}
-                                                            onChange={toggleAllBorrow}
-                                                            className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600"
-                                                            aria-label="Select all borrow requests"
-                                                        />
-                                                    </th>
                                                     <th className="px-4 py-3">Tool</th>
                                                     <th className="px-4 py-3">Requested by</th>
                                                     <th className="hidden px-4 py-3 md:table-cell">Date range</th>
@@ -470,9 +406,7 @@ export default function IndexPage() {
                                                     <BorrowRow
                                                         key={req.id}
                                                         request={req}
-                                                        isActing={actionId === `borrow-${req.id}` || bulkActing}
-                                                        selected={selectedBorrowIds.has(req.id)}
-                                                        onSelect={() => toggleBorrowSelect(req.id)}
+                                                        isActing={actionId === `borrow-${req.id}`}
                                                         onApprove={() => handleApproveBorrow(req.id)}
                                                         onDecline={() => handleDeclineBorrow(req.id)}
                                                     />
@@ -484,39 +418,8 @@ export default function IndexPage() {
                             </section>
                         )}
 
-                        {/* Return requests tab */}
                         {tab === 'return' && (
                             <section className="space-y-3">
-                                {selectedReturnIds.size > 0 && (
-                                    <div className="flex items-center gap-2 rounded-xl border border-amber-100 bg-amber-50 px-4 py-2">
-                                        <span className="text-[11px] font-semibold text-amber-700">
-                                            {selectedReturnIds.size} selected
-                                        </span>
-                                        <button
-                                            type="button"
-                                            disabled={bulkActing}
-                                            onClick={handleBulkApproveReturn}
-                                            className="rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
-                                        >
-                                            {bulkActing ? '...' : 'Approve all'}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            disabled={bulkActing}
-                                            onClick={handleBulkDeclineReturn}
-                                            className="rounded-full border border-gray-300 px-3 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-60"
-                                        >
-                                            Decline all
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setSelectedReturnIds(new Set())}
-                                            className="ml-auto text-[11px] text-gray-500 hover:text-gray-700"
-                                        >
-                                            Clear selection
-                                        </button>
-                                    </div>
-                                )}
                                 {filteredReturn.length === 0 ? (
                                     <EmptyState
                                         icon={
@@ -538,19 +441,10 @@ export default function IndexPage() {
                                         <table className="w-full text-left text-xs">
                                             <thead>
                                                 <tr className="border-b border-gray-100 bg-gray-50 text-[11px] font-semibold tracking-wide text-gray-500 uppercase">
-                                                    <th className="px-4 py-3">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={allReturnSelected}
-                                                            onChange={toggleAllReturn}
-                                                            className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600"
-                                                            aria-label="Select all return requests"
-                                                        />
-                                                    </th>
                                                     <th className="px-4 py-3">Tool</th>
                                                     <th className="px-4 py-3">Borrower</th>
                                                     <th className="hidden px-4 py-3 md:table-cell">Borrow period</th>
-                                                    <th className="hidden px-4 py-3 sm:table-cell">Condition / Note</th>
+                                                    <th className="hidden px-4 py-3 lg:table-cell">Return report</th>
                                                     <th className="px-4 py-3 text-right">Actions</th>
                                                 </tr>
                                             </thead>
@@ -559,10 +453,8 @@ export default function IndexPage() {
                                                     <ReturnRow
                                                         key={req.id}
                                                         request={req}
-                                                        isActing={actionId === `return-${req.id}` || bulkActing}
-                                                        selected={selectedReturnIds.has(req.id)}
-                                                        onSelect={() => toggleReturnSelect(req.id)}
-                                                        onApprove={() => handleApproveReturn(req.id)}
+                                                        isActing={actionId === `return-${req.id}`}
+                                                        onReview={() => handleOpenReturnReview(req)}
                                                         onDecline={() => handleDeclineReturn(req.id)}
                                                     />
                                                 ))}
@@ -575,6 +467,187 @@ export default function IndexPage() {
                     </>
                 )}
             </div>
+
+            <Modal show={Boolean(reviewRequest)} maxWidth="2xl" onClose={handleCloseReturnReview}>
+                {reviewRequest && (
+                    <div className="overflow-hidden rounded-xl bg-white">
+                        <div className="border-b border-gray-100 bg-slate-900 px-6 py-4 text-white">
+                            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">Return review</p>
+                            <h2 className="mt-1 text-lg font-semibold">{reviewRequest.tool_name}</h2>
+                            <p className="text-xs text-slate-300">Borrower: {reviewRequest.user_name}</p>
+                        </div>
+
+                        <div className="space-y-5 px-6 py-5">
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3 text-xs text-gray-700">
+                                    <p><span className="font-semibold text-gray-900">Borrow period:</span> {formatDate(reviewRequest.borrow_date)} - {formatDate(reviewRequest.expected_return_date)}</p>
+                                    <p className="mt-1"><span className="font-semibold text-gray-900">Submitted:</span> {timeAgo(reviewRequest.created_at)}</p>
+                                    <div className="mt-2 flex items-center gap-2">
+                                        <span className="font-semibold text-gray-900">User condition:</span>
+                                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${conditionTone(reviewRequest.reported_condition)}`}>
+                                            {reviewRequest.reported_condition ?? 'Not set'}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3 text-xs text-gray-700">
+                                    <p className="font-semibold text-gray-900">User notes</p>
+                                    <p className="mt-1 whitespace-pre-wrap text-gray-600">{reviewRequest.note?.trim() ? reviewRequest.note : 'No notes provided.'}</p>
+                                </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-gray-100 bg-white p-3">
+                                <p className="text-[11px] font-semibold tracking-wide text-gray-500 uppercase">Borrower proof photos</p>
+                                {reviewBorrowerImages.length > 0 ? (
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                        {reviewBorrowerImages.map((img, index) => (
+                                            <a
+                                                key={`${reviewRequest.id}-borrower-${index}`}
+                                                href={img}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="block h-20 w-20 overflow-hidden rounded-xl border border-gray-200 hover:border-blue-300"
+                                                title={`Open borrower image ${index + 1}`}
+                                            >
+                                                <img
+                                                    src={img}
+                                                    alt={`Borrower proof ${index + 1} for ${reviewRequest.tool_name}`}
+                                                    className="h-full w-full object-cover"
+                                                />
+                                            </a>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="mt-1 text-xs text-gray-500">No proof image attached.</p>
+                                )}
+                            </div>
+
+                            <div>
+                                <label className="mb-2 block text-[11px] font-semibold tracking-wide text-gray-500 uppercase">Admin condition grade (required)</label>
+                                <div className="flex flex-wrap gap-2">
+                                    {RETURN_CONDITIONS.map((condition) => (
+                                        <button
+                                            key={condition}
+                                            type="button"
+                                            onClick={() => {
+                                                setReviewCondition(condition);
+                                                setReviewError(null);
+                                            }}
+                                            className={`rounded-full px-3 py-1.5 text-[11px] font-semibold ${
+                                                reviewCondition === condition
+                                                    ? 'bg-blue-600 text-white'
+                                                    : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                                            }`}
+                                        >
+                                            {condition}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div>
+                                <label htmlFor="admin-review-note" className="mb-1 block text-[11px] font-semibold tracking-wide text-gray-500 uppercase">
+                                    Admin review note (required)
+                                </label>
+                                <textarea
+                                    id="admin-review-note"
+                                    rows={3}
+                                    value={reviewNote}
+                                    onChange={(e) => {
+                                        setReviewNote(e.target.value);
+                                        setReviewError(null);
+                                    }}
+                                    placeholder="Record findings, damage details, and maintenance instructions..."
+                                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                            </div>
+
+                            <div>
+                                <label htmlFor="admin-proof-images" className="mb-1 block text-[11px] font-semibold tracking-wide text-gray-500 uppercase">
+                                    Admin verification photos {reviewRequiresAdminPhotos ? '(required)' : '(optional)'}
+                                </label>
+                                <input
+                                    id="admin-proof-images"
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    onChange={handleAdminImagesChange}
+                                    className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-full file:border-0 file:bg-blue-50 file:px-4 file:py-1.5 file:text-[11px] file:font-semibold file:text-blue-700 hover:file:bg-blue-100"
+                                />
+                                <p className="mt-1 text-[11px] text-gray-500">
+                                    Upload up to 5 photos. JPG/PNG/WEBP, max 5MB each.
+                                    {reviewRequiresAdminPhotos ? ' Required for Poor or Damaged grade.' : ''}
+                                </p>
+                                {reviewRequest.admin_image_urls.length > 0 && (
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                        {reviewRequest.admin_image_urls.map((url, index) => (
+                                            <a
+                                                key={`existing-admin-${index}`}
+                                                href={url}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="block h-16 w-16 overflow-hidden rounded-lg border border-gray-200 hover:border-blue-300"
+                                                title={`Open existing admin image ${index + 1}`}
+                                            >
+                                                <img src={url} alt={`Existing admin image ${index + 1}`} className="h-full w-full object-cover" />
+                                            </a>
+                                        ))}
+                                    </div>
+                                )}
+                                {reviewAdminImagePreviews.length > 0 && (
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                        {reviewAdminImagePreviews.map((url, index) => (
+                                            <div key={`admin-preview-${index}`} className="h-16 w-16 overflow-hidden rounded-lg border border-gray-200">
+                                                <img src={url} alt={`Admin preview ${index + 1}`} className="h-full w-full object-cover" />
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {!reviewCanApprove && (
+                                <div className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                                    {!reviewCondition && <p>Select an admin condition grade.</p>}
+                                    {reviewCondition && !reviewNote.trim() && <p>Add admin review notes.</p>}
+                                    {reviewCondition && reviewRequiresAdminPhotos && reviewAdminImages.length === 0 && !reviewHasExistingAdminImages && (
+                                        <p>Add at least one admin verification photo for Poor or Damaged grade.</p>
+                                    )}
+                                </div>
+                            )}
+
+                            {reviewError && (
+                                <div className="rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-700">{reviewError}</div>
+                            )}
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 border-t border-gray-100 bg-gray-50 px-6 py-3">
+                            <button
+                                type="button"
+                                onClick={handleCloseReturnReview}
+                                disabled={actionId === `return-${reviewRequest.id}`}
+                                className="rounded-full border border-gray-200 px-4 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-60"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleDeclineReturn(reviewRequest.id)}
+                                disabled={actionId === `return-${reviewRequest.id}`}
+                                className="rounded-full border border-gray-300 px-4 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-60"
+                            >
+                                Decline return
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleApproveReturn}
+                                disabled={actionId === `return-${reviewRequest.id}` || !reviewCanApprove}
+                                className="rounded-full bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                            >
+                                {actionId === `return-${reviewRequest.id}` ? 'Saving...' : 'Approve return'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </Modal>
         </AppLayout>
     );
 }
@@ -582,30 +655,18 @@ export default function IndexPage() {
 function BorrowRow({
     request,
     isActing,
-    selected,
-    onSelect,
     onApprove,
     onDecline,
 }: {
     request: ApprovalBorrowRequest;
     isActing: boolean;
-    selected: boolean;
-    onSelect: () => void;
     onApprove: () => void;
     onDecline: () => void;
 }) {
     const toolCode = request.tool_code?.trim() ? request.tool_code : `TL-${request.tool_id}`;
 
     return (
-        <tr className={`hover:bg-gray-50/50 ${selected ? 'bg-blue-50/40' : ''}`}>
-            <td className="px-4 py-3">
-                <input
-                    type="checkbox"
-                    checked={selected}
-                    onChange={onSelect}
-                    className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600"
-                />
-            </td>
+        <tr className="hover:bg-gray-50/50">
             <td className="px-4 py-3">
                 <p className="font-semibold text-gray-900">{request.tool_name}</p>
                 <p className="text-[11px] text-gray-500">{toolCode}</p>
@@ -618,7 +679,7 @@ function BorrowRow({
             </td>
             <td className="hidden px-4 py-3 md:table-cell">
                 <p className="text-gray-700">
-                    {formatDate(request.start_date)} — {formatDate(request.end_date)}
+                    {formatDate(request.start_date)} - {formatDate(request.end_date)}
                 </p>
             </td>
             <td className="hidden px-4 py-3 sm:table-cell">
@@ -651,30 +712,18 @@ function BorrowRow({
 function ReturnRow({
     request,
     isActing,
-    selected,
-    onSelect,
-    onApprove,
+    onReview,
     onDecline,
 }: {
     request: ApprovalReturnRequest;
     isActing: boolean;
-    selected: boolean;
-    onSelect: () => void;
-    onApprove: () => void;
+    onReview: () => void;
     onDecline: () => void;
 }) {
     const toolCode = request.tool_code?.trim() ? request.tool_code : `TL-${request.tool_id}`;
 
     return (
-        <tr className={`hover:bg-gray-50/50 ${selected ? 'bg-amber-50/40' : ''}`}>
-            <td className="px-4 py-3">
-                <input
-                    type="checkbox"
-                    checked={selected}
-                    onChange={onSelect}
-                    className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600"
-                />
-            </td>
+        <tr className="hover:bg-gray-50/50">
             <td className="px-4 py-3">
                 <p className="font-semibold text-gray-900">{request.tool_name}</p>
                 <p className="text-[11px] text-gray-500">{toolCode}</p>
@@ -687,23 +736,33 @@ function ReturnRow({
             </td>
             <td className="hidden px-4 py-3 md:table-cell">
                 <p className="text-gray-700">
-                    {formatDate(request.borrow_date)} — {formatDate(request.expected_return_date)}
+                    {formatDate(request.borrow_date)} - {formatDate(request.expected_return_date)}
                 </p>
             </td>
-            <td className="hidden px-4 py-3 sm:table-cell">
-                <p className="max-w-[180px] truncate text-gray-500" title={request.note ?? undefined}>
-                    {request.note || '—'}
-                </p>
+            <td className="hidden px-4 py-3 lg:table-cell">
+                <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${conditionTone(request.reported_condition)}`}>
+                            {request.reported_condition ?? 'No condition'}
+                        </span>
+                        {(request.borrower_image_urls.length > 0 || request.return_proof_image_url) && (
+                            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">Photo attached</span>
+                        )}
+                    </div>
+                    <p className="max-w-[200px] truncate text-gray-500" title={request.note ?? undefined}>
+                        {request.note || '-'}
+                    </p>
+                </div>
             </td>
             <td className="px-4 py-3">
                 <div className="flex justify-end gap-1.5">
                     <button
                         type="button"
-                        onClick={onApprove}
+                        onClick={onReview}
                         disabled={isActing}
                         className="rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
                     >
-                        {isActing ? '...' : 'Approve'}
+                        {isActing ? '...' : 'Review & Approve'}
                     </button>
                     <button
                         type="button"
