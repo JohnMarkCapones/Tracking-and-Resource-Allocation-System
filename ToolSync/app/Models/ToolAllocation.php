@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class ToolAllocation extends Model
 {
@@ -17,7 +18,11 @@ class ToolAllocation extends Model
         'expected_return_date',
         'actual_return_date',
         'note',
-        'condition',
+        'reported_condition',
+        'return_proof_image_path',
+        'admin_condition',
+        'admin_review_note',
+        'admin_reviewed_at',
         'status',
     ];
 
@@ -25,6 +30,7 @@ class ToolAllocation extends Model
     {
         return [
             'actual_return_date' => 'datetime',
+            'admin_reviewed_at' => 'datetime',
         ];
     }
 
@@ -56,5 +62,10 @@ class ToolAllocation extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function conditionHistory(): HasOne
+    {
+        return $this->hasOne(ToolConditionHistory::class, 'allocation_id');
     }
 }
