@@ -26,9 +26,9 @@ class MaintenanceScheduleController extends Controller
             ->where('scheduled_date', '<', now()->startOfDay())
             ->update(['status' => 'overdue']);
 
-        $activeStatuses = ['scheduled', 'in_progress', 'overdue'];
+        // Only block tools when maintenance start date has arrived (today or past)
         $toolIdsWithActive = MaintenanceSchedule::query()
-            ->whereIn('status', $activeStatuses)
+            ->activeForMaintenance()
             ->pluck('tool_id')
             ->unique()
             ->values();
@@ -90,7 +90,10 @@ class MaintenanceScheduleController extends Controller
             'trigger_threshold' => $validated['trigger_threshold'] ?? 50,
         ]);
 
-        Tool::query()->where('id', $schedule->tool_id)->update(['status' => 'MAINTENANCE']);
+        // Only set MAINTENANCE if start date has arrived; otherwise tool stays borrowable
+        if ($schedule->scheduled_date->lte(now()->startOfDay())) {
+            Tool::query()->where('id', $schedule->tool_id)->update(['status' => 'MAINTENANCE']);
+        }
 
         ActivityLogger::log(
             'maintenance_schedule.created',
@@ -119,13 +122,29 @@ class MaintenanceScheduleController extends Controller
             $hasOtherActive = MaintenanceSchedule::query()
                 ->where('tool_id', $toolId)
                 ->where('id', '!=', $maintenance_schedule->id)
-                ->whereIn('status', ['scheduled', 'in_progress', 'overdue'])
+                ->activeForMaintenance()
                 ->exists();
             if (! $hasOtherActive) {
                 Tool::query()->where('id', $toolId)->update(['status' => 'AVAILABLE']);
             }
         } else {
-            Tool::query()->where('id', $toolId)->update(['status' => 'MAINTENANCE']);
+            $maintenance_schedule->refresh();
+            $isActive = MaintenanceSchedule::query()
+                ->where('id', $maintenance_schedule->id)
+                ->activeForMaintenance()
+                ->exists();
+            if ($isActive) {
+                Tool::query()->where('id', $toolId)->update(['status' => 'MAINTENANCE']);
+            } else {
+                $hasOtherActive = MaintenanceSchedule::query()
+                    ->where('tool_id', $toolId)
+                    ->where('id', '!=', $maintenance_schedule->id)
+                    ->activeForMaintenance()
+                    ->exists();
+                if (! $hasOtherActive) {
+                    Tool::query()->where('id', $toolId)->update(['status' => 'AVAILABLE']);
+                }
+            }
         }
 
         ActivityLogger::log(
@@ -153,7 +172,7 @@ class MaintenanceScheduleController extends Controller
 
         $hasOtherActive = MaintenanceSchedule::query()
             ->where('tool_id', $toolId)
-            ->whereIn('status', ['scheduled', 'in_progress', 'overdue'])
+            ->activeForMaintenance()
             ->exists();
         if (! $hasOtherActive) {
             Tool::query()->where('id', $toolId)->update(['status' => 'AVAILABLE']);

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\MaintenanceSchedule;
 use App\Models\Reservation;
 use App\Models\Tool;
 use App\Models\ToolAllocation;
@@ -53,6 +54,20 @@ class ToolAvailabilityService
             return ['available' => false, 'reason' => 'Tool has no available quantity.'];
         }
 
+        // Equipment must be returned before maintenance start date
+        $blockingMaintenance = MaintenanceSchedule::query()
+            ->where('tool_id', $toolId)
+            ->whereIn('status', ['scheduled', 'in_progress', 'overdue'])
+            ->where('scheduled_date', '<=', $endDate->toDateString())
+            ->orderBy('scheduled_date')
+            ->first();
+        if ($blockingMaintenance) {
+            return [
+                'available' => false,
+                'reason' => "Tool has scheduled maintenance on {$blockingMaintenance->scheduled_date->toDateString()}. Return date must be before maintenance start.",
+            ];
+        }
+
         $dateRangeAvailability = $this->calculateDateRangeAvailability($toolId, $startDate, $endDate, $excludeReservationId);
         if ($dateRangeAvailability['available_count'] < 1) {
             $minAvailable = (int) $dateRangeAvailability['available_count'];
@@ -60,6 +75,7 @@ class ToolAvailabilityService
                 (int) $dateRangeAvailability['borrowed_count'] + (int) $dateRangeAvailability['reserved_count'],
                 0
             );
+
             return [
                 'available' => false,
                 'reason' => "Tool is already fully allocated or reserved for the selected date range. ({$maxCommitted} commitments, {$tool->quantity} available, {$minAvailable} free at minimum)",
@@ -186,7 +202,31 @@ class ToolAvailabilityService
             ];
         }
 
+        foreach ($this->getBlockingMaintenanceSchedules($toolId, $startDate, $endDate) as $maintenance) {
+            $ranges[] = [
+                'from' => $maintenance->scheduled_date->toDateString(),
+                'to' => $maintenance->scheduled_date->toDateString(),
+                'type' => 'maintenance',
+            ];
+        }
+
         return $ranges;
+    }
+
+    /**
+     * Get maintenance schedules that block the given date range.
+     * Equipment must be returned before maintenance start date.
+     *
+     * @return \Illuminate\Database\Eloquent\Collection<int, MaintenanceSchedule>
+     */
+    public function getBlockingMaintenanceSchedules(int $toolId, Carbon $startDate, Carbon $endDate)
+    {
+        return MaintenanceSchedule::query()
+            ->where('tool_id', $toolId)
+            ->whereIn('status', ['scheduled', 'in_progress', 'overdue'])
+            ->where('scheduled_date', '<=', $endDate->toDateString())
+            ->orderBy('scheduled_date')
+            ->get();
     }
 
     /**

@@ -4,6 +4,8 @@ use App\Models\MaintenanceSchedule;
 use App\Models\Tool;
 use App\Models\ToolCategory;
 use App\Models\User;
+use App\Services\ToolAvailabilityService;
+use Carbon\Carbon;
 use Laravel\Sanctum\Sanctum;
 
 function createAdminAndTool(): array
@@ -188,7 +190,7 @@ test('creating a schedule with invalid type returns 422', function () {
 // Tool status sync
 // -------------------------------------------------------------------------
 
-test('creating a schedule sets tool status to MAINTENANCE', function () {
+test('creating a schedule with future date keeps tool AVAILABLE until maintenance start', function () {
     [$admin, $tool] = createAdminAndTool();
     Sanctum::actingAs($admin);
 
@@ -198,6 +200,23 @@ test('creating a schedule sets tool status to MAINTENANCE', function () {
         'tool_id' => $tool->id,
         'type' => 'routine',
         'scheduled_date' => now()->addDays(5)->toDateString(),
+        'assignee' => 'Team',
+    ])->assertCreated();
+
+    $tool->refresh();
+    expect($tool->status)->toBe('AVAILABLE');
+});
+
+test('creating a schedule with today or past date sets tool status to MAINTENANCE', function () {
+    [$admin, $tool] = createAdminAndTool();
+    Sanctum::actingAs($admin);
+
+    expect($tool->status)->toBe('AVAILABLE');
+
+    $this->postJson('/api/maintenance-schedules', [
+        'tool_id' => $tool->id,
+        'type' => 'routine',
+        'scheduled_date' => now()->toDateString(),
         'assignee' => 'Team',
     ])->assertCreated();
 
@@ -296,4 +315,59 @@ test('schedule response includes tool_id for frontend forms', function () {
         ])
         ->assertJsonPath('data.0.tool_id', $tool->id)
         ->assertJsonPath('data.0.toolId', 'TL-'.$tool->id);
+});
+
+// -------------------------------------------------------------------------
+// Borrowing until maintenance start date
+// -------------------------------------------------------------------------
+
+test('equipment with future maintenance is available for borrowing until start date', function () {
+    [$admin, $tool] = createAdminAndTool();
+
+    MaintenanceSchedule::create([
+        'tool_id' => $tool->id,
+        'type' => 'routine',
+        'scheduled_date' => now()->addDays(10)->toDateString(),
+        'assignee' => 'Team',
+        'status' => 'scheduled',
+        'usage_count' => 0,
+        'trigger_threshold' => 50,
+    ]);
+
+    $tool->refresh();
+    expect($tool->status)->toBe('AVAILABLE');
+
+    $service = app(ToolAvailabilityService::class);
+    $result = $service->checkAvailability(
+        $tool->id,
+        Carbon::today()->addDays(1),
+        Carbon::today()->addDays(5)
+    );
+    expect($result['available'])->toBeTrue();
+});
+
+test('reservation extending past maintenance start date is blocked', function () {
+    [$admin, $tool] = createAdminAndTool();
+
+    MaintenanceSchedule::create([
+        'tool_id' => $tool->id,
+        'type' => 'routine',
+        'scheduled_date' => now()->addDays(5)->toDateString(),
+        'assignee' => 'Team',
+        'status' => 'scheduled',
+        'usage_count' => 0,
+        'trigger_threshold' => 50,
+    ]);
+
+    $tool->refresh();
+    expect($tool->status)->toBe('AVAILABLE');
+
+    $service = app(ToolAvailabilityService::class);
+    $result = $service->checkAvailability(
+        $tool->id,
+        Carbon::today()->addDays(1),
+        Carbon::today()->addDays(7)
+    );
+    expect($result['available'])->toBeFalse();
+    expect($result['reason'])->toContain('scheduled maintenance');
 });

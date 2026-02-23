@@ -18,7 +18,8 @@
       "Bash(npm run lint:*)",
       "Bash(npm run format:*)",
       "Bash(vendor/bin/pint:*)",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "Bash(wc:*)"
     ]
   }
 }
