@@ -610,7 +610,7 @@ export default function AdminDashboardPage() {
                                 </div>
                                 <span className="rounded-full bg-gray-100 px-3 py-1 text-[11px] font-medium text-gray-600">Last 24 hours</span>
                             </header>
-                            <ol className="space-y-4 text-xs text-gray-700">
+                            <ol className="max-h-80 space-y-4 overflow-y-auto text-xs text-gray-700">
                                 {recentActivity.length === 0 ? (
                                     <li className="rounded-2xl bg-gray-50 px-3 py-4 text-[11px] text-gray-500">
                                         No recent activity. Borrowing and returns will appear here.
