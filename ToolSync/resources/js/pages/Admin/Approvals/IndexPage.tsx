@@ -50,6 +50,11 @@ function conditionTone(condition: string | null | undefined): string {
     return 'bg-slate-100 text-slate-700';
 }
 
+function emitPendingFlowBadgeUpdate(detail?: { delta?: number; count?: number }): void {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(new CustomEvent('equipit:pending-flow-updated', { detail }));
+}
+
 export default function IndexPage() {
     const [tab, setTab] = useState<Tab>('borrow');
     const [borrowRequests, setBorrowRequests] = useState<ApprovalBorrowRequest[]>([]);
@@ -73,6 +78,9 @@ export default function IndexPage() {
             const res = await apiRequest<ApprovalsApiResponse>('/api/admin/approvals');
             setBorrowRequests(res.data.borrow_requests);
             setReturnRequests(res.data.return_requests);
+            emitPendingFlowBadgeUpdate({
+                count: (res.data.borrow_requests?.length ?? 0) + (res.data.return_requests?.length ?? 0),
+            });
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to load approvals');
         } finally {
@@ -96,6 +104,7 @@ export default function IndexPage() {
             try {
                 await apiRequest(`/api/reservations/${id}/approve`, { method: 'POST' });
                 toast.success('Borrow request approved.');
+                emitPendingFlowBadgeUpdate({ delta: -1 });
                 await loadApprovals();
             } catch (err) {
                 toast.error(err instanceof Error ? err.message : 'Failed to approve');
@@ -112,6 +121,7 @@ export default function IndexPage() {
             try {
                 await apiRequest(`/api/reservations/${id}/decline`, { method: 'POST' });
                 toast.success('Borrow request declined.');
+                emitPendingFlowBadgeUpdate({ delta: -1 });
                 await loadApprovals();
             } catch (err) {
                 toast.error(err instanceof Error ? err.message : 'Failed to decline');
@@ -195,6 +205,7 @@ export default function IndexPage() {
                 body: payload,
             });
             toast.success('Return approved and condition recorded.');
+            emitPendingFlowBadgeUpdate({ delta: -1 });
             handleCloseReturnReview();
             await loadApprovals();
         } catch (err) {
@@ -218,6 +229,7 @@ export default function IndexPage() {
                     handleCloseReturnReview();
                 }
                 toast.success('Return request declined. Tool stays on borrower.');
+                emitPendingFlowBadgeUpdate({ delta: -1 });
                 await loadApprovals();
             } catch (err) {
                 toast.error(err instanceof Error ? err.message : 'Failed to decline return');

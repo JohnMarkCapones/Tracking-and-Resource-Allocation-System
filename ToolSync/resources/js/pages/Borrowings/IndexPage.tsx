@@ -10,7 +10,7 @@ import { mapAllocationStatusToUi } from '@/lib/apiTypes';
 import { apiRequest } from '@/lib/http';
 
 type SharedProps = { auth?: { user?: { id: number } } };
-type FilterStatus = 'all' | 'Active' | 'Pending' | 'Overdue' | 'Returned';
+type FilterStatus = 'all' | 'Upcoming' | 'Active' | 'Pending' | 'Overdue' | 'Returned';
 
 function allocationToBorrowing(a: AllocationDto): Borrowing {
     const status = mapAllocationStatusToUi(a);
@@ -88,28 +88,39 @@ export default function IndexPage() {
     }, [borrowings, filterStatus]);
 
     const summary = useMemo(() => {
+        const upcoming = borrowings.filter((b) => b.status === 'Upcoming').length;
         const active = borrowings.filter((b) => b.status === 'Active').length;
         const pending = borrowings.filter((b) => b.status === 'Pending').length;
         const overdue = borrowings.filter((b) => b.status === 'Overdue').length;
         const returned = borrowings.filter((b) => b.status === 'Returned').length;
-        return { active, pending, overdue, returned, total: borrowings.length };
+        return { upcoming, active, pending, overdue, returned, total: borrowings.length };
     }, [borrowings]);
 
     const handleReturn = (borrowing: Borrowing) => {
         setReturnModalBorrowing(borrowing);
     };
 
-    const handleReturnSubmit = async (data: { condition: string; notes: string }) => {
+    const handleReturnSubmit = async (data: { condition: string; notes: string; imageFiles: File[] }) => {
         if (!returnModalBorrowing) return;
 
+        const noteParts = [`Condition: ${data.condition}`];
+        if (data.notes.trim()) {
+            noteParts.push(`Notes: ${data.notes.trim()}`);
+        }
+
         try {
+            const payload = new FormData();
+            payload.append('_method', 'PUT');
+            payload.append('status', 'PENDING_RETURN');
+            payload.append('note', noteParts.join('\n'));
+            payload.append('reported_condition', data.condition);
+            for (const imageFile of data.imageFiles) {
+                payload.append('return_proof_images[]', imageFile);
+            }
+
             await apiRequest(`/api/tool-allocations/${returnModalBorrowing.id}`, {
-                method: 'PUT',
-                body: {
-                    status: 'PENDING_RETURN',
-                    condition: data.condition,
-                    note: data.notes.trim() || null,
-                },
+                method: 'POST',
+                body: payload,
             });
 
             setBorrowings((prev) =>
@@ -158,6 +169,12 @@ export default function IndexPage() {
                         <span className="font-semibold">{summary.active}</span>
                         <span>Active</span>
                     </div>
+                    {summary.upcoming > 0 && (
+                        <div className="inline-flex items-center gap-2 rounded-full bg-sky-50 px-3 py-1 text-sky-700">
+                            <span className="font-semibold">{summary.upcoming}</span>
+                            <span>Upcoming pickup</span>
+                        </div>
+                    )}
                     {summary.overdue > 0 && (
                         <div className="inline-flex items-center gap-2 rounded-full bg-rose-50 px-3 py-1 text-rose-700">
                             <span className="font-semibold">{summary.overdue}</span>
@@ -180,7 +197,7 @@ export default function IndexPage() {
                     <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[11px] font-semibold tracking-wide text-gray-500 uppercase">Filter</span>
                         <div className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-1 py-1 text-[11px] text-gray-600 shadow-sm">
-                            {(['all', 'Active', 'Pending', 'Overdue', 'Returned'] as const).map((status) => (
+                            {(['all', 'Upcoming', 'Active', 'Pending', 'Overdue', 'Returned'] as const).map((status) => (
                                 <button
                                     key={status}
                                     type="button"

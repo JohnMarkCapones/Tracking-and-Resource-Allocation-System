@@ -16,6 +16,8 @@ class ToolAllocation extends Model
         'user_id',
         'borrow_date',
         'expected_return_date',
+        'claimed_at',
+        'claimed_by',
         'actual_return_date',
         'note',
         'reported_condition',
@@ -29,6 +31,7 @@ class ToolAllocation extends Model
     protected function casts(): array
     {
         return [
+            'claimed_at' => 'datetime',
             'actual_return_date' => 'datetime',
             'admin_reviewed_at' => 'datetime',
         ];
@@ -62,6 +65,11 @@ class ToolAllocation extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function claimer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'claimed_by');
     }
 
     public function conditionHistory(): HasOne

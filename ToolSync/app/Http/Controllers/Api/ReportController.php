@@ -335,6 +335,10 @@ class ReportController extends Controller
      */
     private function deriveBorrowingStatus(ToolAllocation $allocation): array
     {
+        if ($allocation->status === 'SCHEDULED') {
+            return ['Upcoming', 0];
+        }
+
         if ($allocation->status === 'RETURNED') {
             return ['Returned', 0];
         }

@@ -1,7 +1,7 @@
 import { Link } from '@inertiajs/react';
 import { differenceInDays, parseISO } from 'date-fns';
 
-export type BorrowingStatus = 'Active' | 'Pending' | 'Returned' | 'Overdue';
+export type BorrowingStatus = 'Upcoming' | 'Active' | 'Pending' | 'Returned' | 'Overdue';
 
 export type Borrowing = {
     id: number;
@@ -38,12 +38,17 @@ function statusClasses(status: BorrowingStatus): string {
         return 'bg-blue-50 text-blue-700';
     }
 
+    if (status === 'Upcoming') {
+        return 'bg-sky-50 text-sky-700';
+    }
+
     return 'bg-rose-50 text-rose-700';
 }
 
 export function BorrowingCard({ borrowing, onReturn, returnRequested = false }: BorrowingCardProps) {
     const isActive = borrowing.status === 'Active';
     const isOverdue = borrowing.status === 'Overdue';
+    const isUpcoming = borrowing.status === 'Upcoming';
 
     // Treat dueDate as date-only (YYYY-MM-DD) to avoid timezone shifting (e.g. 2026-02-11Z showing as Feb 10 locally).
     const dueYmd = borrowing.dueDate.slice(0, 10);
@@ -72,7 +77,11 @@ export function BorrowingCard({ borrowing, onReturn, returnRequested = false }: 
                             {borrowing.tool.name}
                         </Link>
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusClasses(borrowing.status)}`}>
-                            {borrowing.status === 'Active' ? 'Borrowed' : borrowing.status}
+                            {borrowing.status === 'Active'
+                                ? 'Borrowed'
+                                : borrowing.status === 'Upcoming'
+                                  ? 'Upcoming Pickup'
+                                  : borrowing.status}
                         </span>
                     </div>
                     <p className="mt-1 text-[11px] text-gray-500">
@@ -98,7 +107,7 @@ export function BorrowingCard({ borrowing, onReturn, returnRequested = false }: 
 
             <div className="mt-3 flex flex-wrap gap-4 text-[11px]">
                 <div>
-                    <p className="text-gray-500">Borrowed</p>
+                    <p className="text-gray-500">{isUpcoming ? 'Pickup starts' : 'Borrowed'}</p>
                     <p className="font-medium text-gray-900">{borrowing.borrowDate}</p>
                 </div>
                 <div>

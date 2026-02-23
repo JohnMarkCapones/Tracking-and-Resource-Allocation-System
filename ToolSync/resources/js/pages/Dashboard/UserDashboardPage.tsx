@@ -6,10 +6,10 @@ import { BorrowingHistoryTable } from '@/Components/Dashboard/BorrowingHistoryTa
 import type { AllocationSummaryData } from '@/Components/Dashboard/SummaryDonutChart';
 import { SummaryDonutChart } from '@/Components/Dashboard/SummaryDonutChart';
 import { WelcomeBanner } from '@/Components/Dashboard/WelcomeBanner';
+import { toast } from '@/Components/Toast';
 import AppLayout from '@/Layouts/AppLayout';
 import type { DashboardApiResponse } from '@/lib/apiTypes';
 import { apiRequest } from '@/lib/http';
-import { toast } from '@/Components/Toast';
 
 type SharedProps = { auth?: { user?: { name?: string } } };
 
@@ -32,7 +32,9 @@ function mapRecentToHistoryItem(
     a: DashboardApiResponse['data']['recent_activity'][number],
 ): BorrowingHistoryItem {
     const status =
-        a.status === 'RETURNED'
+        a.status === 'SCHEDULED'
+            ? ('Upcoming' as const)
+            : a.status === 'RETURNED'
             ? ('Returned' as const)
             : a.status === 'PENDING_RETURN'
               ? ('Pending' as const)
@@ -125,14 +127,23 @@ export default function UserDashboardPage() {
     }, []);
 
     const handleReturnSubmit = useCallback(
-        async (data: { condition: string; notes: string }) => {
+        async (data: { condition: string; notes: string; imageFiles: File[] }) => {
             if (!returnModalItem?.allocationId) return;
             const noteParts = [`Condition: ${data.condition}`];
             if (data.notes.trim()) noteParts.push(`Notes: ${data.notes.trim()}`);
             try {
+                const payload = new FormData();
+                payload.append('_method', 'PUT');
+                payload.append('status', 'PENDING_RETURN');
+                payload.append('note', noteParts.join('\n'));
+                payload.append('reported_condition', data.condition);
+                for (const imageFile of data.imageFiles) {
+                    payload.append('return_proof_images[]', imageFile);
+                }
+
                 await apiRequest(`/api/tool-allocations/${returnModalItem.allocationId}`, {
-                    method: 'PUT',
-                    body: { status: 'PENDING_RETURN', note: noteParts.join('\n') },
+                    method: 'POST',
+                    body: payload,
                 });
                 toast(`${returnModalItem.equipment} return is pending admin verification.`, {
                     icon: 'ℹ️',
@@ -160,7 +171,7 @@ export default function UserDashboardPage() {
 
     const upcomingReturns = useMemo((): UpcomingReturnItem[] => {
         return recentActivityRaw
-            .filter((a) => a.status !== 'RETURNED' && isDueWithinNext7Days(a.expected_return_date))
+            .filter((a) => (a.status === 'BORROWED' || a.status === 'PENDING_RETURN') && isDueWithinNext7Days(a.expected_return_date))
             .map((a) => ({
                 id: a.id,
                 toolId: 'TL-' + a.tool_id,
@@ -281,18 +292,24 @@ export default function UserDashboardPage() {
                                             const dotClass =
                                                 activity.status === 'RETURNED'
                                                     ? 'bg-emerald-500'
+                                                    : activity.status === 'SCHEDULED'
+                                                      ? 'bg-sky-500'
                                                     : activity.is_overdue
                                                       ? 'bg-amber-500'
                                                       : 'bg-sky-500';
                                             const title =
                                                 activity.status === 'RETURNED'
                                                     ? `${activity.tool_name ?? 'Tool'} returned`
+                                                    : activity.status === 'SCHEDULED'
+                                                      ? `${activity.tool_name ?? 'Tool'} pickup scheduled`
                                                     : activity.is_overdue
                                                       ? `${activity.tool_name ?? 'Tool'} overdue`
                                                       : `${activity.tool_name ?? 'Tool'} borrowed`;
                                             const details =
                                                 activity.status === 'RETURNED'
                                                     ? `${activity.user_name ?? 'A user'} returned this tool.`
+                                                    : activity.status === 'SCHEDULED'
+                                                      ? `${activity.user_name ?? 'A user'} has an approved pickup scheduled.`
                                                     : `${activity.user_name ?? 'A user'} borrowed this tool.`;
 
                                             return (

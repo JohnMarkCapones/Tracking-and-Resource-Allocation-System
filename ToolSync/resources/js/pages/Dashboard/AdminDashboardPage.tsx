@@ -66,7 +66,9 @@ function formatTimeAgo(date: Date): string {
 
 function mapDashboardRecentToBorrowingItem(a: DashboardRecentActivityItem): BorrowingHistoryItem {
     const status =
-        a.status === 'RETURNED'
+        a.status === 'SCHEDULED'
+            ? ('Upcoming' as const)
+            : a.status === 'RETURNED'
             ? ('Returned' as const)
             : a.status === 'PENDING_RETURN'
               ? ('Pending' as const)
@@ -90,7 +92,9 @@ function mapRecentActivityToItem(a: DashboardRecentActivityItem): RecentActivity
     const date = new Date(a.borrow_date ?? a.expected_return_date ?? 0);
     const tone: ActivityTone = a.is_overdue ? 'maintenance' : a.status === 'RETURNED' ? 'borrowing' : 'borrowing';
     const title =
-        a.status === 'RETURNED'
+        a.status === 'SCHEDULED'
+            ? `${a.tool_name ?? 'Tool'} pickup scheduled`
+            : a.status === 'RETURNED'
             ? `${a.tool_name ?? 'Tool'} returned`
             : a.is_overdue
               ? `${a.tool_name ?? 'Tool'} overdue`
@@ -113,6 +117,11 @@ function getRangeParams(range: '7d' | '30d' | '90d'): { from: string; to: string
     else if (range === '30d') from.setDate(to.getDate() - 30);
     else from.setDate(to.getDate() - 90);
     return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+}
+
+function emitPendingFlowBadgeUpdate(detail?: { delta?: number; count?: number }): void {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(new CustomEvent('equipit:pending-flow-updated', { detail }));
 }
 
 export default function AdminDashboardPage() {
@@ -169,6 +178,9 @@ export default function AdminDashboardPage() {
                 { label: 'Active', value: d.summary.not_returned_count },
             ]);
             setPendingApprovals(d.pending_approvals ?? []);
+            emitPendingFlowBadgeUpdate({
+                count: Number(d.pending_approvals_count ?? d.pending_approvals?.length ?? 0),
+            });
             setOverdueCount(c.overdue_count);
             setMaintenanceDueCount(d.maintenance_due_count ?? 0);
             setRecentActivity((d.recent_activity ?? []).map(mapRecentActivityToItem));
@@ -185,7 +197,8 @@ export default function AdminDashboardPage() {
             setPendingActionId(reservationId);
             try {
                 await apiRequest(`/api/reservations/${reservationId}/approve`, { method: 'POST' });
-                toast.success('Borrow request approved. It now appears in the user’s My Borrowings.');
+                toast.success('Borrow request approved. It now appears as Upcoming pickup in user borrowings.');
+                emitPendingFlowBadgeUpdate({ delta: -1 });
                 await loadDashboard();
             } catch (err) {
                 toast.error(err instanceof Error ? err.message : 'Failed to approve');
@@ -202,6 +215,7 @@ export default function AdminDashboardPage() {
             try {
                 await apiRequest(`/api/reservations/${reservationId}/decline`, { method: 'POST' });
                 toast.success('Borrow request declined.');
+                emitPendingFlowBadgeUpdate({ delta: -1 });
                 await loadDashboard();
             } catch (err) {
                 toast.error(err instanceof Error ? err.message : 'Failed to decline');

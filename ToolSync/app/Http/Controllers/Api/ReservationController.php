@@ -39,7 +39,7 @@ class ReservationController extends Controller
     {
         $activeBorrowedCount = ToolAllocation::query()
             ->where('user_id', $userId)
-            ->whereIn('status', ['BORROWED', 'PENDING_RETURN'])
+            ->whereIn('status', ['SCHEDULED', 'BORROWED', 'PENDING_RETURN'])
             ->count();
 
         $pendingRequestCount = Reservation::query()
@@ -380,7 +380,7 @@ class ReservationController extends Controller
         $maxBorrowings = (int) (SystemSetting::query()->where('key', 'max_borrowings')->value('value') ?? self::MAX_BORROWINGS_DEFAULT);
         $currentBorrowed = ToolAllocation::query()
             ->where('user_id', $reservation->user_id)
-            ->whereIn('status', ['BORROWED', 'PENDING_RETURN'])
+            ->whereIn('status', ['SCHEDULED', 'BORROWED', 'PENDING_RETURN'])
             ->count();
         if ($currentBorrowed >= $maxBorrowings) {
             return response()->json([
@@ -388,7 +388,7 @@ class ReservationController extends Controller
             ], 422);
         }
 
-        $allocation = DB::transaction(function () use ($reservation, $request, $borrowDate, $expectedReturn): ToolAllocation {
+        $allocation = DB::transaction(function () use ($reservation, $borrowDate, $expectedReturn): ToolAllocation {
             // Lock the tool to prevent concurrent approvals
             /** @var Tool $tool */
             $tool = Tool::query()->lockForUpdate()->findOrFail($reservation->tool_id);
@@ -400,6 +400,14 @@ class ReservationController extends Controller
                 ], 409));
             }
 
+            $availabilityService = app(ToolAvailabilityService::class);
+            $availabilityCheck = $availabilityService->checkAvailability($tool->id, $borrowDate, $expectedReturn, $reservation->id);
+            if (! $availabilityCheck['available']) {
+                abort(response()->json([
+                    'message' => $availabilityCheck['reason'] ?? 'Tool is no longer available for borrowing. Request cannot be approved.',
+                ], 409));
+            }
+
             $borrowDateStr = $borrowDate->format('Y-m-d');
             $expectedReturnStr = $expectedReturn->format('Y-m-d');
 
@@ -408,27 +416,12 @@ class ReservationController extends Controller
                 'user_id' => $reservation->user_id,
                 'borrow_date' => $borrowDateStr,
                 'expected_return_date' => $expectedReturnStr,
+                'claimed_at' => null,
+                'claimed_by' => null,
                 'actual_return_date' => null,
                 'note' => null,
-                'status' => 'BORROWED',
+                'status' => 'SCHEDULED',
             ]);
-
-            $oldStatus = $tool->status;
-            $tool->quantity = max(0, (int) $tool->quantity - 1);
-            if ($tool->quantity === 0 && $tool->status === 'AVAILABLE') {
-                $tool->status = 'BORROWED';
-            }
-            $tool->save();
-
-            if ($tool->status !== $oldStatus) {
-                \App\Models\ToolStatusLog::create([
-                    'tool_id' => $tool->id,
-                    'old_status' => $oldStatus,
-                    'new_status' => $tool->status,
-                    'changed_by' => $request->user()?->id,
-                    'changed_at' => now(),
-                ]);
-            }
 
             $reservation->update(['status' => 'COMPLETED']);
 
@@ -441,7 +434,7 @@ class ReservationController extends Controller
         $allocation->user?->notify(new InAppSystemNotification(
             'success',
             'Borrowing approved',
-            "Your request to borrow {$toolName} has been approved. It now appears in My Borrowings.",
+            "Your request to borrow {$toolName} has been approved. It is scheduled for pickup on {$borrowDate->toFormattedDateString()}.",
             '/borrowings'
         ));
 
@@ -464,7 +457,7 @@ class ReservationController extends Controller
             ->delete();
 
         return response()->json([
-            'message' => 'Borrow request approved. Allocation created.',
+            'message' => 'Borrow request approved. Pickup scheduled.',
             'data' => [
                 'reservation' => $reservation->fresh(['tool', 'user']),
                 'allocation' => $allocation,
