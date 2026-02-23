@@ -94,7 +94,32 @@ class ToolController extends Controller
         $statusFilter = $request->input('status');
         if ($statusFilter !== null) {
             $statuses = is_array($statusFilter) ? $statusFilter : [$statusFilter];
-            $query->whereIn('status', $statuses);
+
+            $query->where(function ($q) use ($statuses): void {
+                // Available tools: base status AVAILABLE (regardless of current allocations)
+                if (in_array('AVAILABLE', $statuses, true)) {
+                    $q->orWhere('status', 'AVAILABLE');
+                }
+
+                // Maintenance tools: base status MAINTENANCE
+                if (in_array('MAINTENANCE', $statuses, true)) {
+                    $q->orWhere('status', 'MAINTENANCE');
+                }
+
+                // Borrowed tools: any tool that currently has an active allocation
+                if (in_array('BORROWED', $statuses, true)) {
+                    $today = now()->toDateString();
+
+                    $q->orWhereExists(function ($sub) use ($today): void {
+                        $sub->selectRaw('1')
+                            ->from('tool_allocations')
+                            ->whereColumn('tool_allocations.tool_id', 'tools.id')
+                            ->whereIn('tool_allocations.status', ['SCHEDULED', 'BORROWED', 'PENDING_RETURN'])
+                            ->whereDate('borrow_date', '<=', $today)
+                            ->whereDate('expected_return_date', '>=', $today);
+                    });
+                }
+            });
         }
 
         $categoryFilter = $request->input('category_id');

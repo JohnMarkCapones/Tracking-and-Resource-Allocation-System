@@ -137,6 +137,7 @@ class ReservationController extends Controller
             }
 
             $availabilityCheck = $availabilityService->checkAvailability($tool->id, $from, $to);
+
             if (! $availabilityCheck['available']) {
                 $conflictingRanges = $availabilityService->getConflictingDateRanges($tool->id, $from, $to);
                 abort(response()->json([
@@ -410,6 +411,35 @@ class ReservationController extends Controller
 
             $borrowDateStr = $borrowDate->format('Y-m-d');
             $expectedReturnStr = $expectedReturn->format('Y-m-d');
+
+            // #region agent log
+            try {
+                $logPayload = [
+                    'sessionId' => 'f7829b',
+                    'runId' => 'pre-fix-2',
+                    'hypothesisId' => 'H1',
+                    'location' => 'ReservationController@approve',
+                    'message' => 'Creating tool allocation from reservation approval',
+                    'data' => [
+                        'reservation_id' => $reservation->id,
+                        'tool_id' => $reservation->tool_id,
+                        'user_id' => $reservation->user_id,
+                        'borrow_date' => $borrowDateStr,
+                        'expected_return_date' => $expectedReturnStr,
+                        'status' => 'SCHEDULED',
+                    ],
+                    'timestamp' => (int) (microtime(true) * 1000),
+                ];
+
+                @file_put_contents(
+                    base_path('debug-f7829b.log'),
+                    json_encode($logPayload, JSON_THROW_ON_ERROR).PHP_EOL,
+                    FILE_APPEND
+                );
+            } catch (\Throwable $e) {
+                // Swallow all logging errors to avoid impacting runtime behavior.
+            }
+            // #endregion agent log
 
             $allocation = ToolAllocation::create([
                 'tool_id' => $reservation->tool_id,

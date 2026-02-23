@@ -201,6 +201,33 @@ class ToolAllocationController extends Controller
             'claimed_by' => $isFuturePickup ? null : $request->user()?->id,
         ]);
 
+        // #region agent log
+        try {
+            $logPayload = [
+                'sessionId' => 'f7829b',
+                'runId' => 'pre-fix-1',
+                'hypothesisId' => 'H1',
+                'location' => 'ToolAllocationController@store',
+                'message' => 'Creating tool allocation payload',
+                'data' => [
+                    'status' => $createPayload['status'] ?? null,
+                    'borrow_date' => $createPayload['borrow_date'] ?? null,
+                    'expected_return_date' => $createPayload['expected_return_date'] ?? null,
+                    'is_future_pickup' => $isFuturePickup,
+                ],
+                'timestamp' => (int) (microtime(true) * 1000),
+            ];
+
+            @file_put_contents(
+                base_path('debug-f7829b.log'),
+                json_encode($logPayload, JSON_THROW_ON_ERROR).PHP_EOL,
+                FILE_APPEND
+            );
+        } catch (\Throwable) {
+            // Swallow all logging errors to avoid impacting runtime behavior.
+        }
+        // #endregion agent log
+
         $allocation = DB::transaction(function () use ($createPayload, $validated, $borrowDate, $expectedReturn): ToolAllocation {
             /** @var Tool $tool */
             $tool = Tool::query()->lockForUpdate()->findOrFail((int) $validated['tool_id']);
