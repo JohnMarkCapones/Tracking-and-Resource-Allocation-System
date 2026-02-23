@@ -1,6 +1,10 @@
 export type ToolStatusApi = 'AVAILABLE' | 'BORROWED' | 'MAINTENANCE';
 
-export type ToolStatusUi = 'Available' | 'Borrowed' | 'Maintenance';
+export type BaseToolStatusUi = 'Available' | 'Borrowed' | 'Maintenance';
+
+export type ToolStatusUi = 'Available' | 'Borrowed' | 'Maintenance' | 'Partially Available' | 'Fully Reserved' | 'Unavailable';
+
+export type AvailabilityStatus = 'available' | 'partially_available' | 'fully_reserved' | 'unavailable';
 
 export type ToolCategoryDto = {
     id: number;
@@ -28,10 +32,22 @@ export type ToolDto = {
     borrowed_count?: number;
     /** Number of pending borrow requests for this tool. */
     reserved_count?: number;
+    /** Number of condition history records for this tool. */
+    condition_histories_count?: number;
     /** Calculated available count (quantity - borrowed - reserved). */
     calculated_available_count?: number;
+    /** Optional alias used by some endpoints for calculated availability. */
+    calculated_availability?: number;
     /** Calculated reserved count (pending borrow requests from service). */
     calculated_reserved_count?: number;
+    /** Real-time availability status from backend service. */
+    availability_status?: AvailabilityStatus;
+    /** Human-readable availability message from backend service. */
+    availability_message?: string;
+    /** Optional day-by-day availability map for date-range responses. */
+    available_for_dates?: Record<string, number>;
+    /** Latest admin-verified condition from history. */
+    latest_admin_condition?: string | null;
     /** Key-value specs (e.g. Processor, Memory) shown on tool detail. */
     specifications?: Record<string, string> | null;
 };
@@ -43,6 +59,8 @@ export type ToolCardData = {
     category: string;
     status: ToolStatusUi;
     condition: string;
+    latestAdminCondition?: string | null;
+    hasConditionHistory?: boolean;
     imageUrl?: string;
 };
 
@@ -60,7 +78,7 @@ export type ToolDetail = {
     imageUrl?: string;
 };
 
-export function mapToolStatusToUi(status: ToolStatusApi): ToolStatusUi {
+export function mapToolStatusToUi(status: ToolStatusApi): BaseToolStatusUi {
     if (status === 'BORROWED') {
         return 'Borrowed';
     }
@@ -72,7 +90,22 @@ export function mapToolStatusToUi(status: ToolStatusApi): ToolStatusUi {
     return 'Available';
 }
 
-export type AllocationStatusApi = 'BORROWED' | 'PENDING_RETURN' | 'RETURNED';
+export function mapAvailabilityStatusToUi(availabilityStatus: AvailabilityStatus): ToolStatusUi {
+    switch (availabilityStatus) {
+        case 'available':
+            return 'Available';
+        case 'partially_available':
+            return 'Partially Available';
+        case 'fully_reserved':
+            return 'Fully Reserved';
+        case 'unavailable':
+            return 'Unavailable';
+        default:
+            return 'Available';
+    }
+}
+
+export type AllocationStatusApi = 'SCHEDULED' | 'BORROWED' | 'PENDING_RETURN' | 'RETURNED';
 
 export type AllocationDto = {
     id: number;
@@ -80,6 +113,8 @@ export type AllocationDto = {
     user_id: number;
     borrow_date: string;
     expected_return_date: string;
+    claimed_at?: string | null;
+    claimed_by?: number | null;
     actual_return_date: string | null;
     status: AllocationStatusApi;
     note: string | null;
@@ -102,7 +137,7 @@ export type AllocationDto = {
     };
 };
 
-export type BorrowingStatusUi = 'Active' | 'Pending' | 'Returned' | 'Overdue';
+export type BorrowingStatusUi = 'Upcoming' | 'Active' | 'Pending' | 'Returned' | 'Overdue';
 
 export type BorrowingCardTool = {
     id: number;
@@ -122,6 +157,10 @@ export type BorrowingCardData = {
 };
 
 export function mapAllocationStatusToUi(allocation: AllocationDto, now: Date = new Date()): BorrowingStatusUi {
+    if (allocation.status === 'SCHEDULED') {
+        return 'Upcoming';
+    }
+
     if (allocation.status === 'RETURNED') {
         return 'Returned';
     }
@@ -149,6 +188,7 @@ export type DashboardCounts = {
     tools_available_quantity: number;
     tools_maintenance_quantity: number;
     borrowed_active_count: number;
+    scheduled_active_count?: number;
     reserved_active_count?: number;
     overdue_count: number;
     returned_today_count?: number;
@@ -313,6 +353,12 @@ export type ApprovalReturnRequest = {
     borrow_date: string;
     expected_return_date: string;
     note: string | null;
+    reported_condition: string | null;
+    admin_condition: string | null;
+    admin_review_note: string | null;
+    return_proof_image_url: string | null;
+    borrower_image_urls: string[];
+    admin_image_urls: string[];
     status: string;
     created_at: string | null;
 };
@@ -321,6 +367,14 @@ export type ApprovalsApiResponse = {
     data: {
         borrow_requests: ApprovalBorrowRequest[];
         return_requests: ApprovalReturnRequest[];
+    };
+};
+
+export type ApprovalsCountApiResponse = {
+    data: {
+        borrow_requests_count: number;
+        return_requests_count: number;
+        total: number;
     };
 };
 

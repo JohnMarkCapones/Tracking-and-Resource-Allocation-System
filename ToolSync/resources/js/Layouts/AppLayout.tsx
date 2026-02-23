@@ -1,9 +1,10 @@
 import { Link, router, usePage } from '@inertiajs/react';
 import type { PropsWithChildren, ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { LaserFlow } from '@/Components/LaserFlow';
 import { ThemeToggle } from '@/Components/ThemeToggle';
 import { toast } from '@/Components/Toast';
+import type { ApprovalsCountApiResponse, ReservationApiItem } from '@/lib/apiTypes';
 import { apiRequest } from '@/lib/http';
 import { type SharedData, type User } from '@/types';
 import equipitLogo from '../assets/figma/logo.png';
@@ -41,6 +42,11 @@ type NotificationItem = {
     kind: NotificationKind;
     read: boolean;
     href: string | null;
+};
+
+type PendingFlowBadgeEventDetail = {
+    delta?: number;
+    count?: number;
 };
 
 type SharedNotification = {
@@ -94,6 +100,7 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
         })),
     );
     const [unreadCount, setUnreadCount] = useState(sharedUnreadCount);
+    const [pendingFlowCount, setPendingFlowCount] = useState(0);
 
     useEffect(() => {
         setNotifications(
@@ -122,7 +129,7 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
 
     const mobileNavItemClasses = (isActive: boolean): string =>
         [
-            'block rounded-md px-3 py-2 text-base font-medium',
+            'flex items-center justify-between rounded-md px-3 py-2 text-base font-medium',
             isActive ? 'bg-[#060644]/10 text-[#060644] dark:bg-[#060644] dark:text-white' : 'text-gray-700 hover:bg-gray-100',
         ].join(' ');
 
@@ -259,6 +266,96 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
               },
           ];
 
+    const fetchPendingFlowCount = useCallback(async (): Promise<number> => {
+        if (isAdminLayout) {
+            const res = await apiRequest<ApprovalsCountApiResponse>('/api/admin/approvals/count');
+            return Number(res.data.total ?? 0);
+        }
+
+        const res = await apiRequest<{ data: ReservationApiItem[] }>('/api/reservations');
+        return (res.data ?? []).filter((item) => item.status?.toLowerCase() === 'pending').length;
+    }, [isAdminLayout]);
+
+    const refreshPendingFlowCount = useCallback(async () => {
+        setPendingFlowCount(await fetchPendingFlowCount());
+    }, [fetchPendingFlowCount]);
+
+    useEffect(() => {
+        if (!user) return;
+        let cancelled = false;
+        const loadPendingFlowCount = async () => {
+            try {
+                const nextCount = await fetchPendingFlowCount();
+                if (!cancelled) setPendingFlowCount(nextCount);
+            } catch {
+                if (!cancelled) setPendingFlowCount(0);
+            }
+        };
+        void loadPendingFlowCount();
+        return () => {
+            cancelled = true;
+        };
+    }, [fetchPendingFlowCount, user]);
+
+    useEffect(() => {
+        if (!user) return;
+        const handleWindowFocus = () => {
+            void (async () => {
+                try {
+                    await refreshPendingFlowCount();
+                } catch {
+                    // Ignore transient focus refresh failures.
+                }
+            })();
+        };
+        window.addEventListener('focus', handleWindowFocus);
+        return () => window.removeEventListener('focus', handleWindowFocus);
+    }, [refreshPendingFlowCount, user]);
+
+    useEffect(() => {
+        if (!user || !isAdminLayout) return;
+        const intervalId = window.setInterval(() => {
+            void refreshPendingFlowCount().catch(() => {
+                // Poll failures should not break the layout.
+            });
+        }, 8000);
+
+        return () => window.clearInterval(intervalId);
+    }, [isAdminLayout, refreshPendingFlowCount, user]);
+
+    useEffect(() => {
+        if (!user) return;
+
+        const handleBadgeEvent = (event: Event) => {
+            const custom = event as CustomEvent<PendingFlowBadgeEventDetail>;
+            const nextCount = custom.detail?.count;
+            const delta = custom.detail?.delta;
+
+            if (typeof nextCount === 'number' && Number.isFinite(nextCount)) {
+                setPendingFlowCount(Math.max(0, Math.floor(nextCount)));
+                return;
+            }
+
+            if (typeof delta === 'number' && Number.isFinite(delta)) {
+                setPendingFlowCount((prev) => Math.max(0, prev + Math.floor(delta)));
+                return;
+            }
+
+            void refreshPendingFlowCount().catch(() => {
+                // Ignore transient sync failures from badge event handlers.
+            });
+        };
+
+        window.addEventListener('equipit:pending-flow-updated', handleBadgeEvent as EventListener);
+        return () => window.removeEventListener('equipit:pending-flow-updated', handleBadgeEvent as EventListener);
+    }, [refreshPendingFlowCount, user]);
+
+    const getSidebarBadgeCount = (key: SidebarItemKey): number => {
+        if (isAdminLayout && key === 'approvals') return pendingFlowCount;
+        if (!isAdminLayout && key === 'reservations') return pendingFlowCount;
+        return 0;
+    };
+
     const handleMarkAllNotificationsAsRead = async () => {
         if (unreadCount === 0) {
             setIsNotificationsOpen(false);
@@ -312,9 +409,11 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                     </div>
 
                     <nav className="mt-8 space-y-1">
-                        {sidebarItems.map((item) => (
+                        {sidebarItems.map((item) => {
+                            const badgeCount = getSidebarBadgeCount(item.key);
+                            return (
                             <Link key={item.key} href={item.href} className={desktopNavItemClasses(item.isActive)}>
-                                <span className="flex items-center gap-3">
+                                <span className="flex min-w-0 items-center gap-3">
                                     <span
                                         className={
                                             item.isActive
@@ -494,10 +593,16 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                                             </svg>
                                         )}
                                     </span>
-                                    <span>{item.label}</span>
+                                    <span className="truncate">{item.label}</span>
                                 </span>
+                                {badgeCount > 0 && (
+                                    <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                                        {badgeCount > 99 ? '99+' : badgeCount}
+                                    </span>
+                                )}
                             </Link>
-                        ))}
+                            );
+                        })}
                     </nav>
 
                     <div className="mt-auto space-y-4 rounded-2xl bg-neutral-50 px-4 py-4 text-sm text-gray-700 dark:bg-gray-700 dark:text-gray-200">
@@ -546,11 +651,19 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                             </div>
 
                             <nav className="mt-8 space-y-1">
-                                {sidebarItems.map((item) => (
-                                    <Link key={item.key} href={item.href} className={mobileNavItemClasses(item.isActive)}>
-                                        {item.label}
-                                    </Link>
-                                ))}
+                                {sidebarItems.map((item) => {
+                                    const badgeCount = getSidebarBadgeCount(item.key);
+                                    return (
+                                        <Link key={item.key} href={item.href} className={mobileNavItemClasses(item.isActive)}>
+                                            <span>{item.label}</span>
+                                            {badgeCount > 0 && (
+                                                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                                                    {badgeCount > 99 ? '99+' : badgeCount}
+                                                </span>
+                                            )}
+                                        </Link>
+                                    );
+                                })}
                             </nav>
 
                             <div className="mt-auto space-y-4 rounded-2xl bg-neutral-50 px-4 py-4 text-sm text-gray-700">

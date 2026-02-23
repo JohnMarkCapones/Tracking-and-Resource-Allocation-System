@@ -3,14 +3,14 @@ import { format } from 'date-fns';
 import { useEffect, useRef, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { EmptyState } from '@/Components/EmptyState';
+import { SkeletonCard } from '@/Components/Skeleton';
 import { toast } from '@/Components/Toast';
 import { RequestToolModal } from '@/Components/Tools/RequestToolModal';
 import { ToolCard, type ToolCardData } from '@/Components/Tools/ToolCard';
 import { ToolFilters } from '@/Components/Tools/ToolFilters';
-import { SkeletonCard } from '@/Components/Skeleton';
 import AppLayout from '@/Layouts/AppLayout';
 import type { DashboardApiResponse, ReservationApiItem, ToolDto, ToolCategoryDto } from '@/lib/apiTypes';
-import { mapToolStatusToUi } from '@/lib/apiTypes';
+import { mapToolStatusToUi, mapAvailabilityStatusToUi } from '@/lib/apiTypes';
 import { apiRequest } from '@/lib/http';
 
 const MAX_BORROWINGS = 3;
@@ -28,6 +28,16 @@ type ToolsIndexResponse = {
     meta?: ToolsMeta;
 };
 
+type ToolRangeAvailabilityResponse = {
+    data: {
+        total_quantity: number;
+        available_count: number;
+        available_for_dates?: Record<string, number>;
+        availability_status?: string;
+        availability_message?: string;
+    };
+};
+
 function mapToolToCardData(dto: ToolDto): ToolCardData {
     // Use calculated availability from backend if available, otherwise calculate manually
     const calculatedAvailable = dto.calculated_available_count;
@@ -41,28 +51,40 @@ function mapToolToCardData(dto: ToolDto): ToolCardData {
             ? Math.max(0, calculatedAvailable)
             : Math.max(0, totalQuantity - borrowedQuantity - calculatedReserved);
 
+    // Use availability status from backend if available, otherwise fall back to tool status
+    const status = dto.availability_status 
+        ? mapAvailabilityStatusToUi(dto.availability_status)
+        : mapToolStatusToUi(dto.status);
+
     return {
         id: dto.id,
         name: dto.name,
         slug: dto.slug ?? null,
         toolId: 'TL-' + dto.id,
         category: dto.category?.name ?? 'Other',
-        status: mapToolStatusToUi(dto.status),
-        condition: dto.condition ?? 'Good',
+        status,
+        condition: dto.latest_admin_condition ?? dto.condition ?? 'Good',
         quantity: totalQuantity,
         availableQuantity,
         borrowedQuantity,
         reservedQuantity: calculatedReserved,
-        imageUrl: dto.image_path
-            ? dto.image_path.startsWith('http')
-                ? dto.image_path
-                : `/storage/${dto.image_path.replace(/^\/+/, '')}`
-            : undefined,
+        hasConditionHistory: (dto.condition_histories_count ?? 0) > 0,
+        latestAdminCondition: dto.latest_admin_condition ?? null,
+        imageUrl: dto.image_path ?? undefined,
     };
 }
 
 export default function CatalogPage() {
     const toLocalYmd = (date: Date): string => format(date, 'yyyy-MM-dd');
+
+    const getMinAvailabilityForRange = (availability: ToolRangeAvailabilityResponse['data']): number => {
+        const perDayAvailability = Object.values(availability.available_for_dates ?? {});
+        if (perDayAvailability.length > 0) {
+            return Math.min(...perDayAvailability);
+        }
+
+        return Number(availability.available_count ?? 0);
+    };
 
     const [tools, setTools] = useState<ToolCardData[]>([]);
     const [categories, setCategories] = useState<string[]>([]);
@@ -79,7 +101,7 @@ export default function CatalogPage() {
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
     const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
     const [page, setPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
+    const [, setTotalPages] = useState(1);
     const [totalTools, setTotalTools] = useState(0);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [hasMore, setHasMore] = useState(false);
@@ -211,7 +233,10 @@ export default function CatalogPage() {
                 setCategoryDtos(categoryData);
                 setCategories(categoryData.map((c) => c.name));
 
-                setActiveBorrowingsCount(dashboardRes.data.counts.borrowed_active_count ?? 0);
+                setActiveBorrowingsCount(
+                    (dashboardRes.data.counts.borrowed_active_count ?? 0) +
+                    (dashboardRes.data.counts.scheduled_active_count ?? 0),
+                );
                 setPendingBorrowRequestsCount((reservationsRes.data ?? []).filter((r) => r.status === 'pending').length);
                 setInitialLoaded(true);
             } catch (err) {
@@ -338,6 +363,35 @@ export default function CatalogPage() {
             const startDate = toLocalYmd(data.dateRange.from);
             const endDate = toLocalYmd(data.dateRange.to);
 
+            const rangeChecks = await Promise.all(
+                toolsToRequest.map(async (toolItem) => {
+                    const availability = await apiRequest<ToolRangeAvailabilityResponse>(
+                        `/api/tools/${toolItem.id}/availability?from=${startDate}&to=${endDate}`,
+                    );
+                    const minAvailability = getMinAvailabilityForRange(availability.data);
+
+                    return {
+                        tool: toolItem,
+                        minAvailability,
+                        message: availability.data.availability_message,
+                        available: minAvailability > 0,
+                    };
+                }),
+            );
+
+            const unavailable = rangeChecks.filter((check) => !check.available);
+            if (unavailable.length > 0) {
+                if (unavailable.length === 1) {
+                    const single = unavailable[0];
+                    toast.error(single.message ?? `${single.tool.name} is fully reserved for the selected dates.`);
+                } else {
+                    const names = unavailable.map((check) => check.tool.name).join(', ');
+                    toast.error(`Some selected tools are fully reserved for those dates: ${names}.`);
+                }
+
+                return;
+            }
+
             if (toolsToRequest.length > 1) {
                 await apiRequest<{ message: string }>('/api/reservations/batch', {
                     method: 'POST',
@@ -379,7 +433,10 @@ export default function CatalogPage() {
             } else {
                 setTotalTools(toolsRes.data?.length ?? 0);
             }
-            setActiveBorrowingsCount(dashboardRes.data.counts.borrowed_active_count ?? 0);
+            setActiveBorrowingsCount(
+                (dashboardRes.data.counts.borrowed_active_count ?? 0) +
+                (dashboardRes.data.counts.scheduled_active_count ?? 0),
+            );
             setPendingBorrowRequestsCount((reservationsRes.data ?? []).filter((r) => r.status === 'pending').length);
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to submit request.';

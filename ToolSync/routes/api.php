@@ -78,8 +78,10 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
 
     Route::middleware('admin')->group(function () {
         Route::get('admin/approvals', [DashboardController::class, 'approvals']);
+        Route::get('admin/approvals/count', [DashboardController::class, 'approvalsCount']);
         Route::post('reservations/{reservation}/approve', [ReservationController::class, 'approve']);
         Route::post('reservations/{reservation}/decline', [ReservationController::class, 'decline']);
+        Route::post('tool-allocations/{tool_allocation}/claim', [ToolAllocationController::class, 'claim']);
     });
 
     Route::get('admin/users', [AdminUserController::class, 'index']);

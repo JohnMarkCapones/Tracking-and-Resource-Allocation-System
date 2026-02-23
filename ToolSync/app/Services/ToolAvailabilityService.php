@@ -13,6 +13,23 @@ use Carbon\Carbon;
 class ToolAvailabilityService
 {
     /**
+     * Reservation rows that should reserve inventory slots.
+     *
+     * Keep UPCOMING for backward compatibility with legacy rows until all
+     * environments run the status-simplification migration.
+     *
+     * @var array<int, string>
+     */
+    private const RESERVATION_COMMITMENT_STATUSES = ['PENDING', 'UPCOMING'];
+
+    /**
+     * Allocation rows that consume inventory slots.
+     *
+     * @var array<int, string>
+     */
+    private const ALLOCATION_COMMITMENT_STATUSES = ['SCHEDULED', 'BORROWED', 'PENDING_RETURN'];
+
+    /**
      * Check if a tool is available for the given date range, considering:
      * - Tool status and quantity
      * - Existing allocations (BORROWED, PENDING_RETURN)
@@ -36,22 +53,16 @@ class ToolAvailabilityService
             return ['available' => false, 'reason' => 'Tool has no available quantity.'];
         }
 
-        // Check for conflicting allocations
-        $conflictingAllocations = $this->getConflictingAllocations($toolId, $startDate, $endDate);
-        $activeAllocationCount = $conflictingAllocations->count();
-
-        // Check for conflicting reservations (all users)
-        $conflictingReservations = $this->getConflictingReservations($toolId, $startDate, $endDate, $excludeReservationId);
-        $activeReservationCount = $conflictingReservations->count();
-
-        // Calculate how many units are already committed during this period
-        $committedCount = $activeAllocationCount + $activeReservationCount;
-
-        // Check if we have enough quantity available
-        if ($committedCount >= $tool->quantity) {
+        $dateRangeAvailability = $this->calculateDateRangeAvailability($toolId, $startDate, $endDate, $excludeReservationId);
+        if ($dateRangeAvailability['available_count'] < 1) {
+            $minAvailable = (int) $dateRangeAvailability['available_count'];
+            $maxCommitted = max(
+                (int) $dateRangeAvailability['borrowed_count'] + (int) $dateRangeAvailability['reserved_count'],
+                0
+            );
             return [
                 'available' => false,
-                'reason' => "Tool is already fully allocated or reserved for the selected date range. ({$committedCount} commitments, {$tool->quantity} available)",
+                'reason' => "Tool is already fully allocated or reserved for the selected date range. ({$maxCommitted} commitments, {$tool->quantity} available, {$minAvailable} free at minimum)",
             ];
         }
 
@@ -70,20 +81,9 @@ class ToolAvailabilityService
 
         return ToolAllocation::query()
             ->where('tool_id', $toolId)
-            ->whereIn('status', ['BORROWED', 'PENDING_RETURN'])
-            ->where(function ($query) use ($startDateStr, $endDateStr): void {
-                $query
-                    // Allocation starts inside requested range
-                    ->whereBetween('borrow_date', [$startDateStr, $endDateStr])
-                    // Or allocation ends inside requested range
-                    ->orWhereBetween('expected_return_date', [$startDateStr, $endDateStr])
-                    // Or allocation fully covers requested range
-                    ->orWhere(function ($inner) use ($startDateStr, $endDateStr): void {
-                        $inner
-                            ->where('borrow_date', '<=', $startDateStr)
-                            ->where('expected_return_date', '>=', $endDateStr);
-                    });
-            })
+            ->whereIn('status', self::ALLOCATION_COMMITMENT_STATUSES)
+            ->whereDate('borrow_date', '<=', $endDateStr)
+            ->whereDate('expected_return_date', '>=', $startDateStr)
             ->get();
     }
 
@@ -100,23 +100,12 @@ class ToolAvailabilityService
 
         return Reservation::query()
             ->where('tool_id', $toolId)
-            ->whereIn('status', ['PENDING', 'UPCOMING'])
+            ->whereIn('status', self::RESERVATION_COMMITMENT_STATUSES)
             ->when($excludeReservationId !== null, function ($query) use ($excludeReservationId): void {
                 $query->where('id', '!=', $excludeReservationId);
             })
-            ->where(function ($query) use ($startDateStr, $endDateStr): void {
-                $query
-                    // Reservation starts inside requested range
-                    ->whereBetween('start_date', [$startDateStr, $endDateStr])
-                    // Or reservation ends inside requested range
-                    ->orWhereBetween('end_date', [$startDateStr, $endDateStr])
-                    // Or reservation fully covers requested range
-                    ->orWhere(function ($inner) use ($startDateStr, $endDateStr): void {
-                        $inner
-                            ->where('start_date', '<=', $startDateStr)
-                            ->where('end_date', '>=', $endDateStr);
-                    });
-            })
+            ->whereDate('start_date', '<=', $endDateStr)
+            ->whereDate('end_date', '>=', $startDateStr)
             ->get();
     }
 
@@ -133,20 +122,12 @@ class ToolAvailabilityService
         return Reservation::query()
             ->where('tool_id', $toolId)
             ->where('user_id', $userId)
-            ->whereIn('status', ['PENDING', 'UPCOMING'])
+            ->whereIn('status', self::RESERVATION_COMMITMENT_STATUSES)
             ->when($excludeReservationId !== null, function ($query) use ($excludeReservationId): void {
                 $query->where('id', '!=', $excludeReservationId);
             })
-            ->where(function ($query) use ($startDateStr, $endDateStr): void {
-                $query
-                    ->whereBetween('start_date', [$startDateStr, $endDateStr])
-                    ->orWhereBetween('end_date', [$startDateStr, $endDateStr])
-                    ->orWhere(function ($inner) use ($startDateStr, $endDateStr): void {
-                        $inner
-                            ->where('start_date', '<=', $startDateStr)
-                            ->where('end_date', '>=', $endDateStr);
-                    });
-            })
+            ->whereDate('start_date', '<=', $endDateStr)
+            ->whereDate('end_date', '>=', $startDateStr)
             ->exists();
     }
 
@@ -168,30 +149,14 @@ class ToolAvailabilityService
             ];
         }
 
-        $totalQuantity = (int) $tool->quantity;
-
-        // Count active borrowings (BORROWED or PENDING_RETURN)
-        $borrowedCount = ToolAllocation::query()
-            ->where('tool_id', $toolId)
-            ->whereIn('status', ['BORROWED', 'PENDING_RETURN'])
-            ->count();
-
-        // Count pending borrow requests (awaiting admin approval)
-        $reservedCount = Reservation::query()
-            ->where('tool_id', $toolId)
-            ->whereIn('status', ['PENDING', 'UPCOMING'])
-            ->count();
-
-        // Calculate available: total - borrowed - reserved
-        // Note: This is a simplified calculation. For date-specific availability,
-        // use checkAvailability() with specific date ranges.
-        $availableCount = max(0, $totalQuantity - $borrowedCount - $reservedCount);
+        $today = Carbon::today();
+        $rangeAvailability = $this->calculateDateRangeAvailability($toolId, $today, $today);
 
         return [
-            'total_quantity' => $totalQuantity,
-            'borrowed_count' => $borrowedCount,
-            'reserved_count' => $reservedCount,
-            'available_count' => $availableCount,
+            'total_quantity' => (int) $tool->quantity,
+            'borrowed_count' => (int) $rangeAvailability['borrowed_count'],
+            'reserved_count' => (int) $rangeAvailability['reserved_count'],
+            'available_count' => (int) $rangeAvailability['available_count'],
         ];
     }
 
@@ -215,8 +180,8 @@ class ToolAvailabilityService
 
         foreach ($this->getConflictingReservations($toolId, $startDate, $endDate) as $reservation) {
             $ranges[] = [
-                'from' => $reservation->start_date->toDateString(),
-                'to' => $reservation->end_date->toDateString(),
+                'from' => substr((string) $reservation->getRawOriginal('start_date'), 0, 10),
+                'to' => substr((string) $reservation->getRawOriginal('end_date'), 0, 10),
                 'type' => 'reservation',
             ];
         }
@@ -231,7 +196,144 @@ class ToolAvailabilityService
     {
         return Reservation::query()
             ->where('tool_id', $toolId)
-            ->whereIn('status', ['PENDING', 'UPCOMING'])
+            ->whereIn('status', self::RESERVATION_COMMITMENT_STATUSES)
             ->count();
+    }
+
+    /**
+     * Calculate availability for a specific date range.
+     * Returns detailed availability information including reservations.
+     *
+     * @return array{total_quantity: int, borrowed_count: int, reserved_count: int, available_count: int, available_for_dates: array}
+     */
+    public function calculateDateRangeAvailability(int $toolId, Carbon $startDate, Carbon $endDate, ?int $excludeReservationId = null): array
+    {
+        $tool = Tool::query()->find($toolId);
+        if (! $tool) {
+            return [
+                'total_quantity' => 0,
+                'borrowed_count' => 0,
+                'reserved_count' => 0,
+                'available_count' => 0,
+                'available_for_dates' => [],
+            ];
+        }
+
+        $rangeStart = $startDate->copy()->startOfDay();
+        $rangeEnd = $endDate->copy()->endOfDay();
+
+        $totalQuantity = (int) $tool->quantity;
+
+        $overlappingAllocations = ToolAllocation::query()
+            ->where('tool_id', $toolId)
+            ->whereIn('status', self::ALLOCATION_COMMITMENT_STATUSES)
+            ->whereDate('borrow_date', '<=', $endDate->toDateString())
+            ->whereDate('expected_return_date', '>=', $startDate->toDateString())
+            ->get(['borrow_date', 'expected_return_date']);
+
+        $overlappingReservations = Reservation::query()
+            ->where('tool_id', $toolId)
+            ->whereIn('status', self::RESERVATION_COMMITMENT_STATUSES)
+            ->when($excludeReservationId !== null, function ($query) use ($excludeReservationId): void {
+                $query->where('id', '!=', $excludeReservationId);
+            })
+            ->whereDate('start_date', '<=', $endDate->toDateString())
+            ->whereDate('end_date', '>=', $startDate->toDateString())
+            ->get(['start_date', 'end_date']);
+
+        // Generate day-by-day availability for the date range
+        $availableForDates = [];
+        $minAvailable = $totalQuantity;
+        $maxBorrowed = 0;
+        $maxReserved = 0;
+
+        $current = $rangeStart->copy();
+        while ($current->lte($rangeEnd)) {
+            $currentDate = $current->toDateString();
+
+            $dayBorrowed = $overlappingAllocations->filter(function (ToolAllocation $allocation) use ($currentDate): bool {
+                $borrowDate = substr((string) $allocation->getRawOriginal('borrow_date'), 0, 10);
+                $expectedReturnDate = substr((string) $allocation->getRawOriginal('expected_return_date'), 0, 10);
+
+                return $borrowDate <= $currentDate && $expectedReturnDate >= $currentDate;
+            })->count();
+
+            $dayReserved = $overlappingReservations->filter(function (Reservation $reservation) use ($currentDate): bool {
+                $startDate = substr((string) $reservation->getRawOriginal('start_date'), 0, 10);
+                $endDate = substr((string) $reservation->getRawOriginal('end_date'), 0, 10);
+
+                return $startDate <= $currentDate && $endDate >= $currentDate;
+            })->count();
+
+            $dayAvailable = max(0, $totalQuantity - $dayBorrowed - $dayReserved);
+            $minAvailable = min($minAvailable, $dayAvailable);
+            $maxBorrowed = max($maxBorrowed, $dayBorrowed);
+            $maxReserved = max($maxReserved, $dayReserved);
+
+            $availableForDates[$currentDate] = $dayAvailable;
+            $current->addDay();
+        }
+
+        return [
+            'total_quantity' => $totalQuantity,
+            'borrowed_count' => $maxBorrowed,
+            'reserved_count' => $maxReserved,
+            'available_count' => $minAvailable,
+            'available_for_dates' => $availableForDates,
+        ];
+    }
+
+    /**
+     * Get real-time availability status for a tool considering current date.
+     * Returns whether tool should be shown as available, partially available, or unavailable.
+     *
+     * @return array{status: string, available_count: int, reserved_count: int, message: string}
+     */
+    public function getRealTimeAvailabilityStatus(int $toolId): array
+    {
+        $tool = Tool::query()->find($toolId);
+        if (! $tool) {
+            return [
+                'status' => 'unavailable',
+                'available_count' => 0,
+                'reserved_count' => 0,
+                'message' => 'Tool not found.',
+            ];
+        }
+
+        $today = Carbon::today();
+        $availability = $this->calculateDateRangeAvailability($toolId, $today, $today);
+
+        if ($tool->status !== 'AVAILABLE') {
+            return [
+                'status' => 'unavailable',
+                'available_count' => 0,
+                'reserved_count' => $availability['reserved_count'],
+                'message' => "Tool is {$tool->status}.",
+            ];
+        }
+
+        if ($availability['available_count'] >= $tool->quantity) {
+            return [
+                'status' => 'available',
+                'available_count' => $availability['available_count'],
+                'reserved_count' => $availability['reserved_count'],
+                'message' => 'Tool is available for immediate borrowing.',
+            ];
+        } elseif ($availability['available_count'] > 0) {
+            return [
+                'status' => 'partially_available',
+                'available_count' => $availability['available_count'],
+                'reserved_count' => $availability['reserved_count'],
+                'message' => "Only {$availability['available_count']} of {$tool->quantity} units available. {$availability['reserved_count']} reserved.",
+            ];
+        } else {
+            return [
+                'status' => 'fully_reserved',
+                'available_count' => 0,
+                'reserved_count' => $availability['reserved_count'],
+                'message' => "All {$tool->quantity} units are currently borrowed or reserved.",
+            ];
+        }
     }
 }

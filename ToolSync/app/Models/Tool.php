@@ -97,4 +97,9 @@ class Tool extends Model
     {
         return $this->hasMany(ToolDeprecation::class);
     }
+
+    public function conditionHistories(): HasMany
+    {
+        return $this->hasMany(ToolConditionHistory::class);
+    }
 }

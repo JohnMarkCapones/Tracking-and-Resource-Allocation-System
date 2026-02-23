@@ -12,6 +12,7 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * @group Dashboard
@@ -87,22 +88,42 @@ class DashboardController extends Controller
         // units currently borrowed or reserved. Subtract them for a true count.
         $rawAvailableQty = (int) Tool::query()->where('status', 'AVAILABLE')->sum('quantity');
 
-        $reservedActiveCount = Schema::hasTable('reservations')
-            ? (int) Reservation::query()->where('status', 'PENDING')->count()
-            : 0;
+        $reservedActiveCount = 0;
+        if (Schema::hasTable('reservations')) {
+            $today = now()->toDateString();
+            $reservedActiveCount = (int) Reservation::query()
+                ->where('status', 'PENDING')
+                ->whereDate('start_date', '<=', $today)
+                ->whereDate('end_date', '>=', $today)
+                ->count();
+        }
 
         // "Borrowed items" on dashboard = count of active allocation records (BORROWED or PENDING_RETURN).
         // Use allocation count for both admin and user so top cards match Utilization insights and reflect real active borrowings.
         // (Inventory math total - available - maintenance only equals borrowed when every tool has quantity 1 or status flips to BORROWED.)
-        $activeBorrowQuery = ToolAllocation::query()->whereIn('status', ['BORROWED', 'PENDING_RETURN']);
+        $today = now()->toDateString();
+        $activeBorrowQuery = ToolAllocation::query()
+            ->whereIn('status', ['BORROWED', 'PENDING_RETURN'])
+            ->whereDate('borrow_date', '<=', $today)
+            ->whereDate('expected_return_date', '>=', $today);
         if ($userId) {
             $activeBorrowQuery->where('user_id', $userId);
         }
         $borrowedActiveCount = (int) (clone $activeBorrowQuery)->count();
 
+        $scheduledQuery = ToolAllocation::query()
+            ->where('status', 'SCHEDULED')
+            ->whereDate('expected_return_date', '>=', $today);
+        if ($userId) {
+            $scheduledQuery->where('user_id', $userId);
+        }
+        $scheduledActiveCount = (int) $scheduledQuery->count();
+
         // System-wide borrowed count for availability math (ignoring user scope)
         $systemBorrowedCount = (int) ToolAllocation::query()
-            ->whereIn('status', ['BORROWED', 'PENDING_RETURN'])
+            ->whereIn('status', ['SCHEDULED', 'BORROWED', 'PENDING_RETURN'])
+            ->whereDate('borrow_date', '<=', $today)
+            ->whereDate('expected_return_date', '>=', $today)
             ->count();
 
         // True available = raw DB available quantity minus everything committed
@@ -220,6 +241,7 @@ class DashboardController extends Controller
                     'tools_available_quantity' => $toolsAvailableQty,
                     'tools_maintenance_quantity' => $toolsMaintenanceQty,
                     'borrowed_active_count' => $borrowedActiveCount,
+                    'scheduled_active_count' => $scheduledActiveCount,
                     'reserved_active_count' => $reservedActiveCount,
                     'overdue_count' => $overdueCount,
                     'returned_today_count' => $returnedTodayCount,
@@ -248,6 +270,8 @@ class DashboardController extends Controller
      */
     public function approvals(): JsonResponse
     {
+        $hasConditionHistoryTable = Schema::hasTable('tool_condition_histories');
+
         $borrowRequests = Reservation::query()
             ->with(['tool:id,name,code', 'user:id,name,email'])
             ->where('status', 'PENDING')
@@ -272,12 +296,35 @@ class DashboardController extends Controller
             ->values()
             ->all();
 
-        $returnRequests = ToolAllocation::query()
+        $returnQuery = ToolAllocation::query()
             ->with(['tool:id,name,code', 'user:id,name,email'])
             ->where('status', 'PENDING_RETURN')
-            ->orderBy('updated_at')
+            ->orderBy('updated_at');
+
+        if ($hasConditionHistoryTable) {
+            $returnQuery->with('conditionHistory');
+        }
+
+        $returnRequests = $returnQuery
             ->get()
-            ->map(function (ToolAllocation $a): array {
+            ->map(function (ToolAllocation $a) use ($hasConditionHistoryTable): array {
+                $history = $hasConditionHistoryTable ? $a->conditionHistory : null;
+                $borrowerImageUrls = collect($history?->borrower_images ?? [])
+                    ->filter(fn ($path) => is_string($path) && trim($path) !== '')
+                    ->map(fn (string $path) => Storage::disk('public')->url($path))
+                    ->values()
+                    ->all();
+
+                if ($borrowerImageUrls === [] && ! empty($a->return_proof_image_path)) {
+                    $borrowerImageUrls[] = Storage::disk('public')->url($a->return_proof_image_path);
+                }
+
+                $adminImageUrls = collect($history?->admin_images ?? [])
+                    ->filter(fn ($path) => is_string($path) && trim($path) !== '')
+                    ->map(fn (string $path) => Storage::disk('public')->url($path))
+                    ->values()
+                    ->all();
+
                 return [
                     'id' => $a->id,
                     'type' => 'return',
@@ -290,6 +337,12 @@ class DashboardController extends Controller
                     'borrow_date' => substr((string) $a->getRawOriginal('borrow_date'), 0, 10),
                     'expected_return_date' => substr((string) $a->getRawOriginal('expected_return_date'), 0, 10),
                     'note' => $a->note,
+                    'reported_condition' => $history?->borrower_condition ?? $a->reported_condition,
+                    'admin_condition' => $history?->admin_condition ?? $a->admin_condition,
+                    'admin_review_note' => $history?->admin_notes ?? $a->admin_review_note,
+                    'return_proof_image_url' => $borrowerImageUrls[0] ?? null,
+                    'borrower_image_urls' => $borrowerImageUrls,
+                    'admin_image_urls' => $adminImageUrls,
                     'status' => $a->status,
                     'created_at' => $a->created_at?->toIso8601String(),
                 ];
@@ -301,6 +354,33 @@ class DashboardController extends Controller
             'data' => [
                 'borrow_requests' => $borrowRequests,
                 'return_requests' => $returnRequests,
+            ],
+        ]);
+    }
+
+    /**
+     * Get lightweight pending approval counts for admin sidebar badges.
+     */
+    public function approvalsCount(Request $request): JsonResponse
+    {
+        $actor = $request->user();
+        if (! $actor || ! $actor->isAdmin()) {
+            return response()->json(['message' => 'Only admins can view approval counts.'], 403);
+        }
+
+        $borrowRequestsCount = (int) Reservation::query()
+            ->where('status', 'PENDING')
+            ->count();
+
+        $returnRequestsCount = (int) ToolAllocation::query()
+            ->where('status', 'PENDING_RETURN')
+            ->count();
+
+        return response()->json([
+            'data' => [
+                'borrow_requests_count' => $borrowRequestsCount,
+                'return_requests_count' => $returnRequestsCount,
+                'total' => $borrowRequestsCount + $returnRequestsCount,
             ],
         ]);
     }

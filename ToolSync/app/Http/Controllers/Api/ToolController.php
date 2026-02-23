@@ -8,8 +8,10 @@ use App\Http\Requests\UpdateToolRequest;
 use App\Models\Reservation;
 use App\Models\Tool;
 use App\Models\ToolAllocation;
+use App\Models\ToolConditionHistory;
 use App\Models\ToolStatusLog;
 use App\Services\ToolAvailabilityService;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -57,15 +59,34 @@ class ToolController extends Controller
             ->withCount('allocations')
             ->withCount([
                 'allocations as borrowed_count' => function ($q) {
-                    $q->whereIn('status', ['BORROWED', 'PENDING_RETURN']);
+                    $today = now()->toDateString();
+                    $q->whereIn('status', ['SCHEDULED', 'BORROWED', 'PENDING_RETURN'])
+                        ->whereDate('borrow_date', '<=', $today)
+                        ->whereDate('expected_return_date', '>=', $today);
                 },
             ]);
+
+        if (Schema::hasTable('tool_condition_histories')) {
+            $query->withCount('conditionHistories')
+                ->addSelect([
+                    'latest_admin_condition' => ToolConditionHistory::query()
+                        ->select('admin_condition')
+                        ->whereColumn('tool_id', 'tools.id')
+                        ->whereNotNull('admin_condition')
+                        ->orderByDesc('admin_reviewed_at')
+                        ->orderByDesc('updated_at')
+                        ->limit(1),
+                ]);
+        }
 
         // Add reserved_count if reservations table exists
         if (Schema::hasTable('reservations')) {
             $query->withCount([
                 'reservations as reserved_count' => function ($q) {
-                    $q->whereIn('status', ['PENDING', 'UPCOMING']);
+                    $today = now()->toDateString();
+                    $q->whereIn('status', ['PENDING', 'UPCOMING'])
+                        ->whereDate('start_date', '<=', $today)
+                        ->whereDate('end_date', '>=', $today);
                 },
             ]);
         }
@@ -153,7 +174,9 @@ class ToolController extends Controller
 
         $borrowedCounts = ToolAllocation::query()
             ->whereIn('tool_id', $toolIds)
-            ->whereIn('status', ['BORROWED', 'PENDING_RETURN'])
+            ->whereIn('status', ['SCHEDULED', 'BORROWED', 'PENDING_RETURN'])
+            ->whereDate('borrow_date', '<=', now()->toDateString())
+            ->whereDate('expected_return_date', '>=', now()->toDateString())
             ->selectRaw('tool_id, COUNT(*) as count')
             ->groupBy('tool_id')
             ->pluck('count', 'tool_id');
@@ -163,6 +186,8 @@ class ToolController extends Controller
             $reservedCounts = Reservation::query()
                 ->whereIn('tool_id', $toolIds)
                 ->whereIn('status', ['PENDING', 'UPCOMING'])
+                ->whereDate('start_date', '<=', now()->toDateString())
+                ->whereDate('end_date', '>=', now()->toDateString())
                 ->selectRaw('tool_id, COUNT(*) as count')
                 ->groupBy('tool_id')
                 ->pluck('count', 'tool_id');
@@ -174,7 +199,26 @@ class ToolController extends Controller
             $available = max(0, (int) $tool->quantity - $borrowed - $reserved);
 
             $tool->setAttribute('calculated_available_count', $available);
+            $tool->setAttribute('calculated_availability', $available);
             $tool->setAttribute('calculated_reserved_count', $reserved);
+            
+            // Determine availability status
+            if ($tool->status !== 'AVAILABLE') {
+                $status = 'unavailable';
+                $message = "Tool is {$tool->status}.";
+            } elseif ($available >= $tool->quantity) {
+                $status = 'available';
+                $message = 'Tool is available for immediate borrowing.';
+            } elseif ($available > 0) {
+                $status = 'partially_available';
+                $message = "Only {$available} of {$tool->quantity} units available. {$reserved} reserved.";
+            } else {
+                $status = 'fully_reserved';
+                $message = "All {$tool->quantity} units are currently borrowed or reserved.";
+            }
+            
+            $tool->setAttribute('availability_status', $status);
+            $tool->setAttribute('availability_message', $message);
 
             return $tool;
         });
@@ -267,12 +311,33 @@ class ToolController extends Controller
     public function show(Tool $tool): JsonResponse
     {
         $tool->load('category');
+        if (Schema::hasTable('tool_condition_histories')) {
+            $tool->loadCount('conditionHistories');
+            $tool->setAttribute(
+                'latest_admin_condition',
+                ToolConditionHistory::query()
+                    ->where('tool_id', $tool->id)
+                    ->whereNotNull('admin_condition')
+                    ->orderByDesc('admin_reviewed_at')
+                    ->orderByDesc('updated_at')
+                    ->value('admin_condition')
+            );
+        } else {
+            $tool->setAttribute('condition_histories_count', 0);
+            $tool->setAttribute('latest_admin_condition', null);
+        }
 
         // Add calculated availability
         $availabilityService = app(ToolAvailabilityService::class);
         $availability = $availabilityService->calculateAvailability($tool->id);
         $tool->setAttribute('calculated_available_count', $availability['available_count']);
+        $tool->setAttribute('calculated_availability', $availability['available_count']);
         $tool->setAttribute('calculated_reserved_count', $availability['reserved_count']);
+        
+        // Add real-time availability status
+        $realTimeStatus = $availabilityService->getRealTimeAvailabilityStatus($tool->id);
+        $tool->setAttribute('availability_status', $realTimeStatus['status']);
+        $tool->setAttribute('availability_message', $realTimeStatus['message']);
 
         return response()->json([
             'data' => $tool,
@@ -374,19 +439,58 @@ class ToolController extends Controller
     /**
      * Get availability information for a tool between a date range.
      *
-     * @urlParam tool int required The ID of the tool. Example: 1
+     * @urlParam tool int required The ID of tool. Example: 1
      *
-     * @queryParam from date Start of the range (inclusive). Example: 2026-01-01
-     * @queryParam to date End of the range (inclusive). Example: 2026-01-31
+     * @queryParam from date Start of range (inclusive). Example: 2026-01-01
+     * @queryParam to date End of range (inclusive). Example: 2026-01-31
+     * @response 200 {
+     *   "data": {
+     *     "total_quantity": 5,
+     *     "borrowed_count": 1,
+     *     "reserved_count": 3,
+     *     "available_count": 1,
+     *     "available_for_dates": {
+     *       "2026-02-20": 0,
+     *       "2026-02-21": 0,
+     *       "2026-02-25": 1
+     *     },
+     *     "allocations": [...],
+     *     "reservations": [...]
+     *   }
+     * }
      */
     public function availability(Request $request, Tool $tool): JsonResponse
     {
-        $from = $request->filled('from') ? now()->parse($request->input('from'))->startOfDay() : now()->startOfDay();
-        $to = $request->filled('to') ? now()->parse($request->input('to'))->endOfDay() : now()->copy()->addMonth()->endOfDay();
+        $from = $request->filled('from') ? Carbon::parse($request->input('from'))->startOfDay() : now()->startOfDay();
+        $to = $request->filled('to') ? Carbon::parse($request->input('to'))->endOfDay() : now()->copy()->addMonth()->endOfDay();
 
+        $availabilityService = app(ToolAvailabilityService::class);
+
+        // Get detailed availability for the date range
+        $dateRangeAvailability = $availabilityService->calculateDateRangeAvailability($tool->id, $from, $to);
+        $minAvailable = (int) $dateRangeAvailability['available_count'];
+        $totalQuantity = (int) $dateRangeAvailability['total_quantity'];
+
+        if ($tool->status !== 'AVAILABLE') {
+            $availabilityStatus = 'unavailable';
+            $availabilityMessage = "Tool is {$tool->status}.";
+        } elseif ($minAvailable < 1) {
+            $availabilityStatus = 'fully_reserved';
+            $availabilityMessage = 'Tool is fully reserved for the selected dates.';
+        } elseif ($minAvailable < $totalQuantity) {
+            $availabilityStatus = 'partially_available';
+            $availabilityMessage = "Tool is partially available for the selected dates. Minimum free units: {$minAvailable}.";
+        } else {
+            $availabilityStatus = 'available';
+            $availabilityMessage = 'Tool is available for the selected dates.';
+        }
+
+        // Get existing allocations and reservations for reference
         $allocations = ToolAllocation::query()
             ->where('tool_id', $tool->id)
-            ->whereBetween('borrow_date', [$from, $to])
+            ->whereIn('status', ['SCHEDULED', 'BORROWED', 'PENDING_RETURN'])
+            ->whereDate('borrow_date', '<=', $to->toDateString())
+            ->whereDate('expected_return_date', '>=', $from->toDateString())
             ->get([
                 'id',
                 'borrow_date',
@@ -399,7 +503,9 @@ class ToolController extends Controller
         if (Schema::hasTable('reservations')) {
             $reservations = Reservation::query()
                 ->where('tool_id', $tool->id)
-                ->whereBetween('start_date', [$from, $to])
+                ->whereIn('status', ['PENDING', 'UPCOMING'])
+                ->whereDate('start_date', '<=', $to->toDateString())
+                ->whereDate('end_date', '>=', $from->toDateString())
                 ->get([
                     'id',
                     'start_date',
@@ -411,10 +517,12 @@ class ToolController extends Controller
         }
 
         return response()->json([
-            'data' => [
+            'data' => array_merge($dateRangeAvailability, [
+                'availability_status' => $availabilityStatus,
+                'availability_message' => $availabilityMessage,
                 'allocations' => $allocations,
                 'reservations' => $reservations,
-            ],
+            ]),
         ]);
     }
 }

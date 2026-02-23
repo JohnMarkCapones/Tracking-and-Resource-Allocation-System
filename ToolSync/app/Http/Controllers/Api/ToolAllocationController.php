@@ -143,9 +143,6 @@ class ToolAllocationController extends Controller
             $validated['user_id'] = $actor->id;
         }
 
-        // DEBUG: log what arrives from the frontend
-        \Log::info('BORROW DEBUG - validated input', $validated);
-
         $borrowDate = Carbon::parse($validated['borrow_date']);
         $expectedReturn = Carbon::parse($validated['expected_return_date']);
         $dateValidator = app(DateValidationService::class);
@@ -161,7 +158,7 @@ class ToolAllocationController extends Controller
         $maxDuration = (int) (SystemSetting::query()->where('key', 'max_duration')->value('value') ?? 14);
         $currentBorrowed = ToolAllocation::query()
             ->where('user_id', $borrower->id)
-            ->whereIn('status', ['BORROWED', 'PENDING_RETURN'])
+            ->whereIn('status', ['SCHEDULED', 'BORROWED', 'PENDING_RETURN'])
             ->count();
         $durationDays = $borrowDate->diffInDays($expectedReturn) + 1;
         $evaluator = app(AutoApprovalEvaluator::class);
@@ -197,9 +194,14 @@ class ToolAllocationController extends Controller
         // Pass the validated Y-m-d strings directly. MySQL will store them as
         // "2026-02-10 00:00:00" with no timezone conversion, so the calendar date
         // is always preserved exactly as the user selected it.
-        $createPayload = $validated;
+        $isFuturePickup = $borrowDate->copy()->startOfDay()->isAfter(now()->startOfDay());
+        $createPayload = array_merge($validated, [
+            'status' => $isFuturePickup ? 'SCHEDULED' : 'BORROWED',
+            'claimed_at' => $isFuturePickup ? null : now(),
+            'claimed_by' => $isFuturePickup ? null : $request->user()?->id,
+        ]);
 
-        $allocation = DB::transaction(function () use ($createPayload, $validated, $request, $borrowDate, $expectedReturn): ToolAllocation {
+        $allocation = DB::transaction(function () use ($createPayload, $validated, $borrowDate, $expectedReturn): ToolAllocation {
             /** @var Tool $tool */
             $tool = Tool::query()->lockForUpdate()->findOrFail((int) $validated['tool_id']);
 
@@ -209,45 +211,16 @@ class ToolAllocationController extends Controller
                 ], 409));
             }
 
-            // Double-check reservation conflicts after locking
             $availabilityService = app(ToolAvailabilityService::class);
-            $conflictingReservations = $availabilityService->getConflictingReservations($tool->id, $borrowDate, $expectedReturn);
-            $conflictingAllocations = $availabilityService->getConflictingAllocations($tool->id, $borrowDate, $expectedReturn);
-            $committedCount = $conflictingReservations->count() + $conflictingAllocations->count();
-
-            if ($committedCount >= $tool->quantity) {
+            $availabilityCheck = $availabilityService->checkAvailability($tool->id, $borrowDate, $expectedReturn);
+            if (! $availabilityCheck['available']) {
                 abort(response()->json([
-                    'message' => 'Tool is already fully allocated or reserved for the selected date range.',
+                    'message' => $availabilityCheck['reason'] ?? 'Tool is not available for borrowing.',
                 ], 409));
             }
 
-            $oldStatus = $tool->status;
-
             $allocation = ToolAllocation::create($createPayload);
             $allocation->refresh();
-
-            // DEBUG: log what actually got stored
-            $rawRow = \DB::table('tool_allocations')->where('id', $allocation->id)->first();
-            \Log::info('BORROW DEBUG - raw DB row', [
-                'borrow_date' => $rawRow->borrow_date,
-                'expected_return_date' => $rawRow->expected_return_date,
-            ]);
-
-            $tool->quantity = max(0, (int) $tool->quantity - 1);
-            if ($tool->quantity === 0 && $tool->status === 'AVAILABLE') {
-                $tool->status = 'BORROWED';
-            }
-            $tool->save();
-
-            if ($tool->status !== $oldStatus) {
-                ToolStatusLog::create([
-                    'tool_id' => $tool->id,
-                    'old_status' => $oldStatus,
-                    'new_status' => $tool->status,
-                    'changed_by' => $request->user()?->id,
-                    'changed_at' => now(),
-                ]);
-            }
 
             return $allocation;
         });
@@ -266,8 +239,10 @@ class ToolAllocationController extends Controller
 
         $allocation->user?->notify(new InAppSystemNotification(
             'success',
-            'Borrowing confirmed',
-            "Your borrowing for {$toolName} has been created.",
+            $isFuturePickup ? 'Borrowing scheduled' : 'Borrowing confirmed',
+            $isFuturePickup
+                ? "Your borrowing for {$toolName} is approved and scheduled for pickup on {$borrowDate->toFormattedDateString()}."
+                : "Your borrowing for {$toolName} has been created.",
             '/borrowings'
         ));
 
@@ -275,8 +250,10 @@ class ToolAllocationController extends Controller
         if ($adminRecipients->isNotEmpty()) {
             Notification::send($adminRecipients, new InAppSystemNotification(
                 'info',
-                'New borrowing activity',
-                "{$allocation->user?->name} borrowed {$toolName}.",
+                $isFuturePickup ? 'New scheduled pickup' : 'New borrowing activity',
+                $isFuturePickup
+                    ? "{$allocation->user?->name} has a scheduled pickup for {$toolName}."
+                    : "{$allocation->user?->name} borrowed {$toolName}.",
                 '/admin/allocation-history'
             ));
         }
@@ -396,6 +373,13 @@ class ToolAllocationController extends Controller
                     'message' => 'This return request is already pending admin approval.',
                     'data' => $toolAllocation->load(['tool', 'user']),
                 ]);
+            }
+
+            if ($toolAllocation->status === 'SCHEDULED') {
+                return response()->json([
+                    'message' => 'This borrowing has not been claimed yet. Return requests are only allowed after pickup.',
+                    'data' => $toolAllocation->load(['tool', 'user']),
+                ], 422);
             }
 
             if (($request->input('status') ?? null) !== 'PENDING_RETURN') {
@@ -528,6 +512,24 @@ class ToolAllocationController extends Controller
 
         $oldAllocationStatus = $toolAllocation->status;
 
+        if (($validated['status'] ?? null) === 'PENDING_RETURN' && $oldAllocationStatus !== 'BORROWED') {
+            return response()->json([
+                'message' => 'Only claimed borrowings can be moved to pending return.',
+            ], 422);
+        }
+
+        if (($validated['status'] ?? null) === 'BORROWED' && $oldAllocationStatus === 'SCHEDULED') {
+            return response()->json([
+                'message' => 'Use the claim action to move a scheduled borrowing to borrowed.',
+            ], 422);
+        }
+
+        if (($validated['status'] ?? null) === 'RETURNED' && ! in_array($oldAllocationStatus, ['BORROWED', 'PENDING_RETURN'], true)) {
+            return response()->json([
+                'message' => 'Only active or pending-return borrowings can be marked as returned.',
+            ], 422);
+        }
+
         $returnedCondition = null;
         if (($validated['status'] ?? null) === 'RETURNED') {
             $returnedCondition = $validated['admin_condition']
@@ -580,22 +582,14 @@ class ToolAllocationController extends Controller
                 $history->save();
             }
 
-            if (in_array($oldAllocationStatus, ['BORROWED', 'PENDING_RETURN'], true) && $toolAllocation->status === 'RETURNED') {
+            if (in_array($oldAllocationStatus, ['BORROWED', 'PENDING_RETURN'], true) && $toolAllocation->status === 'RETURNED' && $returnedCondition !== null) {
                 /** @var Tool $tool */
                 $tool = Tool::query()->lockForUpdate()->findOrFail($toolAllocation->tool_id);
                 $oldToolStatus = $tool->status;
 
-                $tool->quantity = (int) $tool->quantity + 1;
-
-                if ($tool->status === 'BORROWED' && $tool->quantity > 0) {
-                    $tool->status = 'AVAILABLE';
-                }
-
-                if ($returnedCondition !== null) {
-                    $tool->condition = $returnedCondition;
-                    if ($returnedCondition === 'Damaged') {
-                        $tool->status = 'MAINTENANCE';
-                    }
+                $tool->condition = $returnedCondition;
+                if ($returnedCondition === 'Damaged') {
+                    $tool->status = 'MAINTENANCE';
                 }
 
                 $tool->save();
@@ -836,6 +830,81 @@ class ToolAllocationController extends Controller
         }
 
         return in_array(strtolower(trim($condition)), ['poor', 'damaged'], true);
+    }
+
+    /**
+     * Admin: mark a scheduled borrowing as claimed (physical handover complete).
+     */
+    public function claim(Request $request, ToolAllocation $toolAllocation): JsonResponse
+    {
+        $actor = $request->user();
+        if (! $actor || ! $actor->isAdmin()) {
+            return response()->json([
+                'message' => 'Only admins can mark a borrowing as claimed.',
+            ], 403);
+        }
+
+        if ($toolAllocation->status !== 'SCHEDULED') {
+            return response()->json([
+                'message' => 'Only scheduled borrowings can be claimed.',
+                'data' => $toolAllocation->load(['tool', 'user']),
+            ], 422);
+        }
+
+        $borrowDate = Carbon::parse(substr((string) $toolAllocation->getRawOriginal('borrow_date'), 0, 10))->startOfDay();
+        if (now()->lt($borrowDate)) {
+            return response()->json([
+                'message' => 'Borrowing cannot be claimed before its start date.',
+            ], 422);
+        }
+
+        $claimedAllocation = DB::transaction(function () use ($toolAllocation, $actor): ToolAllocation {
+            /** @var ToolAllocation $lockedAllocation */
+            $lockedAllocation = ToolAllocation::query()->lockForUpdate()->findOrFail($toolAllocation->id);
+            if ($lockedAllocation->status !== 'SCHEDULED') {
+                abort(response()->json([
+                    'message' => 'Borrowing is no longer in scheduled state.',
+                ], 409));
+            }
+
+            /** @var Tool $tool */
+            $tool = Tool::query()->lockForUpdate()->findOrFail($lockedAllocation->tool_id);
+            if ($tool->status !== 'AVAILABLE') {
+                abort(response()->json([
+                    'message' => "Tool cannot be claimed because it is currently {$tool->status}.",
+                ], 409));
+            }
+
+            $lockedAllocation->update([
+                'status' => 'BORROWED',
+                'claimed_at' => now(),
+                'claimed_by' => $actor->id,
+            ]);
+
+            return $lockedAllocation->fresh(['tool', 'user']);
+        });
+
+        ActivityLogger::log(
+            'tool_allocation.claimed',
+            'ToolAllocation',
+            $claimedAllocation->id,
+            "Borrowing #{$claimedAllocation->id} was marked as claimed.",
+            ['tool_id' => $claimedAllocation->tool_id, 'user_id' => $claimedAllocation->user_id],
+            $actor->id
+        );
+
+        $toolName = $claimedAllocation->tool?->name ?? "Tool #{$claimedAllocation->tool_id}";
+        $claimedAllocation->user?->notify(new InAppSystemNotification(
+            'success',
+            'Tool pickup confirmed',
+            "Your pickup for {$toolName} has been confirmed. The borrowing is now active.",
+            '/borrowings'
+        ));
+
+        return response()->json([
+            'message' => 'Borrowing marked as claimed.',
+            'data' => $claimedAllocation,
+        ]);
     }
 
     /**

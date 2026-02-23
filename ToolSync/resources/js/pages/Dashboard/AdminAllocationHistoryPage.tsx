@@ -11,7 +11,7 @@ import type {
 import { mapAllocationStatusToUi } from '@/lib/apiTypes';
 import { apiRequest } from '@/lib/http';
 
-type AllocationStatus = 'Returned' | 'Active' | 'Pending' | 'Overdue';
+type AllocationStatus = 'Returned' | 'Upcoming' | 'Active' | 'Pending' | 'Overdue';
 
 type Allocation = {
     id: number;
@@ -42,6 +42,8 @@ function mapHistoryItemToAllocation(a: AllocationHistoryItem): Allocation {
     let statusDetail = '';
     if (a.status === 'RETURNED' && a.actual_return_date) {
         statusDetail = `Returned on ${new Date(a.actual_return_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`;
+    } else if (status === 'Upcoming') {
+        statusDetail = `Pickup scheduled for ${borrowDate}`;
     } else if (a.status === 'PENDING_RETURN') {
         statusDetail = 'Awaiting admin return approval';
     } else if (status === 'Overdue') {
@@ -73,6 +75,10 @@ function statusClasses(status: AllocationStatus): string {
 
     if (status === 'Pending') {
         return 'bg-amber-50 text-amber-700';
+    }
+
+    if (status === 'Upcoming') {
+        return 'bg-sky-50 text-sky-700';
     }
 
     if (status === 'Active') {
@@ -110,6 +116,15 @@ function statusIcon(status: AllocationStatus): ReactNode {
         );
     }
 
+    if (status === 'Upcoming') {
+        return (
+            <svg className="mr-1.5 h-3 w-3" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 2.5V4.5M11 2.5V4.5M3 6.5H13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                <rect x="3" y="4.5" width="10" height="9" rx="2" stroke="currentColor" strokeWidth="1.4" />
+            </svg>
+        );
+    }
+
     return (
         <svg className="mr-1.5 h-3 w-3" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M8 4.5V8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
@@ -126,6 +141,7 @@ function buildHistoryParams(page: number, statusFilter: 'all' | AllocationStatus
     params.set('per_page', String(PAGE_SIZE));
     params.set('page', String(page));
     if (statusFilter === 'Active') params.set('status', 'BORROWED');
+    else if (statusFilter === 'Upcoming') params.set('status', 'SCHEDULED');
     else if (statusFilter === 'Returned') params.set('status', 'RETURNED');
     else if (statusFilter === 'Overdue') {
         params.set('status', 'BORROWED');
@@ -141,6 +157,7 @@ export default function AdminAllocationHistoryPage() {
     const [error, setError] = useState<string | null>(null);
     const [summaryCounts, setSummaryCounts] = useState({ total: 0, returned: 0, active: 0, overdue: 0 });
     const [returningId, setReturningId] = useState<number | null>(null);
+    const [claimingId, setClaimingId] = useState<number | null>(null);
 
     const [statusFilter, setStatusFilter] = useState<'all' | AllocationStatus>(() => {
         if (typeof window === 'undefined') return 'all';
@@ -187,6 +204,7 @@ export default function AdminAllocationHistoryPage() {
     const buildExportQuery = useCallback((): string => {
         const url = new URL('/api/tool-allocations/export', window.location.origin);
         if (statusFilter === 'Active') url.searchParams.set('status', 'BORROWED');
+        else if (statusFilter === 'Upcoming') url.searchParams.set('status', 'SCHEDULED');
         else if (statusFilter === 'Returned') url.searchParams.set('status', 'RETURNED');
         else if (statusFilter === 'Overdue') {
             url.searchParams.set('status', 'BORROWED');
@@ -235,6 +253,24 @@ export default function AdminAllocationHistoryPage() {
                 toast.error(msg);
             } finally {
                 setReturningId(null);
+            }
+        },
+        [page, loadSummary, loadHistory],
+    );
+
+    const handleClaimTool = useCallback(
+        async (row: Allocation) => {
+            setClaimingId(row.id);
+            try {
+                await apiRequest(`/api/tool-allocations/${row.id}/claim`, { method: 'POST' });
+                toast.success(`Borrowing for "${row.tool}" marked as claimed.`);
+                await loadSummary();
+                await loadHistory(page);
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : 'Failed to mark borrowing as claimed';
+                toast.error(msg);
+            } finally {
+                setClaimingId(null);
             }
         },
         [page, loadSummary, loadHistory],
@@ -430,7 +466,7 @@ export default function AdminAllocationHistoryPage() {
                     <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[11px] font-semibold tracking-wide text-gray-500 uppercase">Filter by status</span>
                         <div className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-1 py-1 text-[11px] text-gray-600 shadow-sm">
-                            {(['all', 'Active', 'Returned', 'Overdue'] as const).map((value) => (
+                            {(['all', 'Upcoming', 'Active', 'Returned', 'Overdue'] as const).map((value) => (
                                 <button
                                     key={value}
                                     type="button"
@@ -562,6 +598,7 @@ export default function AdminAllocationHistoryPage() {
                                     {paginated.map((row, index) => {
                                         const isEven = index % 2 === 0;
                                         const isReturned = row.status === 'Returned';
+                                        const isUpcoming = row.status === 'Upcoming';
 
                                         return (
                                             <tr
@@ -600,7 +637,16 @@ export default function AdminAllocationHistoryPage() {
                                                     )}
                                                 </td>
                                                 <td className="py-3 text-right">
-                                                    {isReturned ? (
+                                                    {isUpcoming ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleClaimTool(row)}
+                                                            disabled={claimingId === row.id}
+                                                            className="rounded-full bg-sky-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-sky-700 disabled:opacity-60"
+                                                        >
+                                                            {claimingId === row.id ? 'Claiming…' : 'Mark Claimed'}
+                                                        </button>
+                                                    ) : isReturned ? (
                                                         <button
                                                             type="button"
                                                             onClick={() => setSelectedAllocation(row)}
@@ -612,7 +658,7 @@ export default function AdminAllocationHistoryPage() {
                                                         <button
                                                             type="button"
                                                             onClick={() => handleReturnTool(row)}
-                                                            disabled={returningId === row.id}
+                                                            disabled={returningId === row.id || claimingId === row.id}
                                                             className="rounded-full bg-blue-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
                                                         >
                                                             {returningId === row.id ? 'Returning…' : 'Return Tool'}

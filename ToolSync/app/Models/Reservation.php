@@ -23,8 +23,9 @@ class Reservation extends Model
     protected function casts(): array
     {
         return [
-            'start_date' => 'datetime',
-            'end_date' => 'datetime',
+            // Date-only domain fields (no time component).
+            'start_date' => 'date',
+            'end_date' => 'date',
             'recurring' => 'boolean',
         ];
     }
@@ -39,4 +40,3 @@ class Reservation extends Model
         return $this->belongsTo(User::class);
     }
 }
-

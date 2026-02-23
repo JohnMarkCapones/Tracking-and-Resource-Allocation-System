@@ -6,18 +6,24 @@ import { Breadcrumb } from '@/Components/Breadcrumb';
 import { toast } from '@/Components/Toast';
 import { AvailabilityCalendar } from '@/Components/Tools/AvailabilityCalendar';
 import { RequestToolModal } from '@/Components/Tools/RequestToolModal';
+import { ToolConditionHistory, type ToolConditionHistoryEntry } from '@/Components/Tools/ToolConditionHistory';
 import AppLayout from '@/Layouts/AppLayout';
 import { apiRequest } from '@/lib/http';
 import { useFavoritesStore } from '@/stores/favoritesStore';
 
 type AvailabilityApiResponse = {
     data: {
+        total_quantity: number;
+        available_count: number;
+        available_for_dates?: Record<string, number>;
+        availability_status?: 'available' | 'partially_available' | 'fully_reserved' | 'unavailable';
+        availability_message?: string;
         allocations: Array<{ borrow_date: string; expected_return_date: string; actual_return_date: string | null; status: string }>;
         reservations: Array<{ start_date: string; end_date: string; status: string }>;
     };
 };
 
-type ToolStatus = 'Available' | 'Borrowed' | 'Maintenance';
+type ToolStatus = 'Available' | 'Borrowed' | 'Maintenance' | 'Partially Available' | 'Fully Reserved' | 'Unavailable';
 
 type ToolDetail = {
     id: number;
@@ -36,6 +42,7 @@ type ToolDetail = {
 
 type DetailPageProps = {
     tool: ToolDetail;
+    conditionHistory?: ToolConditionHistoryEntry[];
 };
 
 function statusClasses(status: ToolStatus): string {
@@ -47,16 +54,81 @@ function statusClasses(status: ToolStatus): string {
         return 'bg-amber-50 text-amber-700';
     }
 
+    if (status === 'Partially Available') {
+        return 'bg-blue-50 text-blue-700';
+    }
+
+    if (status === 'Fully Reserved') {
+        return 'bg-orange-50 text-orange-700';
+    }
+
+    if (status === 'Unavailable') {
+        return 'bg-gray-50 text-gray-700';
+    }
+
     return 'bg-rose-50 text-rose-700';
+}
+
+function mapAvailabilityStatusToUi(status?: AvailabilityApiResponse['data']['availability_status']): ToolStatus {
+    if (status === 'partially_available') return 'Partially Available';
+    if (status === 'fully_reserved') return 'Fully Reserved';
+    if (status === 'unavailable') return 'Unavailable';
+    return 'Available';
+}
+
+function getMinRangeAvailability(availability: AvailabilityApiResponse['data']): number {
+    const dayValues = Object.values(availability.available_for_dates ?? {});
+    if (dayValues.length > 0) {
+        return Math.min(...dayValues);
+    }
+
+    return Number(availability.available_count ?? 0);
+}
+
+function buildUnavailableRanges(availabilityByDate: Record<string, number>): Array<{ from: Date; to: Date }> {
+    const blockedDates = Object.entries(availabilityByDate)
+        .filter(([, available]) => Number(available) < 1)
+        .map(([date]) => new Date(`${date}T00:00:00`))
+        .sort((a, b) => a.getTime() - b.getTime());
+
+    if (blockedDates.length === 0) {
+        return [];
+    }
+
+    const ranges: Array<{ from: Date; to: Date }> = [];
+    let rangeStart = blockedDates[0];
+    let rangeEnd = blockedDates[0];
+
+    for (let i = 1; i < blockedDates.length; i++) {
+        const current = blockedDates[i];
+        const previous = blockedDates[i - 1];
+        const dayDiff = Math.round((current.getTime() - previous.getTime()) / (24 * 60 * 60 * 1000));
+
+        if (dayDiff === 1) {
+            rangeEnd = current;
+            continue;
+        }
+
+        ranges.push({ from: rangeStart, to: rangeEnd });
+        rangeStart = current;
+        rangeEnd = current;
+    }
+
+    ranges.push({ from: rangeStart, to: rangeEnd });
+
+    return ranges;
 }
 
 export default function DetailPage() {
     const page = usePage<DetailPageProps>();
     const { tool } = page.props;
+    const conditionHistory = page.props.conditionHistory ?? [];
     const { addToRecentlyViewed } = useFavoritesStore();
     const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [unavailableDates, setUnavailableDates] = useState<Array<{ from: Date; to: Date }>>([]);
+    const [computedStatus, setComputedStatus] = useState<ToolStatus>(tool.status);
+    const [availabilityMessage, setAvailabilityMessage] = useState<string | null>(null);
 
     useEffect(() => {
         if (page.url.includes('request=1')) {
@@ -89,33 +161,29 @@ export default function DetailPage() {
         )
             .then((res) => {
                 if (cancelled) return;
-                const ranges: Array<{ from: Date; to: Date }> = [];
-                for (const a of res.data.allocations ?? []) {
-                    if (a.status === 'BORROWED') {
-                        ranges.push({
-                            from: new Date(a.borrow_date),
-                            to: new Date(a.expected_return_date),
-                        });
-                    }
-                }
-                for (const r of res.data.reservations ?? []) {
-                    if (r.status !== 'cancelled' && r.status !== 'completed') {
-                        ranges.push({
-                            from: new Date(r.start_date),
-                            to: new Date(r.end_date),
-                        });
-                    }
-                }
+                const ranges = buildUnavailableRanges(res.data.available_for_dates ?? {});
                 setUnavailableDates(ranges);
+
+                if (tool.status === 'Maintenance') {
+                    setComputedStatus('Maintenance');
+                } else {
+                    const mappedStatus = mapAvailabilityStatusToUi(res.data.availability_status);
+                    setComputedStatus(mappedStatus);
+                }
+                setAvailabilityMessage(res.data.availability_message ?? null);
             })
             .catch(() => {
-                if (!cancelled) setUnavailableDates([]);
+                if (!cancelled) {
+                    setUnavailableDates([]);
+                    setComputedStatus(tool.status);
+                    setAvailabilityMessage(null);
+                }
             });
 
         return () => {
             cancelled = true;
         };
-    }, [tool.id]);
+    }, [tool.id, tool.status]);
 
     const handleRequestSubmit = async (data: { dateRange: DateRange; purpose: string }) => {
         if (!data.dateRange.from || !data.dateRange.to) {
@@ -126,12 +194,24 @@ export default function DetailPage() {
         setIsSubmitting(true);
 
         try {
+            const startDate = toLocalYmd(data.dateRange.from);
+            const endDate = toLocalYmd(data.dateRange.to);
+            const rangeAvailability = await apiRequest<AvailabilityApiResponse>(
+                `/api/tools/${tool.id}/availability?from=${startDate}&to=${endDate}`,
+            );
+            const minAvailability = getMinRangeAvailability(rangeAvailability.data);
+
+            if (minAvailability < 1) {
+                toast.error(rangeAvailability.data.availability_message ?? 'Tool is fully reserved for the selected dates.');
+                return;
+            }
+
             await apiRequest<{ message: string }>('/api/reservations', {
                 method: 'POST',
                 body: {
                     tool_id: tool.id,
-                    start_date: toLocalYmd(data.dateRange.from),
-                    end_date: toLocalYmd(data.dateRange.to),
+                    start_date: startDate,
+                    end_date: endDate,
                     recurring: false,
                 },
             });
@@ -188,8 +268,8 @@ export default function DetailPage() {
                                         <h2 className="mt-1 text-lg font-semibold text-gray-900">{tool.name}</h2>
                                         <p className="mt-1 text-xs text-gray-500">ID: {tool.toolId}</p>
                                     </div>
-                                    <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${statusClasses(tool.status)}`}>
-                                        {tool.status}
+                                    <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${statusClasses(computedStatus)}`}>
+                                        {computedStatus}
                                     </span>
                                 </div>
 
@@ -228,7 +308,13 @@ export default function DetailPage() {
                     <div className="space-y-4">
                         <AvailabilityCalendar unavailableDates={unavailableDates} />
 
-                        {tool.status === 'Available' && (
+                        {availabilityMessage && computedStatus !== 'Available' && (
+                            <div className="rounded-2xl bg-blue-50 px-4 py-3 text-center">
+                                <p className="text-xs font-medium text-blue-800">{availabilityMessage}</p>
+                            </div>
+                        )}
+
+                        {(computedStatus === 'Available' || computedStatus === 'Partially Available') && (
                             <button
                                 type="button"
                                 onClick={() => setIsRequestModalOpen(true)}
@@ -238,10 +324,12 @@ export default function DetailPage() {
                             </button>
                         )}
 
-                        {tool.status === 'Borrowed' && (
+                        {(computedStatus === 'Borrowed' || computedStatus === 'Fully Reserved' || computedStatus === 'Unavailable') && (
                             <>
                                 <div className="rounded-2xl bg-amber-50 px-4 py-3 text-center">
-                                    <p className="text-xs font-medium text-amber-800">This tool is currently borrowed</p>
+                                    <p className="text-xs font-medium text-amber-800">
+                                        {computedStatus === 'Borrowed' ? 'This tool is currently borrowed' : 'This tool is currently not free for all selected dates'}
+                                    </p>
                                     <p className="mt-1 text-[11px] text-amber-700">Check the calendar above for available dates</p>
                                 </div>
                                 <button
@@ -249,12 +337,12 @@ export default function DetailPage() {
                                     onClick={() => setIsRequestModalOpen(true)}
                                     className="w-full rounded-full bg-blue-600 py-3 text-sm font-semibold text-white shadow-lg hover:bg-blue-700"
                                 >
-                                    Request to Borrow
+                                    Request a Reservation
                                 </button>
                             </>
                         )}
 
-                        {tool.status === 'Maintenance' && (
+                        {computedStatus === 'Maintenance' && (
                             <div className="rounded-2xl bg-rose-50 px-4 py-3 text-center">
                                 <p className="text-xs font-medium text-rose-800">This tool is under maintenance</p>
                                 <p className="mt-1 text-[11px] text-rose-700">It will be available once maintenance is complete</p>
@@ -269,6 +357,8 @@ export default function DetailPage() {
                         </Link>
                     </div>
                 </div>
+
+                <ToolConditionHistory entries={conditionHistory} />
             </div>
 
             <RequestToolModal
