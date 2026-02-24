@@ -11,7 +11,7 @@ import { mapAllocationStatusToUi } from '@/lib/apiTypes';
 import { apiRequest } from '@/lib/http';
 
 type SharedProps = { auth?: { user?: { id: number } } };
-type FilterStatus = 'all' | 'Booked' | 'Active' | 'Pending' | 'Overdue' | 'Unclaimed' | 'Returned' | 'Cancelled';
+type FilterStatus = 'all' | 'Active' | 'Overdue' | 'Returned';
 
 function formatUiDate(dateString: string): string {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -87,31 +87,24 @@ export default function IndexPage() {
     }, [userId]);
 
     const filteredBorrowings = useMemo(() => {
+        const borrowingStates = borrowings.filter((b) => ['Active', 'Overdue', 'Returned'].includes(b.status));
         if (filterStatus === 'all') {
-            return borrowings;
+            return borrowingStates;
         }
 
-        return borrowings.filter((b) => b.status === filterStatus);
+        return borrowingStates.filter((b) => b.status === filterStatus);
     }, [borrowings, filterStatus]);
 
     const summary = useMemo(() => {
-        const booked = borrowings.filter((b) => b.status === 'Booked').length;
         const active = borrowings.filter((b) => b.status === 'Active').length;
-        const pending = borrowings.filter((b) => b.status === 'Pending').length;
         const overdue = borrowings.filter((b) => b.status === 'Overdue').length;
-        const unclaimed = borrowings.filter((b) => b.status === 'Unclaimed').length;
         const returned = borrowings.filter((b) => b.status === 'Returned').length;
-        const cancelled = borrowings.filter((b) => b.status === 'Cancelled').length;
 
         return {
-            booked,
             active,
-            pending,
             overdue,
-            unclaimed,
             returned,
-            cancelled,
-            total: borrowings.length,
+            total: active + overdue + returned,
         };
     }, [borrowings]);
 
@@ -119,13 +112,9 @@ export default function IndexPage() {
         () =>
             [
                 { key: 'all' as const, label: 'All', count: summary.total },
-                { key: 'Booked' as const, label: 'Booked', count: summary.booked },
                 { key: 'Active' as const, label: 'Active', count: summary.active, hideZero: true },
-                { key: 'Pending' as const, label: 'Pending Approval', count: summary.pending },
                 { key: 'Overdue' as const, label: 'Overdue', count: summary.overdue },
-                { key: 'Unclaimed' as const, label: 'Unclaimed', count: summary.unclaimed },
                 { key: 'Returned' as const, label: 'Returned', count: summary.returned },
-                { key: 'Cancelled' as const, label: 'Cancelled', count: summary.cancelled },
             ] satisfies Array<{ key: FilterStatus; label: string; count: number; hideZero?: boolean }>,
         [summary],
     );
@@ -215,7 +204,7 @@ export default function IndexPage() {
                     <p className="text-xs font-medium tracking-[0.18em] text-gray-500 uppercase">My borrowings</p>
                     <h1 className="text-2xl font-semibold text-gray-900">Track your borrowed equipment</h1>
                     <p className="mt-1 text-xs text-gray-500">
-                        Returns require admin approval. Booked pickups can be cancelled at least 3 days before pickup.
+                        Returns require admin approval.
                     </p>
                 </>
             }
