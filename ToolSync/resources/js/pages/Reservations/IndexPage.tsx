@@ -13,7 +13,7 @@ type Reservation = {
     toolId: string;
     startDate: string;
     endDate: string;
-    status: 'pending' | 'completed' | 'cancelled';
+    status: 'pending_approval' | 'booked' | 'unclaimed' | 'completed' | 'cancelled';
     recurring?: boolean;
     recurrencePattern?: string;
 };
@@ -22,11 +22,25 @@ type ReservationsApiResponse = { data: ReservationApiItem[] };
 
 function mapApiToReservation(r: ReservationApiItem): Reservation {
     const raw = r.status.toLowerCase();
-    // Normalize legacy statuses (upcoming/active) to pending
+    const startYmd = r.startDate.slice(0, 10);
+    const startDate = new Date(`${startYmd}T00:00:00`);
+    const today = new Date();
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+    // Canonical reservation statuses (single source of truth per item):
+    // - pending      => pending_approval
+    // - completed    => booked when start date is in the future, else completed
+    // - cancelled    => unclaimed when start date is in the past, else cancelled
     const status: Reservation['status'] =
-        raw === 'completed' ? 'completed' :
-        raw === 'cancelled' ? 'cancelled' :
-        'pending';
+        raw === 'completed'
+            ? startDate > todayStart
+                ? 'booked'
+                : 'completed'
+            : raw === 'cancelled'
+              ? startDate < todayStart
+                  ? 'unclaimed'
+                  : 'cancelled'
+              : 'pending_approval';
     return {
         id: r.id,
         toolName: r.toolName,
@@ -40,12 +54,22 @@ function mapApiToReservation(r: ReservationApiItem): Reservation {
 }
 
 const STATUS_STYLES: Record<string, string> = {
-    pending: 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+    pending_approval: 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+    booked: 'bg-sky-50 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400',
+    unclaimed: 'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
     completed: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
     cancelled: 'bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
 };
 
-type FilterStatus = 'all' | 'pending' | 'completed' | 'cancelled';
+type FilterStatus = 'all' | Reservation['status'];
+
+function statusLabel(status: Reservation['status']): string {
+    if (status === 'pending_approval') return 'Pending Approval';
+    if (status === 'booked') return 'Booked';
+    if (status === 'unclaimed') return 'Unclaimed';
+    if (status === 'completed') return 'Approved';
+    return status;
+}
 
 // Calendar helpers
 const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -109,6 +133,36 @@ export default function IndexPage() {
         return reservations.filter((r) => r.status === filter);
     }, [reservations, filter]);
 
+    const summary = useMemo(() => {
+        const pendingApproval = reservations.filter((r) => r.status === 'pending_approval').length;
+        const booked = reservations.filter((r) => r.status === 'booked').length;
+        const unclaimed = reservations.filter((r) => r.status === 'unclaimed').length;
+        const completed = reservations.filter((r) => r.status === 'completed').length;
+        const cancelled = reservations.filter((r) => r.status === 'cancelled').length;
+
+        return {
+            total: reservations.length,
+            booked,
+            pendingApproval,
+            unclaimed,
+            completed,
+            cancelled,
+        };
+    }, [reservations]);
+
+    const filterTabs = useMemo(
+        () =>
+            [
+                { key: 'all' as const, label: 'All', count: summary.total },
+                { key: 'booked' as const, label: 'Booked', count: summary.booked },
+                { key: 'pending_approval' as const, label: 'Pending Approval', count: summary.pendingApproval },
+                { key: 'unclaimed' as const, label: 'Unclaimed', count: summary.unclaimed },
+                { key: 'completed' as const, label: 'Approved', count: summary.completed },
+                { key: 'cancelled' as const, label: 'Cancelled', count: summary.cancelled },
+            ] satisfies Array<{ key: FilterStatus; label: string; count: number }>,
+        [summary],
+    );
+
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
     const days = getDaysInMonth(year, month);
@@ -118,7 +172,7 @@ export default function IndexPage() {
     const nextMonth = () => setCurrentMonth(new Date(year, month + 1, 1));
 
     const getReservationsForDay = (date: Date) => {
-        return reservations.filter((r) => r.status === 'pending' && isInRange(date, r.startDate, r.endDate));
+        return reservations.filter((r) => (r.status === 'pending_approval' || r.status === 'booked') && isInRange(date, r.startDate, r.endDate));
     };
 
     const handleConfirmCancel = async () => {
@@ -130,7 +184,7 @@ export default function IndexPage() {
                 body: { status: 'CANCELLED' },
             });
             setReservations((prev) =>
-                prev.map((r) => (r.id === reservationToCancel.id ? { ...r, status: 'cancelled' as const } : r)),
+                prev.map((r) => (r.id === reservationToCancel.id ? { ...r, status: 'cancelled' } : r)),
             );
             toast.success(`Borrow request for ${reservationToCancel.toolName} has been cancelled.`);
         } catch {
@@ -238,18 +292,25 @@ export default function IndexPage() {
                 <section>
                     <div className="mb-4 flex items-center justify-between">
                         <div className="inline-flex items-center gap-1 rounded-full bg-white px-1 py-1 text-[11px] shadow-sm dark:bg-gray-800">
-                            {(['all', 'pending', 'completed', 'cancelled'] as const).map((status) => (
+                            {filterTabs.map((tab) => (
                                 <button
-                                    key={status}
+                                    key={tab.key}
                                     type="button"
-                                    onClick={() => setFilter(status)}
-                                    className={`rounded-full px-3 py-1 capitalize ${
-                                        filter === status
+                                    onClick={() => setFilter(tab.key)}
+                                    className={`inline-flex items-center gap-1 rounded-full px-3 py-1 ${
+                                        filter === tab.key
                                             ? 'bg-gray-900 text-white dark:bg-blue-600'
                                             : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700'
                                     }`}
                                 >
-                                    {status === 'all' ? 'All' : status}
+                                    <span className="capitalize">{tab.label}</span>
+                                    <span
+                                        className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                                            filter === tab.key ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-700'
+                                        }`}
+                                    >
+                                        {tab.count}
+                                    </span>
                                 </button>
                             ))}
                         </div>
@@ -312,11 +373,11 @@ export default function IndexPage() {
                                     </div>
                                     <div className="flex items-center gap-3">
                                         <span
-                                            className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold capitalize ${STATUS_STYLES[reservation.status]}`}
+                                            className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${STATUS_STYLES[reservation.status]}`}
                                         >
-                                            {reservation.status}
+                                            {statusLabel(reservation.status)}
                                         </span>
-                                        {reservation.status === 'pending' && (
+                                        {reservation.status === 'pending_approval' && (
                                             <button
                                                 type="button"
                                                 onClick={() => setReservationToCancel(reservation)}
