@@ -24,6 +24,11 @@ class ReservationController extends Controller
 {
     private const MAX_BORROWINGS_DEFAULT = 3;
 
+    private function buildUnclaimedPickupPenaltyMessage(Carbon $penaltyUntil): string
+    {
+        return "You have an unclaimed pickup for this tool. You can request this tool again after {$penaltyUntil->toFormattedDateString()}.";
+    }
+
     private function resolveMaxBorrowings(int $categoryId): int
     {
         /** @var ToolCategory|null $category */
@@ -105,6 +110,8 @@ class ReservationController extends Controller
             ], 422);
         }
 
+        $availabilityService = app(ToolAvailabilityService::class);
+
         // Block only when active borrowings (scheduled + borrowed + pending return) are at the limit.
         // Pending reservation requests do not count toward the max.
         if ($user) {
@@ -117,11 +124,20 @@ class ReservationController extends Controller
                     'message' => "You have reached the maximum of {$maxBorrowings} active borrowings. Return a tool before requesting another.",
                 ], 422);
             }
+
+            if (! $user->isAdmin()) {
+                $penaltyUntil = $availabilityService->getActiveUnclaimedPickupPenaltyEnd($user->id, $toolIdForLimit);
+                if ($penaltyUntil !== null) {
+                    return response()->json([
+                        'message' => $this->buildUnclaimedPickupPenaltyMessage($penaltyUntil),
+                    ], 422);
+                }
+            }
         }
 
         // Wrap availability check + creation in a transaction with a row-level lock to prevent
         // two simultaneous requests both passing the availability check (race condition).
-        $reservation = DB::transaction(function () use ($validated, $user, $from, $to): Reservation {
+        $reservation = DB::transaction(function () use ($validated, $user, $from, $to, $availabilityService): Reservation {
             /** @var Tool|null $tool */
             $tool = Tool::query()->lockForUpdate()->find((int) $validated['tool_id']);
 
@@ -132,8 +148,6 @@ class ReservationController extends Controller
             if ($tool->status !== 'AVAILABLE' || $tool->quantity < 1) {
                 abort(response()->json(['message' => 'Tool is not available for reservation.'], 409));
             }
-
-            $availabilityService = app(ToolAvailabilityService::class);
 
             if ($user && $availabilityService->hasUserOverlappingReservation($tool->id, $user->id, $from, $to)) {
                 abort(response()->json([
@@ -240,6 +254,15 @@ class ReservationController extends Controller
                 $errors[] = "Tool #{$toolId} is not available for borrowing.";
 
                 continue;
+            }
+            if ($user && ! $user->isAdmin()) {
+                $penaltyUntil = $availabilityService->getActiveUnclaimedPickupPenaltyEnd($user->id, $toolId);
+                if ($penaltyUntil !== null) {
+                    $toolName = $tool?->name ?? "Tool #{$toolId}";
+                    $errors[] = "{$toolName}: ".$this->buildUnclaimedPickupPenaltyMessage($penaltyUntil);
+
+                    continue;
+                }
             }
             if ($user && $availabilityService->hasUserOverlappingReservation($toolId, $user->id, $from, $to)) {
                 $errors[] = "You already have a pending request for {$tool->name} in this date range.";
@@ -358,6 +381,16 @@ class ReservationController extends Controller
             return response()->json(['message' => 'Only admins can approve borrow requests.'], 403);
         }
 
+        $validated = $request->validate([
+            'ignore_unclaimed_pickup_penalty' => ['sometimes', 'boolean'],
+            'ignore_missed_pickup_penalty' => ['sometimes', 'boolean'],
+        ]);
+        $ignoreUnclaimedPickupPenalty = (bool) (
+            $validated['ignore_unclaimed_pickup_penalty']
+            ?? $validated['ignore_missed_pickup_penalty']
+            ?? false
+        );
+
         if ($reservation->status !== 'PENDING') {
             return response()->json([
                 'message' => 'This request is no longer pending approval.',
@@ -376,6 +409,13 @@ class ReservationController extends Controller
 
         // Check availability with date-based conflict detection
         $availabilityService = app(ToolAvailabilityService::class);
+        $penaltyUntil = $availabilityService->getActiveUnclaimedPickupPenaltyEnd($reservation->user_id, $tool->id);
+        if ($penaltyUntil !== null && ! $ignoreUnclaimedPickupPenalty) {
+            return response()->json([
+                'message' => "This request cannot be approved yet. ".$this->buildUnclaimedPickupPenaltyMessage($penaltyUntil),
+            ], 422);
+        }
+
         $availabilityCheck = $availabilityService->checkAvailability($tool->id, $borrowDate, $expectedReturn, $reservation->id);
         if (! $availabilityCheck['available']) {
             return response()->json([

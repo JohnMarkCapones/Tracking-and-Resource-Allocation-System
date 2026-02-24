@@ -21,6 +21,9 @@ class ToolAllocation extends Model
         'actual_return_date',
         'cancelled_at',
         'cancellation_reason',
+        'unclaimed_at',
+        'missed_pickup_at',
+        'penalty_until',
         'note',
         'reported_condition',
         'return_proof_image_path',
@@ -36,6 +39,9 @@ class ToolAllocation extends Model
             'claimed_at' => 'datetime',
             'actual_return_date' => 'datetime',
             'cancelled_at' => 'datetime',
+            'unclaimed_at' => 'datetime',
+            'missed_pickup_at' => 'datetime',
+            'penalty_until' => 'datetime',
             'admin_reviewed_at' => 'datetime',
         ];
     }

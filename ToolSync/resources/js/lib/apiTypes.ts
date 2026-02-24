@@ -105,7 +105,7 @@ export function mapAvailabilityStatusToUi(availabilityStatus: AvailabilityStatus
     }
 }
 
-export type AllocationStatusApi = 'SCHEDULED' | 'BORROWED' | 'PENDING_RETURN' | 'RETURNED' | 'CANCELLED';
+export type AllocationStatusApi = 'SCHEDULED' | 'BORROWED' | 'PENDING_RETURN' | 'RETURNED' | 'CANCELLED' | 'UNCLAIMED';
 
 export type AllocationDto = {
     id: number;
@@ -118,6 +118,9 @@ export type AllocationDto = {
     actual_return_date: string | null;
     cancelled_at?: string | null;
     cancellation_reason?: string | null;
+    unclaimed_at?: string | null;
+    missed_pickup_at?: string | null;
+    penalty_until?: string | null;
     status: AllocationStatusApi;
     note: string | null;
     condition: string | null;
@@ -139,7 +142,7 @@ export type AllocationDto = {
     };
 };
 
-export type BorrowingStatusUi = 'Upcoming' | 'Active' | 'Pending' | 'Returned' | 'Overdue' | 'Cancelled';
+export type BorrowingStatusUi = 'Upcoming' | 'Active' | 'Pending' | 'Returned' | 'Overdue' | 'Unclaimed' | 'Cancelled';
 
 export type BorrowingCardTool = {
     id: number;
@@ -160,10 +163,35 @@ export type BorrowingCardData = {
 
 export function mapAllocationStatusToUi(allocation: AllocationDto, now: Date = new Date()): BorrowingStatusUi {
     if (allocation.status === 'SCHEDULED') {
+        // Treat pickup as a date-only value in local time. If pickup day has passed
+        // and allocation is still scheduled (not claimed), surface it as unclaimed.
+        const pickupYmd = allocation.borrow_date.slice(0, 10);
+        const pickupDayStart = new Date(`${pickupYmd}T00:00:00`);
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+        if (pickupDayStart < todayStart) {
+            return 'Unclaimed';
+        }
+
         return 'Upcoming';
     }
 
+    if (allocation.status === 'UNCLAIMED') {
+        return 'Unclaimed';
+    }
+
     if (allocation.status === 'CANCELLED') {
+        const cancellationReason = (allocation.cancellation_reason ?? '').toLowerCase();
+        const wasAutoCancelledForUnclaimed =
+            allocation.unclaimed_at != null
+            || allocation.missed_pickup_at != null
+            || cancellationReason.includes('unclaimed pickup')
+            || cancellationReason.includes('missed pickup');
+
+        if (wasAutoCancelledForUnclaimed) {
+            return 'Unclaimed';
+        }
+
         return 'Cancelled';
     }
 

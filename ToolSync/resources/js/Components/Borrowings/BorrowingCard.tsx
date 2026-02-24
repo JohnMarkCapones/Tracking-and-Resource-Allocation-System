@@ -1,7 +1,7 @@
 import { Link } from '@inertiajs/react';
 import { differenceInDays, parseISO } from 'date-fns';
 
-export type BorrowingStatus = 'Upcoming' | 'Active' | 'Pending' | 'Returned' | 'Overdue' | 'Cancelled';
+export type BorrowingStatus = 'Upcoming' | 'Active' | 'Pending' | 'Returned' | 'Overdue' | 'Unclaimed' | 'Cancelled';
 
 export type Borrowing = {
     id: number;
@@ -17,6 +17,7 @@ export type Borrowing = {
     dueDate: string;
     returnDate?: string;
     status: BorrowingStatus;
+    canRequestReturn?: boolean;
 };
 
 type BorrowingCardProps = {
@@ -48,13 +49,19 @@ function statusClasses(status: BorrowingStatus): string {
         return 'bg-gray-100 text-gray-700';
     }
 
+    if (status === 'Unclaimed') {
+        return 'bg-orange-50 text-orange-700';
+    }
+
     return 'bg-rose-50 text-rose-700';
 }
 
 export function BorrowingCard({ borrowing, onReturn, onCancel, returnRequested = false }: BorrowingCardProps) {
     const isActive = borrowing.status === 'Active';
     const isOverdue = borrowing.status === 'Overdue';
+    const isUnclaimed = borrowing.status === 'Unclaimed';
     const isUpcoming = borrowing.status === 'Upcoming';
+    const canRequestReturn = borrowing.canRequestReturn ?? (isActive || isOverdue);
 
     // Treat dueDate as date-only (YYYY-MM-DD) to avoid timezone shifting (e.g. 2026-02-11Z showing as Feb 10 locally).
     const dueYmd = borrowing.dueDate.slice(0, 10);
@@ -87,11 +94,13 @@ export function BorrowingCard({ borrowing, onReturn, onCancel, returnRequested =
                                 ? 'Borrowed'
                                 : borrowing.status === 'Upcoming'
                                   ? 'Upcoming Pickup'
+                                  : borrowing.status === 'Unclaimed'
+                                    ? 'Unclaimed Pickup'
                                   : borrowing.status}
                         </span>
                     </div>
                     <p className="mt-1 text-[11px] text-gray-500">
-                        {borrowing.tool.category} · {borrowing.tool.toolId}
+                        {borrowing.tool.category} - {borrowing.tool.toolId}
                     </p>
                 </div>
 
@@ -108,7 +117,7 @@ export function BorrowingCard({ borrowing, onReturn, onCancel, returnRequested =
                     >
                         Cancel reservation
                     </button>
-                ) : (isActive || isOverdue) ? (
+                ) : canRequestReturn ? (
                     <button
                         type="button"
                         onClick={() => onReturn(borrowing)}
@@ -129,7 +138,7 @@ export function BorrowingCard({ borrowing, onReturn, onCancel, returnRequested =
                     <p className="text-gray-500">
                         {borrowing.status === 'Returned'
                             ? 'Returned'
-                            : borrowing.status === 'Cancelled'
+                            : borrowing.status === 'Cancelled' || borrowing.status === 'Unclaimed'
                               ? 'Cancelled'
                               : 'Due'}
                     </p>
@@ -153,6 +162,11 @@ export function BorrowingCard({ borrowing, onReturn, onCancel, returnRequested =
                 {isOverdue && (
                     <div className="ml-auto">
                         <span className="rounded-full bg-rose-100 px-2 py-1 text-[10px] font-semibold text-rose-700">Overdue</span>
+                    </div>
+                )}
+                {isUnclaimed && (
+                    <div className="ml-auto">
+                        <span className="rounded-full bg-orange-100 px-2 py-1 text-[10px] font-semibold text-orange-700">Unclaimed</span>
                     </div>
                 )}
             </div>

@@ -12,3 +12,8 @@ Schedule::command('allocations:check-overdue')
     ->dailyAt('09:00')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/overdue-check.log'));
+
+Schedule::command('allocations:cancel-unclaimed-pickups')
+    ->dailyAt('00:15')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/unclaimed-pickup-cancel.log'));
