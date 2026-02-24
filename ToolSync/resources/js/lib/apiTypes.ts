@@ -229,6 +229,8 @@ export type DashboardPendingApproval = {
 export type DashboardApiResponse = {
     data: {
         scope: { user_id: number | null };
+        /** Max concurrent borrow/request slots (from system settings). Used by catalog for "Borrowing limit reached". */
+        max_borrowings?: number;
         counts: DashboardCounts;
         total_users?: number;
         pending_approvals_count?: number;

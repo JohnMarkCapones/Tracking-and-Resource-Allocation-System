@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\MaintenanceSchedule;
 use App\Models\Reservation;
+use App\Models\SystemSetting;
 use App\Models\Tool;
 use App\Models\ToolAllocation;
 use App\Models\User;
@@ -142,16 +143,34 @@ class DashboardController extends Controller
         }
         $returnedTodayCount = (int) $returnedTodayQuery->count();
 
-        $recentAllocationsQuery = ToolAllocation::query()
+        // Build recent_activity so active borrowings (SCHEDULED/BORROWED/PENDING_RETURN) always appear
+        // first; then fill remaining slots with most recent allocations (any status). This way the
+        // "Overview of Borrowing History" table shows the same 1 borrowed item as the Borrowed card.
+        $activeStatuses = ['SCHEDULED', 'BORROWED', 'PENDING_RETURN'];
+        $activeQuery = ToolAllocation::query()
+            ->with(['tool:id,name', 'user:id,name,email'])
+            ->whereIn('status', $activeStatuses)
+            ->orderByDesc('borrow_date');
+        if ($userId) {
+            $activeQuery->where('user_id', $userId);
+        }
+        $activeAllocations = $activeQuery->get();
+
+        $recentQuery = ToolAllocation::query()
             ->with(['tool:id,name', 'user:id,name,email'])
             ->orderByDesc('borrow_date');
         if ($userId) {
-            $recentAllocationsQuery->where('user_id', $userId);
+            $recentQuery->where('user_id', $userId);
         }
+        if ($activeAllocations->isNotEmpty()) {
+            $recentQuery->whereNotIn('id', $activeAllocations->pluck('id'));
+        }
+        $recentOthers = $recentQuery->limit($recentLimit)->get();
 
-        $recentAllocations = $recentAllocationsQuery
-            ->limit($recentLimit)
-            ->get()
+        $recentAllocations = $activeAllocations
+            ->concat($recentOthers)
+            ->take($recentLimit)
+            ->values()
             ->map(function (ToolAllocation $a): array {
                 // Read raw DB value for expected_return_date (e.g. "2026-02-11 00:00:00")
                 // and compare against end-of-day so a tool due on Feb 11 is only overdue on Feb 12.
@@ -231,11 +250,18 @@ class DashboardController extends Controller
                 ->count();
         }
 
+        $maxBorrowings = 3;
+        if (Schema::hasTable('system_settings')) {
+            $maxBorrowings = (int) (SystemSetting::query()->where('key', 'max_borrowings')->value('value') ?? 3);
+            $maxBorrowings = max(1, min($maxBorrowings, 20));
+        }
+
         return response()->json([
             'data' => [
                 'scope' => [
                     'user_id' => $userId,
                 ],
+                'max_borrowings' => $maxBorrowings,
                 'counts' => [
                     'tools_total_quantity' => $totalToolsQty,
                     'tools_available_quantity' => $toolsAvailableQty,

@@ -155,7 +155,7 @@ export function ToolCard({ tool, onRequestBorrow, disableBorrowRequest = false }
                     }`}
                     onClick={handleButtonClick}
                     disabled={disableBorrowRequest}
-                    title={disableBorrowRequest ? 'Maximum 3 active borrow/request slots reached.' : undefined}
+                    title={disableBorrowRequest ? 'Maximum active borrowings reached. Return a tool before borrowing another.' : undefined}
                 >
                     {disableBorrowRequest ? 'Borrowing limit reached' : 'Request to Borrow'}
                 </button>
@@ -164,10 +164,14 @@ export function ToolCard({ tool, onRequestBorrow, disableBorrowRequest = false }
             {(tool.status === 'Borrowed' || tool.status === 'Fully Reserved' || tool.status === 'Unavailable') && (
                 <button
                     type="button"
-                    className="mt-3 w-full rounded-full bg-blue-600 py-1.5 text-[11px] font-semibold text-white hover:bg-blue-700"
+                    className={`mt-3 w-full rounded-full py-1.5 text-[11px] font-semibold text-white ${
+                        disableBorrowRequest ? 'cursor-not-allowed bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'
+                    }`}
                     onClick={handleButtonClick}
+                    disabled={disableBorrowRequest}
+                    title={disableBorrowRequest ? 'Maximum active borrowings reached. Return a tool before borrowing another.' : undefined}
                 >
-                    Request a Reservation
+                    {disableBorrowRequest ? 'Borrowing limit reached' : 'Request a Reservation'}
                 </button>
             )}
         </div>

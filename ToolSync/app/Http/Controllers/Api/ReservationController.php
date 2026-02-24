@@ -35,19 +35,23 @@ class ReservationController extends Controller
         return (int) (SystemSetting::query()->where('key', 'max_borrowings')->value('value') ?? self::MAX_BORROWINGS_DEFAULT);
     }
 
-    private function activeBorrowSlotsUsed(int $userId): int
+    /**
+     * Count only active allocations (scheduled, borrowed, pending return).
+     * Pending reservation requests are not counted; the limit applies to actual borrowings.
+     */
+    private function activeAllocationCount(int $userId): int
     {
-        $activeBorrowedCount = ToolAllocation::query()
+        return (int) ToolAllocation::query()
             ->where('user_id', $userId)
             ->whereIn('status', ['SCHEDULED', 'BORROWED', 'PENDING_RETURN'])
             ->count();
+    }
 
-        $pendingRequestCount = Reservation::query()
-            ->where('user_id', $userId)
-            ->where('status', 'PENDING')
-            ->count();
-
-        return (int) $activeBorrowedCount + (int) $pendingRequestCount;
+    /** @deprecated Use activeAllocationCount for limit checks; pending requests no longer count. */
+    private function activeBorrowSlotsUsed(int $userId): int
+    {
+        return $this->activeAllocationCount($userId)
+            + (int) Reservation::query()->where('user_id', $userId)->where('status', 'PENDING')->count();
     }
 
     public function index(Request $request): JsonResponse
@@ -101,15 +105,16 @@ class ReservationController extends Controller
             ], 422);
         }
 
-        // Pre-check max borrowings before entering the transaction (avoids holding lock unnecessarily).
+        // Block only when active borrowings (scheduled + borrowed + pending return) are at the limit.
+        // Pending reservation requests do not count toward the max.
         if ($user) {
             $toolIdForLimit = (int) $validated['tool_id'];
             $categoryId = Tool::query()->where('id', $toolIdForLimit)->value('category_id');
             $maxBorrowings = $categoryId !== null ? $this->resolveMaxBorrowings((int) $categoryId) : self::MAX_BORROWINGS_DEFAULT;
-            $activeSlotsUsed = $this->activeBorrowSlotsUsed($user->id);
-            if ($activeSlotsUsed >= $maxBorrowings) {
+            $activeCount = $this->activeAllocationCount($user->id);
+            if ($activeCount >= $maxBorrowings) {
                 return response()->json([
-                    'message' => "You have reached the maximum concurrent borrow/request limit ({$maxBorrowings}). Return a tool or wait for pending requests to be resolved.",
+                    'message' => "You have reached the maximum of {$maxBorrowings} active borrowings. Return a tool before requesting another.",
                 ], 422);
             }
         }
@@ -219,10 +224,10 @@ class ReservationController extends Controller
         }
 
         $maxBorrowings = (int) (SystemSetting::query()->where('key', 'max_borrowings')->value('value') ?? self::MAX_BORROWINGS_DEFAULT);
-        $activeSlotsUsed = $user ? $this->activeBorrowSlotsUsed($user->id) : 0;
-        if ($activeSlotsUsed + count($toolIds) > $maxBorrowings) {
+        $activeCount = $user ? $this->activeAllocationCount($user->id) : 0;
+        if ($activeCount >= $maxBorrowings) {
             return response()->json([
-                'message' => "You can only have up to {$maxBorrowings} concurrent borrow/request slots. You have {$activeSlotsUsed} in use. Requesting ".count($toolIds).' more would exceed the limit.',
+                'message' => "You have reached the maximum of {$maxBorrowings} active borrowings. Return a tool before requesting more.",
             ], 422);
         }
 

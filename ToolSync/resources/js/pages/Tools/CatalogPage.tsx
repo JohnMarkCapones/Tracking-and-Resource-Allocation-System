@@ -1,4 +1,4 @@
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { format } from 'date-fns';
 import { useEffect, useRef, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
@@ -13,7 +13,7 @@ import type { DashboardApiResponse, ReservationApiItem, ToolDto, ToolCategoryDto
 import { mapToolStatusToUi, mapAvailabilityStatusToUi } from '@/lib/apiTypes';
 import { apiRequest } from '@/lib/http';
 
-const MAX_BORROWINGS = 3;
+const DEFAULT_MAX_BORROWINGS = 3;
 const PAGE_SIZE = 18;
 
 type ToolsMeta = {
@@ -74,8 +74,17 @@ function mapToolToCardData(dto: ToolDto): ToolCardData {
     };
 }
 
+type CatalogPageProps = { auth?: { user?: { id: number } } };
+
 export default function CatalogPage() {
+    const inertiaPage = usePage<CatalogPageProps>();
+    const userId = inertiaPage.props.auth?.user?.id;
     const toLocalYmd = (date: Date): string => format(date, 'yyyy-MM-dd');
+
+    // Dashboard counts must be scoped to the current user so the borrow limit reflects
+    // their own slots (not system-wide). Admins otherwise see "Borrowing limit reached"
+    // because the dashboard returns all users' counts when user_id is not passed.
+    const dashboardUrl = userId != null ? `/api/dashboard?user_id=${userId}` : '/api/dashboard';
 
     const getMinAvailabilityForRange = (availability: ToolRangeAvailabilityResponse['data']): number => {
         const perDayAvailability = Object.values(availability.available_for_dates ?? {});
@@ -97,6 +106,7 @@ export default function CatalogPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [activeBorrowingsCount, setActiveBorrowingsCount] = useState(0);
     const [pendingBorrowRequestsCount, setPendingBorrowRequestsCount] = useState(0);
+    const [maxBorrowings, setMaxBorrowings] = useState(DEFAULT_MAX_BORROWINGS);
     const [search, setSearch] = useState('');
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
     const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
@@ -109,7 +119,9 @@ export default function CatalogPage() {
     const [randomSeed, setRandomSeed] = useState<string | null>(null);
     const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
-    const borrowSlotsUsed = activeBorrowingsCount + pendingBorrowRequestsCount;
+    // Limit is based only on active borrowings (scheduled + borrowed + pending return).
+    // Pending reservation requests (not yet approved) do not count toward the max.
+    const borrowSlotsUsed = activeBorrowingsCount;
 
     const fetchTools = async (options?: {
         page?: number;
@@ -210,7 +222,7 @@ export default function CatalogPage() {
                 const [toolsRes, categoriesRes, dashboardRes, reservationsRes] = await Promise.all([
                     apiRequest<ToolsIndexResponse>(`/api/tools?paginated=1&page=1&per_page=${PAGE_SIZE}&random_seed=${seed}`),
                     apiRequest<{ data: ToolCategoryDto[] }>('/api/tool-categories'),
-                    apiRequest<DashboardApiResponse>('/api/dashboard'),
+                    apiRequest<DashboardApiResponse>(dashboardUrl),
                     apiRequest<{ data: ReservationApiItem[] }>('/api/reservations'),
                 ]);
                 if (cancelled) return;
@@ -233,6 +245,9 @@ export default function CatalogPage() {
                 setCategoryDtos(categoryData);
                 setCategories(categoryData.map((c) => c.name));
 
+                setMaxBorrowings(
+                    dashboardRes.data.max_borrowings ?? DEFAULT_MAX_BORROWINGS,
+                );
                 setActiveBorrowingsCount(
                     (dashboardRes.data.counts.borrowed_active_count ?? 0) +
                     (dashboardRes.data.counts.scheduled_active_count ?? 0),
@@ -251,7 +266,7 @@ export default function CatalogPage() {
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [dashboardUrl]);
 
     const handleClearAll = () => {
         setSelectedCategories([]);
@@ -315,8 +330,8 @@ export default function CatalogPage() {
     }, [initialLoaded, loading, isLoadingMore, hasMore, page]);
 
     const handleRequestBorrow = (tool: ToolCardData) => {
-        if (tool.status === 'Available' && borrowSlotsUsed >= MAX_BORROWINGS) {
-            toast.error(`You can only have up to ${MAX_BORROWINGS} active borrow/request slots at a time.`);
+        if (tool.status === 'Available' && borrowSlotsUsed >= maxBorrowings) {
+            toast.error(`You have reached the maximum of ${maxBorrowings} active borrowings. Return a tool before borrowing another.`);
             return;
         }
         setSelectedTool(tool);
@@ -337,8 +352,8 @@ export default function CatalogPage() {
 
     const handleBatchRequestClick = () => {
         if (selectedTools.length === 0) return;
-        if (borrowSlotsUsed + selectedTools.length > MAX_BORROWINGS) {
-            toast.error(`You can only have up to ${MAX_BORROWINGS} active borrow/request slots. You have ${borrowSlotsUsed} in use.`);
+        if (borrowSlotsUsed + selectedTools.length > maxBorrowings) {
+            toast.error(`You can have at most ${maxBorrowings} active borrowings. You have ${borrowSlotsUsed}. Return a tool before requesting more.`);
             return;
         }
         setSelectedTool(null);
@@ -421,7 +436,7 @@ export default function CatalogPage() {
 
             const [toolsRes, dashboardRes, reservationsRes] = await Promise.all([
                 apiRequest<ToolsIndexResponse>(`/api/tools?paginated=1&page=${page}&per_page=${PAGE_SIZE}${randomSeed ? `&random_seed=${randomSeed}` : ''}`),
-                apiRequest<DashboardApiResponse>('/api/dashboard'),
+                apiRequest<DashboardApiResponse>(dashboardUrl),
                 apiRequest<{ data: ReservationApiItem[] }>('/api/reservations'),
             ]);
             const meta = toolsRes.meta;
@@ -433,6 +448,7 @@ export default function CatalogPage() {
             } else {
                 setTotalTools(toolsRes.data?.length ?? 0);
             }
+            setMaxBorrowings(dashboardRes.data.max_borrowings ?? DEFAULT_MAX_BORROWINGS);
             setActiveBorrowingsCount(
                 (dashboardRes.data.counts.borrowed_active_count ?? 0) +
                 (dashboardRes.data.counts.scheduled_active_count ?? 0),
@@ -552,7 +568,7 @@ export default function CatalogPage() {
                                         key={tool.id}
                                         tool={tool}
                                         onRequestBorrow={handleRequestBorrow}
-                                        disableBorrowRequest={tool.status === 'Available' && borrowSlotsUsed >= MAX_BORROWINGS}
+                                        disableBorrowRequest={borrowSlotsUsed >= maxBorrowings}
                                     />
                                 ))}
                                 {isLoadingMore &&

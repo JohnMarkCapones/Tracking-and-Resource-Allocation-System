@@ -9,25 +9,38 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('tool_allocations', function (Blueprint $table): void {
-            // When a borrower actually picks up / claims the tool
-            $table->dateTime('claimed_at')->nullable()->after('expected_return_date');
+            // When a borrower actually picks up / claims the tool (skip if already added by later migration)
+            if (! Schema::hasColumn('tool_allocations', 'claimed_at')) {
+                $table->dateTime('claimed_at')->nullable()->after('expected_return_date');
+            }
 
-            // Who claimed the tool (may differ from the original requester)
-            $table->foreignId('claimed_by')
-                ->nullable()
-                ->after('claimed_at')
-                ->constrained('users')
-                ->cascadeOnUpdate()
-                ->nullOnDelete();
+            if (! Schema::hasColumn('tool_allocations', 'claimed_by')) {
+                $table->foreignId('claimed_by')
+                    ->nullable()
+                    ->after('claimed_at')
+                    ->constrained('users')
+                    ->cascadeOnUpdate()
+                    ->nullOnDelete();
+            }
 
             // Borrower-reported condition and optional proof image when returning
-            $table->string('reported_condition', 50)->nullable()->after('note');
-            $table->string('return_proof_image_path', 255)->nullable()->after('reported_condition');
+            if (! Schema::hasColumn('tool_allocations', 'reported_condition')) {
+                $table->string('reported_condition', 50)->nullable()->after('note');
+            }
+            if (! Schema::hasColumn('tool_allocations', 'return_proof_image_path')) {
+                $table->string('return_proof_image_path', 255)->nullable()->after('reported_condition');
+            }
 
             // Admin review of the returned condition
-            $table->string('admin_condition', 50)->nullable()->after('return_proof_image_path');
-            $table->text('admin_review_note')->nullable()->after('admin_condition');
-            $table->dateTime('admin_reviewed_at')->nullable()->after('admin_review_note');
+            if (! Schema::hasColumn('tool_allocations', 'admin_condition')) {
+                $table->string('admin_condition', 50)->nullable()->after('return_proof_image_path');
+            }
+            if (! Schema::hasColumn('tool_allocations', 'admin_review_note')) {
+                $table->text('admin_review_note')->nullable()->after('admin_condition');
+            }
+            if (! Schema::hasColumn('tool_allocations', 'admin_reviewed_at')) {
+                $table->dateTime('admin_reviewed_at')->nullable()->after('admin_review_note');
+            }
         });
     }
 
