@@ -16,6 +16,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * @group Tools
@@ -406,6 +407,8 @@ class ToolController extends Controller
     {
         $oldStatus = $tool->status;
         $validated = $request->validated();
+        $removeImage = (bool) ($validated['remove_image'] ?? false);
+        unset($validated['remove_image']);
 
         if (! Schema::hasColumn('tools', 'code')) {
             unset($validated['code']);
@@ -419,7 +422,15 @@ class ToolController extends Controller
         }
 
         if ($request->hasFile('image')) {
+            if (is_string($tool->image_path) && trim($tool->image_path) !== '') {
+                Storage::disk('public')->delete($tool->image_path);
+            }
             $validated['image_path'] = $request->file('image')->store('images/tools', 'public');
+        } elseif ($removeImage) {
+            if (is_string($tool->image_path) && trim($tool->image_path) !== '') {
+                Storage::disk('public')->delete($tool->image_path);
+            }
+            $validated['image_path'] = null;
         }
 
         $tool->update($validated);

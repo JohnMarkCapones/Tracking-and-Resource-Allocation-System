@@ -1,6 +1,7 @@
 import { Head } from '@inertiajs/react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EmptyState } from '@/Components/EmptyState';
+import { ImageGallery, type ImageGalleryEntry } from '@/Components/ImageGallery/ImageGallery';
 import Modal from '@/Components/Modal';
 import { toast } from '@/Components/Toast';
 import AppLayout from '@/Layouts/AppLayout';
@@ -13,8 +14,10 @@ import { apiRequest } from '@/lib/http';
 
 type Tab = 'borrow' | 'return';
 type ReturnCondition = 'Excellent' | 'Good' | 'Fair' | 'Poor' | 'Damaged' | 'Functional';
+type ReviewAdminImage = { id: string; file: File; previewUrl: string };
 
 const RETURN_CONDITIONS: ReturnCondition[] = ['Excellent', 'Good', 'Fair', 'Poor', 'Damaged', 'Functional'];
+const MAX_ADMIN_REVIEW_IMAGES = 5;
 
 function formatDate(dateStr: string | null): string {
     if (!dateStr) return '-';
@@ -67,9 +70,11 @@ export default function IndexPage() {
     const [reviewRequest, setReviewRequest] = useState<ApprovalReturnRequest | null>(null);
     const [reviewCondition, setReviewCondition] = useState<ReturnCondition | null>(null);
     const [reviewNote, setReviewNote] = useState('');
-    const [reviewAdminImages, setReviewAdminImages] = useState<File[]>([]);
-    const [reviewAdminImagePreviews, setReviewAdminImagePreviews] = useState<string[]>([]);
+    const [reviewAdminImages, setReviewAdminImages] = useState<ReviewAdminImage[]>([]);
+    const [reviewExistingAdminImages, setReviewExistingAdminImages] = useState<string[]>([]);
+    const [reviewRemovedAdminImageUrls, setReviewRemovedAdminImageUrls] = useState<string[]>([]);
     const [reviewError, setReviewError] = useState<string | null>(null);
+    const reviewAdminImagesRef = useRef<ReviewAdminImage[]>([]);
 
     const loadApprovals = useCallback(async () => {
         setLoading(true);
@@ -93,10 +98,21 @@ export default function IndexPage() {
     }, [loadApprovals]);
 
     useEffect(() => {
+        reviewAdminImagesRef.current = reviewAdminImages;
+    }, [reviewAdminImages]);
+
+    useEffect(() => {
         return () => {
-            reviewAdminImagePreviews.forEach((url) => URL.revokeObjectURL(url));
+            reviewAdminImagesRef.current.forEach((image) => URL.revokeObjectURL(image.previewUrl));
         };
-    }, [reviewAdminImagePreviews]);
+    }, []);
+
+    const clearReviewAdminUploads = useCallback(() => {
+        setReviewAdminImages((prev) => {
+            prev.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+            return [];
+        });
+    }, []);
 
     const handleApproveBorrow = useCallback(
         async (id: number) => {
@@ -135,33 +151,65 @@ export default function IndexPage() {
         setReviewRequest(request);
         setReviewCondition(isReturnCondition(request.admin_condition) ? request.admin_condition : null);
         setReviewNote(request.admin_review_note ?? '');
-        setReviewAdminImages([]);
-        setReviewAdminImagePreviews((prev) => {
-            prev.forEach((url) => URL.revokeObjectURL(url));
-            return [];
-        });
+        clearReviewAdminUploads();
+        setReviewExistingAdminImages(request.admin_image_urls ?? []);
+        setReviewRemovedAdminImageUrls([]);
         setReviewError(null);
-    }, []);
+    }, [clearReviewAdminUploads]);
 
     const handleCloseReturnReview = useCallback(() => {
         setReviewRequest(null);
         setReviewCondition(null);
         setReviewNote('');
-        setReviewAdminImages([]);
-        setReviewAdminImagePreviews((prev) => {
-            prev.forEach((url) => URL.revokeObjectURL(url));
-            return [];
+        clearReviewAdminUploads();
+        setReviewExistingAdminImages([]);
+        setReviewRemovedAdminImageUrls([]);
+        setReviewError(null);
+    }, [clearReviewAdminUploads]);
+
+    const handleAdminImagesChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(event.target.files ?? []).filter((file) => file.type.startsWith('image/'));
+        const slotsLeft = Math.max(0, MAX_ADMIN_REVIEW_IMAGES - reviewExistingAdminImages.length - reviewAdminImages.length);
+        const accepted = files.slice(0, slotsLeft).map((file) => ({
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${file.name}`,
+            file,
+            previewUrl: URL.createObjectURL(file),
+        }));
+
+        if (accepted.length > 0) {
+            setReviewAdminImages((prev) => [...prev, ...accepted]);
+        }
+
+        if (files.length > slotsLeft) {
+            setReviewError(`You can upload up to ${MAX_ADMIN_REVIEW_IMAGES} photos total.`);
+        } else {
+            setReviewError(null);
+        }
+
+        event.target.value = '';
+    }, [reviewAdminImages.length, reviewExistingAdminImages.length]);
+
+    const handleRemoveNewAdminImage = useCallback((imageId: string) => {
+        setReviewAdminImages((prev) => {
+            const target = prev.find((image) => image.id === imageId);
+            if (target) {
+                URL.revokeObjectURL(target.previewUrl);
+            }
+
+            return prev.filter((image) => image.id !== imageId);
         });
         setReviewError(null);
     }, []);
 
-    const handleAdminImagesChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(event.target.files ?? []);
-        setReviewAdminImages(files);
-        setReviewAdminImagePreviews((prev) => {
-            prev.forEach((url) => URL.revokeObjectURL(url));
-            return files.map((file) => URL.createObjectURL(file));
-        });
+    const handleRemoveExistingAdminImage = useCallback((imageUrl: string) => {
+        setReviewExistingAdminImages((prev) => prev.filter((url) => url !== imageUrl));
+        setReviewRemovedAdminImageUrls((prev) => (prev.includes(imageUrl) ? prev : [...prev, imageUrl]));
+        setReviewError(null);
+    }, []);
+
+    const handleRestoreRemovedAdminImage = useCallback((imageUrl: string) => {
+        setReviewRemovedAdminImageUrls((prev) => prev.filter((url) => url !== imageUrl));
+        setReviewExistingAdminImages((prev) => (prev.includes(imageUrl) ? prev : [...prev, imageUrl]));
         setReviewError(null);
     }, []);
 
@@ -170,7 +218,7 @@ export default function IndexPage() {
 
         const noteValue = reviewNote.trim();
         const isAdminPhotoRequired = reviewCondition === 'Poor' || reviewCondition === 'Damaged';
-        const existingAdminImageCount = reviewRequest.admin_image_urls.length;
+        const existingAdminImageCount = reviewExistingAdminImages.length;
 
         if (!reviewCondition) {
             setReviewError('Please select an admin condition grade before approval.');
@@ -196,8 +244,11 @@ export default function IndexPage() {
             payload.append('status', 'RETURNED');
             payload.append('admin_condition', reviewCondition);
             payload.append('admin_review_note', noteValue);
-            for (const file of reviewAdminImages) {
-                payload.append('admin_proof_images[]', file);
+            for (const image of reviewAdminImages) {
+                payload.append('admin_proof_images[]', image.file);
+            }
+            for (const imageUrl of reviewRemovedAdminImageUrls) {
+                payload.append('remove_admin_image_urls[]', imageUrl);
             }
 
             await apiRequest(`/api/tool-allocations/${reviewRequest.id}`, {
@@ -215,7 +266,16 @@ export default function IndexPage() {
         } finally {
             setActionId(null);
         }
-    }, [reviewRequest, reviewCondition, reviewNote, reviewAdminImages, loadApprovals, handleCloseReturnReview]);
+    }, [
+        reviewRequest,
+        reviewCondition,
+        reviewNote,
+        reviewAdminImages,
+        reviewExistingAdminImages.length,
+        reviewRemovedAdminImageUrls,
+        loadApprovals,
+        handleCloseReturnReview,
+    ]);
 
     const handleDeclineReturn = useCallback(
         async (id: number) => {
@@ -276,7 +336,44 @@ export default function IndexPage() {
               ? [reviewRequest.return_proof_image_url]
               : []
         : [];
-    const reviewHasExistingAdminImages = (reviewRequest?.admin_image_urls.length ?? 0) > 0;
+    const reviewBorrowerImageItems: ImageGalleryEntry[] = reviewBorrowerImages.map((img, index) => ({
+        id: `${reviewRequest?.id ?? 'review'}-borrower-${index}`,
+        src: img,
+        href: img,
+        alt: `Borrower proof ${index + 1}${reviewRequest ? ` for ${reviewRequest.tool_name}` : ''}`,
+        actionTitle: `Open borrower image ${index + 1}`,
+    }));
+    const existingAdminImageItems: ImageGalleryEntry[] = reviewExistingAdminImages.map((url, index) => ({
+        id: `existing-admin-${index}`,
+        src: url,
+        href: url,
+        alt: `Existing admin image ${index + 1}`,
+        actionLabel: 'Remove image',
+        actionAriaLabel: `Remove existing admin image ${index + 1}`,
+        actionTitle: 'Remove image',
+        onAction: () => handleRemoveExistingAdminImage(url),
+    }));
+    const newAdminImageItems: ImageGalleryEntry[] = reviewAdminImages.map((image, index) => ({
+        id: image.id,
+        src: image.previewUrl,
+        alt: `New admin image ${index + 1}`,
+        actionLabel: 'Remove image',
+        actionAriaLabel: `Remove new admin image ${index + 1}`,
+        actionTitle: 'Remove image',
+        onAction: () => handleRemoveNewAdminImage(image.id),
+    }));
+    const removedAdminImageItems: ImageGalleryEntry[] = reviewRemovedAdminImageUrls.map((url, index) => ({
+        id: `removed-admin-${index}`,
+        src: url,
+        href: url,
+        alt: `Removed admin image ${index + 1}`,
+        actionLabel: 'Restore image',
+        actionAriaLabel: `Restore removed admin image ${index + 1}`,
+        actionTitle: 'Restore image',
+        actionIcon: '+',
+        onAction: () => handleRestoreRemovedAdminImage(url),
+    }));
+    const reviewHasExistingAdminImages = reviewExistingAdminImages.length > 0;
     const reviewRequiresAdminPhotos = reviewCondition === 'Poor' || reviewCondition === 'Damaged';
     const reviewCanApprove = Boolean(reviewCondition) &&
         reviewNote.trim().length > 0 &&
@@ -510,24 +607,7 @@ export default function IndexPage() {
                             <div className="rounded-2xl border border-gray-100 bg-white p-3">
                                 <p className="text-[11px] font-semibold tracking-wide text-gray-500 uppercase">Borrower proof photos</p>
                                 {reviewBorrowerImages.length > 0 ? (
-                                    <div className="mt-2 flex flex-wrap gap-2">
-                                        {reviewBorrowerImages.map((img, index) => (
-                                            <a
-                                                key={`${reviewRequest.id}-borrower-${index}`}
-                                                href={img}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="block h-20 w-20 overflow-hidden rounded-xl border border-gray-200 hover:border-blue-300"
-                                                title={`Open borrower image ${index + 1}`}
-                                            >
-                                                <img
-                                                    src={img}
-                                                    alt={`Borrower proof ${index + 1} for ${reviewRequest.tool_name}`}
-                                                    className="h-full w-full object-cover"
-                                                />
-                                            </a>
-                                        ))}
-                                    </div>
+                                    <ImageGallery items={reviewBorrowerImageItems} className="mt-2" />
                                 ) : (
                                     <p className="mt-1 text-xs text-gray-500">No proof image attached.</p>
                                 )}
@@ -589,29 +669,35 @@ export default function IndexPage() {
                                     Upload up to 5 photos. JPG/PNG/WEBP, max 5MB each.
                                     {reviewRequiresAdminPhotos ? ' Required for Poor or Damaged grade.' : ''}
                                 </p>
-                                {reviewRequest.admin_image_urls.length > 0 && (
-                                    <div className="mt-2 flex flex-wrap gap-2">
-                                        {reviewRequest.admin_image_urls.map((url, index) => (
-                                            <a
-                                                key={`existing-admin-${index}`}
-                                                href={url}
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                className="block h-16 w-16 overflow-hidden rounded-lg border border-gray-200 hover:border-blue-300"
-                                                title={`Open existing admin image ${index + 1}`}
-                                            >
-                                                <img src={url} alt={`Existing admin image ${index + 1}`} className="h-full w-full object-cover" />
-                                            </a>
-                                        ))}
+                                {existingAdminImageItems.length > 0 && (
+                                    <div className="mt-2">
+                                        <p className="mb-1 text-[11px] font-medium text-gray-600">Existing images</p>
+                                        <ImageGallery
+                                            items={existingAdminImageItems}
+                                            emptyText="No existing admin photos."
+                                            sizeClassName="h-16 w-16"
+                                        />
                                     </div>
                                 )}
-                                {reviewAdminImagePreviews.length > 0 && (
-                                    <div className="mt-2 flex flex-wrap gap-2">
-                                        {reviewAdminImagePreviews.map((url, index) => (
-                                            <div key={`admin-preview-${index}`} className="h-16 w-16 overflow-hidden rounded-lg border border-gray-200">
-                                                <img src={url} alt={`Admin preview ${index + 1}`} className="h-full w-full object-cover" />
-                                            </div>
-                                        ))}
+                                {newAdminImageItems.length > 0 && (
+                                    <div className="mt-2">
+                                        <p className="mb-1 text-[11px] font-medium text-gray-600">New uploads</p>
+                                        <ImageGallery
+                                            items={newAdminImageItems}
+                                            emptyText="No new images selected."
+                                            sizeClassName="h-16 w-16"
+                                        />
+                                    </div>
+                                )}
+                                {removedAdminImageItems.length > 0 && (
+                                    <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+                                        <p className="mb-1 text-[11px] font-medium text-amber-800">Marked for removal</p>
+                                        <ImageGallery
+                                            items={removedAdminImageItems}
+                                            emptyText="No images marked for removal."
+                                            sizeClassName="h-16 w-16"
+                                        />
+                                        <p className="mt-1 text-[11px] text-amber-700">Click the action on an image to restore it.</p>
                                     </div>
                                 )}
                             </div>

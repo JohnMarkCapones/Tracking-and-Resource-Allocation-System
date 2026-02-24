@@ -22,6 +22,7 @@ class UpdateToolRequest extends FormRequest
             'description' => ['nullable', 'string'],
             'image_path' => ['nullable', 'string', 'max:255'],
             'image' => ['nullable', 'image', 'max:2048'],
+            'remove_image' => ['sometimes', 'boolean'],
             'category_id' => ['sometimes', 'integer', 'exists:tool_categories,id'],
             'status' => ['sometimes', 'string', 'in:AVAILABLE,BORROWED,MAINTENANCE'],
             'condition' => ['sometimes', 'string', 'in:Excellent,Good,Fair,Poor,Damaged,Functional'],
