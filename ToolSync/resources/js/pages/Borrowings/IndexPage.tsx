@@ -115,6 +115,21 @@ export default function IndexPage() {
         };
     }, [borrowings]);
 
+    const filterTabs = useMemo(
+        () =>
+            [
+                { key: 'all' as const, label: 'All', count: summary.total },
+                { key: 'Upcoming' as const, label: 'Upcoming', count: summary.upcoming },
+                { key: 'Active' as const, label: 'Active', count: summary.active, hideZero: true },
+                { key: 'Pending' as const, label: 'Pending', count: summary.pending },
+                { key: 'Overdue' as const, label: 'Overdue', count: summary.overdue },
+                { key: 'Unclaimed' as const, label: 'Unclaimed', count: summary.unclaimed },
+                { key: 'Returned' as const, label: 'Returned', count: summary.returned },
+                { key: 'Cancelled' as const, label: 'Cancelled', count: summary.cancelled },
+            ] satisfies Array<{ key: FilterStatus; label: string; count: number; hideZero?: boolean }>,
+        [summary],
+    );
+
     const handleReturn = (borrowing: Borrowing) => {
         setReturnModalBorrowing(borrowing);
     };
@@ -216,65 +231,31 @@ export default function IndexPage() {
                 )}
                 {!loading && (
                     <>
-                        <section className="flex flex-wrap gap-3 rounded-3xl bg-white px-5 py-3 text-[11px] text-gray-600 shadow-sm">
-                            <div className="inline-flex items-center gap-2 rounded-full bg-gray-50 px-3 py-1">
-                                <span className="font-semibold text-gray-900">{summary.total}</span>
-                                <span>Total borrowings</span>
-                            </div>
-                            <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-blue-700">
-                                <span className="font-semibold">{summary.active}</span>
-                                <span>Active</span>
-                            </div>
-                            {summary.upcoming > 0 && (
-                                <div className="inline-flex items-center gap-2 rounded-full bg-sky-50 px-3 py-1 text-sky-700">
-                                    <span className="font-semibold">{summary.upcoming}</span>
-                                    <span>Upcoming pickup</span>
-                                </div>
-                            )}
-                            {summary.overdue > 0 && (
-                                <div className="inline-flex items-center gap-2 rounded-full bg-rose-50 px-3 py-1 text-rose-700">
-                                    <span className="font-semibold">{summary.overdue}</span>
-                                    <span>Overdue</span>
-                                </div>
-                            )}
-                            {summary.unclaimed > 0 && (
-                                <div className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1 text-orange-700">
-                                    <span className="font-semibold">{summary.unclaimed}</span>
-                                    <span>Unclaimed pickup</span>
-                                </div>
-                            )}
-                            {summary.pending > 0 && (
-                                <div className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-amber-700">
-                                    <span className="font-semibold">{summary.pending}</span>
-                                    <span>Pending approval</span>
-                                </div>
-                            )}
-                            <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">
-                                <span className="font-semibold">{summary.returned}</span>
-                                <span>Returned</span>
-                            </div>
-                            {summary.cancelled > 0 && (
-                                <div className="inline-flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1 text-gray-700">
-                                    <span className="font-semibold">{summary.cancelled}</span>
-                                    <span>Cancelled</span>
-                                </div>
-                            )}
-                        </section>
-
                         <section className="flex flex-col justify-between gap-3 rounded-3xl bg-white px-5 py-4 shadow-sm sm:flex-row sm:items-center">
                             <div className="flex flex-wrap items-center gap-2">
                                 <span className="text-[11px] font-semibold tracking-wide text-gray-500 uppercase">Filter</span>
                                 <div className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-1 py-1 text-[11px] text-gray-600 shadow-sm">
-                                    {(['all', 'Upcoming', 'Active', 'Pending', 'Overdue', 'Unclaimed', 'Returned', 'Cancelled'] as const).map((status) => (
+                                    {filterTabs.map((tab) => (
                                         <button
-                                            key={status}
+                                            key={tab.key}
                                             type="button"
-                                            onClick={() => setFilterStatus(status)}
-                                            className={`rounded-full px-3 py-1 capitalize ${
-                                                filterStatus === status ? 'bg-slate-900 text-white' : 'text-gray-600 hover:bg-gray-100'
+                                            onClick={() => setFilterStatus(tab.key)}
+                                            className={`inline-flex items-center gap-1 rounded-full px-3 py-1 ${
+                                                filterStatus === tab.key ? 'bg-slate-900 text-white' : 'text-gray-600 hover:bg-gray-100'
                                             }`}
                                         >
-                                            {status === 'all' ? 'All' : status}
+                                            <span className="capitalize">{tab.label}</span>
+                                            {(!tab.hideZero || tab.count > 0) && (
+                                                <span
+                                                    className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                                                        filterStatus === tab.key
+                                                            ? 'bg-white/20 text-white'
+                                                            : 'bg-gray-200 text-gray-700'
+                                                    }`}
+                                                >
+                                                    {tab.count}
+                                                </span>
+                                            )}
                                         </button>
                                     ))}
                                 </div>
