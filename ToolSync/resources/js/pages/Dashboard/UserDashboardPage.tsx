@@ -33,7 +33,7 @@ function mapRecentToHistoryItem(
 ): BorrowingHistoryItem {
     const status =
         a.status === 'SCHEDULED'
-            ? ('Upcoming' as const)
+            ? ('Booked' as const)
             : a.status === 'RETURNED'
             ? ('Returned' as const)
             : a.status === 'PENDING_RETURN'
@@ -301,7 +301,7 @@ export default function UserDashboardPage() {
                                                 activity.status === 'RETURNED'
                                                     ? `${activity.tool_name ?? 'Tool'} returned`
                                                     : activity.status === 'SCHEDULED'
-                                                      ? `${activity.tool_name ?? 'Tool'} pickup scheduled`
+                                                      ? `${activity.tool_name ?? 'Tool'} pickup booked`
                                                     : activity.is_overdue
                                                       ? `${activity.tool_name ?? 'Tool'} overdue`
                                                       : `${activity.tool_name ?? 'Tool'} borrowed`;
@@ -309,7 +309,7 @@ export default function UserDashboardPage() {
                                                 activity.status === 'RETURNED'
                                                     ? `${activity.user_name ?? 'A user'} returned this tool.`
                                                     : activity.status === 'SCHEDULED'
-                                                      ? `${activity.user_name ?? 'A user'} has an approved pickup scheduled.`
+                                                      ? `${activity.user_name ?? 'A user'} has an approved pickup booking.`
                                                     : `${activity.user_name ?? 'A user'} borrowed this tool.`;
 
                                             return (

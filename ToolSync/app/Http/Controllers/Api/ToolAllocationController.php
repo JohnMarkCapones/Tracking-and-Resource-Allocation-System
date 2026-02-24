@@ -286,7 +286,7 @@ class ToolAllocationController extends Controller
             'success',
             $isFuturePickup ? 'Borrowing scheduled' : 'Borrowing confirmed',
             $isFuturePickup
-                ? "Your borrowing for {$toolName} is approved and scheduled for pickup on {$borrowDate->toFormattedDateString()}."
+                ? "Your borrowing for {$toolName} is approved and booked for pickup on {$borrowDate->toFormattedDateString()}."
                 : "Your borrowing for {$toolName} has been created.",
             '/borrowings'
         ));
@@ -295,9 +295,9 @@ class ToolAllocationController extends Controller
         if ($adminRecipients->isNotEmpty()) {
             Notification::send($adminRecipients, new InAppSystemNotification(
                 'info',
-                $isFuturePickup ? 'New scheduled pickup' : 'New borrowing activity',
+                $isFuturePickup ? 'New booked pickup' : 'New borrowing activity',
                 $isFuturePickup
-                    ? "{$allocation->user?->name} has a scheduled pickup for {$toolName}."
+                    ? "{$allocation->user?->name} has a booked pickup for {$toolName}."
                     : "{$allocation->user?->name} borrowed {$toolName}.",
                 '/admin/allocation-history'
             ));
@@ -960,7 +960,7 @@ class ToolAllocationController extends Controller
     }
 
     /**
-     * Cancel an upcoming scheduled pickup reservation.
+     * Cancel an upcoming booked pickup reservation.
      */
     public function cancel(Request $request, ToolAllocation $toolAllocation): JsonResponse
     {
@@ -1066,8 +1066,8 @@ class ToolAllocationController extends Controller
             if ($adminRecipients->isNotEmpty()) {
                 Notification::send($adminRecipients, new InAppSystemNotification(
                     'info',
-                    'Scheduled pickup cancelled',
-                    "{$cancelledAllocation->user?->name} cancelled a scheduled pickup for {$toolName}.",
+                    'Booked pickup cancelled',
+                    "{$cancelledAllocation->user?->name} cancelled a booked pickup for {$toolName}.",
                     '/admin/allocation-history'
                 ));
             }

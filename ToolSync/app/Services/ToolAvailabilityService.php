@@ -17,12 +17,9 @@ class ToolAvailabilityService
     /**
      * Reservation rows that should reserve inventory slots.
      *
-     * Keep UPCOMING for backward compatibility with legacy rows until all
-     * environments run the status-simplification migration.
-     *
      * @var array<int, string>
      */
-    private const RESERVATION_COMMITMENT_STATUSES = ['PENDING', 'UPCOMING'];
+    private const RESERVATION_COMMITMENT_STATUSES = ['PENDING'];
 
     /**
      * Allocation rows that consume inventory slots.

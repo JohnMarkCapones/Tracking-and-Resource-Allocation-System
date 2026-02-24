@@ -1,7 +1,7 @@
 import { Link } from '@inertiajs/react';
 import { useState, type ReactElement } from 'react';
 
-export type BorrowingHistoryStatus = 'Returned' | 'Borrowed' | 'Overdue' | 'Pending' | 'Upcoming';
+export type BorrowingHistoryStatus = 'Returned' | 'Borrowed' | 'Overdue' | 'Pending' | 'Booked';
 
 export type BorrowingHistoryItem = {
     equipment: string;
@@ -28,8 +28,13 @@ function statusClasses(status: BorrowingHistoryStatus): string {
     if (status === 'Returned') return 'bg-emerald-50 text-emerald-700';
     if (status === 'Borrowed') return 'bg-amber-50 text-amber-700';
     if (status === 'Pending') return 'bg-amber-50 text-amber-700';
-    if (status === 'Upcoming') return 'bg-sky-50 text-sky-700';
+    if (status === 'Booked') return 'bg-sky-50 text-sky-700';
     return 'bg-rose-50 text-rose-700';
+}
+
+function statusLabel(status: BorrowingHistoryStatus): string {
+    if (status === 'Pending') return 'Pending Approval';
+    return status;
 }
 
 function statusIcon(status: BorrowingHistoryStatus): ReactElement {
@@ -41,7 +46,7 @@ function statusIcon(status: BorrowingHistoryStatus): ReactElement {
         );
     }
 
-    if (status === 'Borrowed' || status === 'Pending' || status === 'Upcoming') {
+    if (status === 'Borrowed' || status === 'Pending' || status === 'Booked') {
         return (
             <svg className="mr-1.5 h-3 w-3" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M8 3.5V8L11 9.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
@@ -180,7 +185,7 @@ export function BorrowingHistoryTable({
                                         )}`}
                                     >
                                         {statusIcon(item.status)}
-                                        {item.status}
+                                        {statusLabel(item.status)}
                                     </span>
                                 </td>
                                 <td className="py-3 text-right">
@@ -200,7 +205,7 @@ export function BorrowingHistoryTable({
                                                 View
                                             </button>
                                         )}
-                                        {item.status !== 'Returned' && item.status !== 'Pending' && item.status !== 'Upcoming' && onReturn && (
+                                        {item.status !== 'Returned' && item.status !== 'Pending' && item.status !== 'Booked' && onReturn && (
                                             <button
                                                 type="button"
                                                 onClick={() => onReturn(item)}

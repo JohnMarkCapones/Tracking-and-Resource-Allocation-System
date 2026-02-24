@@ -67,7 +67,7 @@ function formatTimeAgo(date: Date): string {
 function mapDashboardRecentToBorrowingItem(a: DashboardRecentActivityItem): BorrowingHistoryItem {
     const status =
         a.status === 'SCHEDULED'
-            ? ('Upcoming' as const)
+            ? ('Booked' as const)
             : a.status === 'RETURNED'
             ? ('Returned' as const)
             : a.status === 'PENDING_RETURN'
@@ -93,7 +93,7 @@ function mapRecentActivityToItem(a: DashboardRecentActivityItem): RecentActivity
     const tone: ActivityTone = a.is_overdue ? 'maintenance' : a.status === 'RETURNED' ? 'borrowing' : 'borrowing';
     const title =
         a.status === 'SCHEDULED'
-            ? `${a.tool_name ?? 'Tool'} pickup scheduled`
+            ? `${a.tool_name ?? 'Tool'} pickup booked`
             : a.status === 'RETURNED'
             ? `${a.tool_name ?? 'Tool'} returned`
             : a.is_overdue
@@ -197,7 +197,7 @@ export default function AdminDashboardPage() {
             setPendingActionId(reservationId);
             try {
                 await apiRequest(`/api/reservations/${reservationId}/approve`, { method: 'POST' });
-                toast.success('Borrow request approved. It now appears as Upcoming pickup in user borrowings.');
+                toast.success('Borrow request approved. It now appears as Booked pickup in user borrowings.');
                 emitPendingFlowBadgeUpdate({ delta: -1 });
                 await loadDashboard();
             } catch (err) {

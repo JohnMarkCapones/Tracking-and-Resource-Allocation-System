@@ -11,7 +11,7 @@ import type {
 import { mapAllocationStatusToUi } from '@/lib/apiTypes';
 import { apiRequest } from '@/lib/http';
 
-type AllocationStatus = 'Returned' | 'Upcoming' | 'Active' | 'Pending' | 'Overdue';
+type AllocationStatus = 'Returned' | 'Booked' | 'Active' | 'Pending' | 'Overdue';
 
 type Allocation = {
     id: number;
@@ -42,8 +42,8 @@ function mapHistoryItemToAllocation(a: AllocationHistoryItem): Allocation {
     let statusDetail = '';
     if (a.status === 'RETURNED' && a.actual_return_date) {
         statusDetail = `Returned on ${new Date(a.actual_return_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`;
-    } else if (status === 'Upcoming') {
-        statusDetail = `Pickup scheduled for ${borrowDate}`;
+    } else if (status === 'Booked') {
+        statusDetail = `Pickup booked for ${borrowDate}`;
     } else if (a.status === 'PENDING_RETURN') {
         statusDetail = 'Awaiting admin return approval';
     } else if (status === 'Overdue') {
@@ -77,7 +77,7 @@ function statusClasses(status: AllocationStatus): string {
         return 'bg-amber-50 text-amber-700';
     }
 
-    if (status === 'Upcoming') {
+    if (status === 'Booked') {
         return 'bg-sky-50 text-sky-700';
     }
 
@@ -86,6 +86,14 @@ function statusClasses(status: AllocationStatus): string {
     }
 
     return 'bg-rose-50 text-rose-700';
+}
+
+function statusLabel(status: AllocationStatus): string {
+    if (status === 'Pending') {
+        return 'Pending Approval';
+    }
+
+    return status;
 }
 
 function statusIcon(status: AllocationStatus): ReactNode {
@@ -116,7 +124,7 @@ function statusIcon(status: AllocationStatus): ReactNode {
         );
     }
 
-    if (status === 'Upcoming') {
+    if (status === 'Booked') {
         return (
             <svg className="mr-1.5 h-3 w-3" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M5 2.5V4.5M11 2.5V4.5M3 6.5H13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
@@ -141,7 +149,7 @@ function buildHistoryParams(page: number, statusFilter: 'all' | AllocationStatus
     params.set('per_page', String(PAGE_SIZE));
     params.set('page', String(page));
     if (statusFilter === 'Active') params.set('status', 'BORROWED');
-    else if (statusFilter === 'Upcoming') params.set('status', 'SCHEDULED');
+    else if (statusFilter === 'Booked') params.set('status', 'SCHEDULED');
     else if (statusFilter === 'Returned') params.set('status', 'RETURNED');
     else if (statusFilter === 'Overdue') {
         params.set('status', 'BORROWED');
@@ -204,7 +212,7 @@ export default function AdminAllocationHistoryPage() {
     const buildExportQuery = useCallback((): string => {
         const url = new URL('/api/tool-allocations/export', window.location.origin);
         if (statusFilter === 'Active') url.searchParams.set('status', 'BORROWED');
-        else if (statusFilter === 'Upcoming') url.searchParams.set('status', 'SCHEDULED');
+        else if (statusFilter === 'Booked') url.searchParams.set('status', 'SCHEDULED');
         else if (statusFilter === 'Returned') url.searchParams.set('status', 'RETURNED');
         else if (statusFilter === 'Overdue') {
             url.searchParams.set('status', 'BORROWED');
@@ -466,7 +474,7 @@ export default function AdminAllocationHistoryPage() {
                     <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[11px] font-semibold tracking-wide text-gray-500 uppercase">Filter by status</span>
                         <div className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-1 py-1 text-[11px] text-gray-600 shadow-sm">
-                            {(['all', 'Upcoming', 'Active', 'Returned', 'Overdue'] as const).map((value) => (
+                            {(['all', 'Booked', 'Active', 'Returned', 'Overdue'] as const).map((value) => (
                                 <button
                                     key={value}
                                     type="button"
@@ -598,7 +606,7 @@ export default function AdminAllocationHistoryPage() {
                                     {paginated.map((row, index) => {
                                         const isEven = index % 2 === 0;
                                         const isReturned = row.status === 'Returned';
-                                        const isUpcoming = row.status === 'Upcoming';
+                                        const isBooked = row.status === 'Booked';
 
                                         return (
                                             <tr
@@ -624,7 +632,7 @@ export default function AdminAllocationHistoryPage() {
                                                         )}`}
                                                     >
                                                         {statusIcon(row.status)}
-                                                        {row.status}
+                                                        {statusLabel(row.status)}
                                                     </span>
                                                 </td>
                                                 <td className="py-3 pr-4">
@@ -637,7 +645,7 @@ export default function AdminAllocationHistoryPage() {
                                                     )}
                                                 </td>
                                                 <td className="py-3 text-right">
-                                                    {isUpcoming ? (
+                                                    {isBooked ? (
                                                         <button
                                                             type="button"
                                                             onClick={() => handleClaimTool(row)}
@@ -738,7 +746,7 @@ export default function AdminAllocationHistoryPage() {
                                 <div>
                                     <p className="text-[11px] font-semibold tracking-wide text-gray-500 uppercase">Status</p>
                                     <p className="mt-1 text-sm font-medium text-gray-900">
-                                        {selectedAllocation.status}{' '}
+                                        {statusLabel(selectedAllocation.status)}{' '}
                                         {selectedAllocation.statusDetail && (
                                             <span className="block text-[11px] font-normal text-gray-600">{selectedAllocation.statusDetail}</span>
                                         )}

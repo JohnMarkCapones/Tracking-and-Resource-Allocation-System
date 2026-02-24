@@ -336,7 +336,7 @@ class ReportController extends Controller
     private function deriveBorrowingStatus(ToolAllocation $allocation): array
     {
         if ($allocation->status === 'SCHEDULED') {
-            return ['Upcoming', 0];
+            return ['Booked', 0];
         }
 
         if ($allocation->status === 'RETURNED') {
