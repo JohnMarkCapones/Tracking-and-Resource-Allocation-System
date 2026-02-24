@@ -509,7 +509,7 @@ class ReservationController extends Controller
         $allocation->user?->notify(new InAppSystemNotification(
             'success',
             'Borrowing approved',
-            "Your request to borrow {$toolName} has been approved. It is scheduled for pickup on {$borrowDate->toFormattedDateString()}.",
+            "Your request to borrow {$toolName} has been approved. It is booked for pickup on {$borrowDate->toFormattedDateString()}.",
             '/borrowings'
         ));
 

@@ -84,7 +84,7 @@ class ToolController extends Controller
             $query->withCount([
                 'reservations as reserved_count' => function ($q) {
                     $today = now()->toDateString();
-                    $q->whereIn('status', ['PENDING', 'UPCOMING'])
+                    $q->where('status', 'PENDING')
                         ->whereDate('start_date', '<=', $today)
                         ->whereDate('end_date', '>=', $today);
                 },
@@ -210,7 +210,7 @@ class ToolController extends Controller
         if (Schema::hasTable('reservations')) {
             $reservedCounts = Reservation::query()
                 ->whereIn('tool_id', $toolIds)
-                ->whereIn('status', ['PENDING', 'UPCOMING'])
+                ->where('status', 'PENDING')
                 ->whereDate('start_date', '<=', now()->toDateString())
                 ->whereDate('end_date', '>=', now()->toDateString())
                 ->selectRaw('tool_id, COUNT(*) as count')
@@ -528,7 +528,7 @@ class ToolController extends Controller
         if (Schema::hasTable('reservations')) {
             $reservations = Reservation::query()
                 ->where('tool_id', $tool->id)
-                ->whereIn('status', ['PENDING', 'UPCOMING'])
+                ->where('status', 'PENDING')
                 ->whereDate('start_date', '<=', $to->toDateString())
                 ->whereDate('end_date', '>=', $from->toDateString())
                 ->get([

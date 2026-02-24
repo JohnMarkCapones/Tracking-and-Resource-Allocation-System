@@ -142,7 +142,7 @@ export type AllocationDto = {
     };
 };
 
-export type BorrowingStatusUi = 'Upcoming' | 'Active' | 'Pending' | 'Returned' | 'Overdue' | 'Unclaimed' | 'Cancelled';
+export type BorrowingStatusUi = 'Booked' | 'Active' | 'Pending' | 'Returned' | 'Overdue' | 'Unclaimed' | 'Cancelled';
 
 export type BorrowingCardTool = {
     id: number;
@@ -173,7 +173,7 @@ export function mapAllocationStatusToUi(allocation: AllocationDto, now: Date = n
             return 'Unclaimed';
         }
 
-        return 'Upcoming';
+        return 'Booked';
     }
 
     if (allocation.status === 'UNCLAIMED') {

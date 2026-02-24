@@ -11,7 +11,7 @@ import { mapAllocationStatusToUi } from '@/lib/apiTypes';
 import { apiRequest } from '@/lib/http';
 
 type SharedProps = { auth?: { user?: { id: number } } };
-type FilterStatus = 'all' | 'Upcoming' | 'Active' | 'Pending' | 'Overdue' | 'Unclaimed' | 'Returned' | 'Cancelled';
+type FilterStatus = 'all' | 'Booked' | 'Active' | 'Pending' | 'Overdue' | 'Unclaimed' | 'Returned' | 'Cancelled';
 
 function formatUiDate(dateString: string): string {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -95,7 +95,7 @@ export default function IndexPage() {
     }, [borrowings, filterStatus]);
 
     const summary = useMemo(() => {
-        const upcoming = borrowings.filter((b) => b.status === 'Upcoming').length;
+        const booked = borrowings.filter((b) => b.status === 'Booked').length;
         const active = borrowings.filter((b) => b.status === 'Active').length;
         const pending = borrowings.filter((b) => b.status === 'Pending').length;
         const overdue = borrowings.filter((b) => b.status === 'Overdue').length;
@@ -104,7 +104,7 @@ export default function IndexPage() {
         const cancelled = borrowings.filter((b) => b.status === 'Cancelled').length;
 
         return {
-            upcoming,
+            booked,
             active,
             pending,
             overdue,
@@ -119,9 +119,9 @@ export default function IndexPage() {
         () =>
             [
                 { key: 'all' as const, label: 'All', count: summary.total },
-                { key: 'Upcoming' as const, label: 'Upcoming', count: summary.upcoming },
+                { key: 'Booked' as const, label: 'Booked', count: summary.booked },
                 { key: 'Active' as const, label: 'Active', count: summary.active, hideZero: true },
-                { key: 'Pending' as const, label: 'Pending', count: summary.pending },
+                { key: 'Pending' as const, label: 'Pending Approval', count: summary.pending },
                 { key: 'Overdue' as const, label: 'Overdue', count: summary.overdue },
                 { key: 'Unclaimed' as const, label: 'Unclaimed', count: summary.unclaimed },
                 { key: 'Returned' as const, label: 'Returned', count: summary.returned },
@@ -215,7 +215,7 @@ export default function IndexPage() {
                     <p className="text-xs font-medium tracking-[0.18em] text-gray-500 uppercase">My borrowings</p>
                     <h1 className="text-2xl font-semibold text-gray-900">Track your borrowed equipment</h1>
                     <p className="mt-1 text-xs text-gray-500">
-                        Returns require admin approval. Upcoming pickups can be cancelled at least 3 days before pickup.
+                        Returns require admin approval. Booked pickups can be cancelled at least 3 days before pickup.
                     </p>
                 </>
             }
