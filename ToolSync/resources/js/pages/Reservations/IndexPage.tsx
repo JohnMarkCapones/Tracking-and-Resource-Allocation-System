@@ -377,7 +377,7 @@ export default function IndexPage() {
                                         >
                                             {statusLabel(reservation.status)}
                                         </span>
-                                        {reservation.status === 'pending_approval' && (
+                                        {(reservation.status === 'pending_approval' || reservation.status === 'booked') && (
                                             <button
                                                 type="button"
                                                 onClick={() => setReservationToCancel(reservation)}

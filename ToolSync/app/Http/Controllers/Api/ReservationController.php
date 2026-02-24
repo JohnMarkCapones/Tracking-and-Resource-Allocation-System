@@ -19,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Schema;
 
 class ReservationController extends Controller
 {
@@ -331,7 +332,7 @@ class ReservationController extends Controller
     }
 
     /**
-     * User can only cancel their own PENDING borrow requests.
+     * User can cancel their own pending requests and booked pickups.
      */
     public function update(Request $request, Reservation $reservation): JsonResponse
     {
@@ -347,14 +348,66 @@ class ReservationController extends Controller
             'status' => ['required', 'in:CANCELLED'],
         ]);
 
-        if ($reservation->status !== 'PENDING') {
+        if (! in_array($reservation->status, ['PENDING', 'COMPLETED'], true)) {
             return response()->json([
-                'message' => 'Only pending borrow requests can be cancelled.',
+                'message' => 'Only pending or booked reservations can be cancelled.',
             ], 422);
         }
 
         $oldStatus = $reservation->status;
-        $reservation->update($validated);
+
+        if ($reservation->status === 'COMPLETED') {
+            $pickupDate = Carbon::parse((string) $reservation->start_date)->startOfDay();
+            if ($pickupDate->lt(Carbon::today())) {
+                return response()->json([
+                    'message' => 'This booked reservation can no longer be cancelled.',
+                ], 422);
+            }
+
+            $matchingAllocation = ToolAllocation::query()
+                ->where('user_id', $reservation->user_id)
+                ->where('tool_id', $reservation->tool_id)
+                ->whereDate('borrow_date', Carbon::parse((string) $reservation->start_date)->toDateString())
+                ->whereDate('expected_return_date', Carbon::parse((string) $reservation->end_date)->toDateString())
+                ->where('status', 'SCHEDULED')
+                ->latest('id')
+                ->first();
+
+            if (! $matchingAllocation) {
+                return response()->json([
+                    'message' => 'No cancellable booked pickup was found for this reservation.',
+                ], 422);
+            }
+
+            DB::transaction(function () use ($reservation, $matchingAllocation, $validated): void {
+                $reservation->update($validated);
+
+                $allocationPayload = [
+                    'status' => 'CANCELLED',
+                ];
+                if (Schema::hasColumn('tool_allocations', 'cancelled_at')) {
+                    $allocationPayload['cancelled_at'] = now();
+                }
+                if (Schema::hasColumn('tool_allocations', 'cancellation_reason')) {
+                    $allocationPayload['cancellation_reason'] = 'Cancelled by user from reservations page';
+                }
+                if (Schema::hasColumn('tool_allocations', 'unclaimed_at')) {
+                    $allocationPayload['unclaimed_at'] = null;
+                }
+                if (Schema::hasColumn('tool_allocations', 'missed_pickup_at')) {
+                    $allocationPayload['missed_pickup_at'] = null;
+                }
+                if (Schema::hasColumn('tool_allocations', 'penalty_until')) {
+                    $allocationPayload['penalty_until'] = null;
+                }
+
+                $matchingAllocation->update($allocationPayload);
+            });
+        } else {
+            $reservation->update($validated);
+        }
+
+        $reservation->refresh();
 
         ActivityLogger::log(
             'reservation.cancelled',
