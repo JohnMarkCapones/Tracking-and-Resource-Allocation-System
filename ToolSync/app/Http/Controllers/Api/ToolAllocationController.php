@@ -37,6 +37,11 @@ class ToolAllocationController extends Controller
     private const TOOL_CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor', 'Damaged', 'Functional'];
     private const RESERVATION_CANCELLATION_MIN_DAYS = 3;
 
+    private function buildUnclaimedPickupPenaltyMessage(Carbon $penaltyUntil): string
+    {
+        return "You have an unclaimed pickup for this tool. You can request this tool again after {$penaltyUntil->toFormattedDateString()}.";
+    }
+
     /**
      * List all tool allocations
      *
@@ -152,6 +157,18 @@ class ToolAllocationController extends Controller
             return response()->json([
                 'message' => implode(' ', $dateErrors),
             ], 422);
+        }
+
+        if ($actor && ! $actor->isAdmin()) {
+            $penaltyUntil = app(ToolAvailabilityService::class)->getActiveUnclaimedPickupPenaltyEnd(
+                (int) $validated['user_id'],
+                (int) $validated['tool_id']
+            );
+            if ($penaltyUntil !== null) {
+                return response()->json([
+                    'message' => $this->buildUnclaimedPickupPenaltyMessage($penaltyUntil),
+                ], 422);
+            }
         }
 
         $borrower = User::query()->findOrFail((int) $validated['user_id']);
@@ -995,11 +1012,22 @@ class ToolAllocationController extends Controller
                 ], 409));
             }
 
-            $lockedAllocation->update([
+            $cancelPayload = [
                 'status' => 'CANCELLED',
                 'cancelled_at' => now(),
                 'cancellation_reason' => $cancellationReason,
-            ]);
+            ];
+            if (Schema::hasColumn('tool_allocations', 'unclaimed_at')) {
+                $cancelPayload['unclaimed_at'] = null;
+            }
+            if (Schema::hasColumn('tool_allocations', 'missed_pickup_at')) {
+                $cancelPayload['missed_pickup_at'] = null;
+            }
+            if (Schema::hasColumn('tool_allocations', 'penalty_until')) {
+                $cancelPayload['penalty_until'] = null;
+            }
+
+            $lockedAllocation->update($cancelPayload);
 
             return $lockedAllocation->fresh(['tool', 'user']);
         });

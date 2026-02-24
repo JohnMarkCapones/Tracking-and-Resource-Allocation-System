@@ -11,7 +11,7 @@ import { mapAllocationStatusToUi } from '@/lib/apiTypes';
 import { apiRequest } from '@/lib/http';
 
 type SharedProps = { auth?: { user?: { id: number } } };
-type FilterStatus = 'all' | 'Upcoming' | 'Active' | 'Pending' | 'Overdue' | 'Returned' | 'Cancelled';
+type FilterStatus = 'all' | 'Upcoming' | 'Active' | 'Pending' | 'Overdue' | 'Unclaimed' | 'Returned' | 'Cancelled';
 
 function formatUiDate(dateString: string): string {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -26,7 +26,8 @@ function allocationToBorrowing(allocation: AllocationDto): Borrowing {
     const borrowDateValue = allocation.borrow_date.slice(0, 10);
     const borrowDate = formatUiDate(`${borrowDateValue}T00:00:00`);
     const dueDate = allocation.expected_return_date.slice(0, 10);
-    const returnSource = status === 'Cancelled' ? allocation.cancelled_at : allocation.actual_return_date;
+    const isCancelledStatus = allocation.status === 'CANCELLED' || allocation.status === 'UNCLAIMED' || status === 'Unclaimed';
+    const returnSource = isCancelledStatus ? allocation.cancelled_at : allocation.actual_return_date;
     const returnDate = returnSource ? formatUiDate(returnSource) : undefined;
 
     return {
@@ -43,6 +44,7 @@ function allocationToBorrowing(allocation: AllocationDto): Borrowing {
         dueDate,
         returnDate,
         status,
+        canRequestReturn: allocation.status === 'BORROWED',
     };
 }
 
@@ -97,6 +99,7 @@ export default function IndexPage() {
         const active = borrowings.filter((b) => b.status === 'Active').length;
         const pending = borrowings.filter((b) => b.status === 'Pending').length;
         const overdue = borrowings.filter((b) => b.status === 'Overdue').length;
+        const unclaimed = borrowings.filter((b) => b.status === 'Unclaimed').length;
         const returned = borrowings.filter((b) => b.status === 'Returned').length;
         const cancelled = borrowings.filter((b) => b.status === 'Cancelled').length;
 
@@ -105,6 +108,7 @@ export default function IndexPage() {
             active,
             pending,
             overdue,
+            unclaimed,
             returned,
             cancelled,
             total: borrowings.length,
@@ -233,6 +237,12 @@ export default function IndexPage() {
                                     <span>Overdue</span>
                                 </div>
                             )}
+                            {summary.unclaimed > 0 && (
+                                <div className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1 text-orange-700">
+                                    <span className="font-semibold">{summary.unclaimed}</span>
+                                    <span>Unclaimed pickup</span>
+                                </div>
+                            )}
                             {summary.pending > 0 && (
                                 <div className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-amber-700">
                                     <span className="font-semibold">{summary.pending}</span>
@@ -255,7 +265,7 @@ export default function IndexPage() {
                             <div className="flex flex-wrap items-center gap-2">
                                 <span className="text-[11px] font-semibold tracking-wide text-gray-500 uppercase">Filter</span>
                                 <div className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-1 py-1 text-[11px] text-gray-600 shadow-sm">
-                                    {(['all', 'Upcoming', 'Active', 'Pending', 'Overdue', 'Returned', 'Cancelled'] as const).map((status) => (
+                                    {(['all', 'Upcoming', 'Active', 'Pending', 'Overdue', 'Unclaimed', 'Returned', 'Cancelled'] as const).map((status) => (
                                         <button
                                             key={status}
                                             type="button"
@@ -344,4 +354,3 @@ export default function IndexPage() {
         </AppLayout>
     );
 }
-

@@ -7,6 +7,7 @@ use App\Models\Reservation;
 use App\Models\Tool;
 use App\Models\ToolAllocation;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Service to check tool availability considering allocations and reservations.
@@ -29,6 +30,11 @@ class ToolAvailabilityService
      * @var array<int, string>
      */
     private const ALLOCATION_COMMITMENT_STATUSES = ['SCHEDULED', 'BORROWED', 'PENDING_RETURN'];
+
+    /**
+     * Penalty period after an unclaimed pickup before same-tool re-borrow is allowed.
+     */
+    private const UNCLAIMED_PICKUP_PENALTY_DAYS = 7;
 
     /**
      * Check if a tool is available for the given date range, considering:
@@ -145,6 +151,76 @@ class ToolAvailabilityService
             ->whereDate('start_date', '<=', $endDateStr)
             ->whereDate('end_date', '>=', $startDateStr)
             ->exists();
+    }
+
+    public function getUnclaimedPickupPenaltyDays(): int
+    {
+        return self::UNCLAIMED_PICKUP_PENALTY_DAYS;
+    }
+
+    private function resolveUnclaimedMarkerColumn(): ?string
+    {
+        if (Schema::hasColumn('tool_allocations', 'unclaimed_at')) {
+            return 'unclaimed_at';
+        }
+
+        if (Schema::hasColumn('tool_allocations', 'missed_pickup_at')) {
+            return 'missed_pickup_at';
+        }
+
+        return null;
+    }
+
+    public function getActiveUnclaimedPickupPenaltyEnd(int $userId, int $toolId, ?Carbon $asOf = null): ?Carbon
+    {
+        $unclaimedMarkerColumn = $this->resolveUnclaimedMarkerColumn();
+        if ($unclaimedMarkerColumn === null || ! Schema::hasColumn('tool_allocations', 'penalty_until')) {
+            return null;
+        }
+
+        $referenceDate = ($asOf ?? now())->toDateString();
+
+        /** @var ToolAllocation|null $allocation */
+        $allocation = ToolAllocation::query()
+            ->where('user_id', $userId)
+            ->where('tool_id', $toolId)
+            ->where('status', 'CANCELLED')
+            ->whereNotNull($unclaimedMarkerColumn)
+            ->whereNotNull('penalty_until')
+            ->whereDate('penalty_until', '>=', $referenceDate)
+            ->orderByDesc('penalty_until')
+            ->first();
+
+        if (! $allocation) {
+            return null;
+        }
+
+        $rawPenaltyUntil = $allocation->getRawOriginal('penalty_until');
+        if (! is_string($rawPenaltyUntil) || trim($rawPenaltyUntil) === '') {
+            return null;
+        }
+
+        return Carbon::parse($rawPenaltyUntil);
+    }
+
+    public function hasActiveUnclaimedPickupPenalty(int $userId, int $toolId, ?Carbon $asOf = null): bool
+    {
+        return $this->getActiveUnclaimedPickupPenaltyEnd($userId, $toolId, $asOf) !== null;
+    }
+
+    public function getMissedPickupPenaltyDays(): int
+    {
+        return $this->getUnclaimedPickupPenaltyDays();
+    }
+
+    public function getActiveMissedPickupPenaltyEnd(int $userId, int $toolId, ?Carbon $asOf = null): ?Carbon
+    {
+        return $this->getActiveUnclaimedPickupPenaltyEnd($userId, $toolId, $asOf);
+    }
+
+    public function hasActiveMissedPickupPenalty(int $userId, int $toolId, ?Carbon $asOf = null): bool
+    {
+        return $this->hasActiveUnclaimedPickupPenalty($userId, $toolId, $asOf);
     }
 
     /**
