@@ -19,6 +19,8 @@ class ToolAllocation extends Model
         'claimed_at',
         'claimed_by',
         'actual_return_date',
+        'cancelled_at',
+        'cancellation_reason',
         'note',
         'reported_condition',
         'return_proof_image_path',
@@ -33,6 +35,7 @@ class ToolAllocation extends Model
         return [
             'claimed_at' => 'datetime',
             'actual_return_date' => 'datetime',
+            'cancelled_at' => 'datetime',
             'admin_reviewed_at' => 'datetime',
         ];
     }

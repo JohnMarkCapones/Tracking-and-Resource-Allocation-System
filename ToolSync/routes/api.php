@@ -57,6 +57,7 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::get('tool-allocations/history', [ToolAllocationHistoryController::class, 'index']);
     Route::get('tool-allocations/history/summary', [ToolAllocationHistoryController::class, 'summary']);
     Route::get('tool-allocations/export', [ToolAllocationHistoryController::class, 'export']);
+    Route::post('tool-allocations/{tool_allocation}/cancel', [ToolAllocationController::class, 'cancel']);
     Route::get('analytics/overview', [AnalyticsController::class, 'overview']);
     Route::get('analytics/export', [AnalyticsController::class, 'export']);
 

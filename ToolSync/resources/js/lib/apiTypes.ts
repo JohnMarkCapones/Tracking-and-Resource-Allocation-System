@@ -105,7 +105,7 @@ export function mapAvailabilityStatusToUi(availabilityStatus: AvailabilityStatus
     }
 }
 
-export type AllocationStatusApi = 'SCHEDULED' | 'BORROWED' | 'PENDING_RETURN' | 'RETURNED';
+export type AllocationStatusApi = 'SCHEDULED' | 'BORROWED' | 'PENDING_RETURN' | 'RETURNED' | 'CANCELLED';
 
 export type AllocationDto = {
     id: number;
@@ -116,6 +116,8 @@ export type AllocationDto = {
     claimed_at?: string | null;
     claimed_by?: number | null;
     actual_return_date: string | null;
+    cancelled_at?: string | null;
+    cancellation_reason?: string | null;
     status: AllocationStatusApi;
     note: string | null;
     condition: string | null;
@@ -137,7 +139,7 @@ export type AllocationDto = {
     };
 };
 
-export type BorrowingStatusUi = 'Upcoming' | 'Active' | 'Pending' | 'Returned' | 'Overdue';
+export type BorrowingStatusUi = 'Upcoming' | 'Active' | 'Pending' | 'Returned' | 'Overdue' | 'Cancelled';
 
 export type BorrowingCardTool = {
     id: number;
@@ -159,6 +161,10 @@ export type BorrowingCardData = {
 export function mapAllocationStatusToUi(allocation: AllocationDto, now: Date = new Date()): BorrowingStatusUi {
     if (allocation.status === 'SCHEDULED') {
         return 'Upcoming';
+    }
+
+    if (allocation.status === 'CANCELLED') {
+        return 'Cancelled';
     }
 
     if (allocation.status === 'RETURNED') {

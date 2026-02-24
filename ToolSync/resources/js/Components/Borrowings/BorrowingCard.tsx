@@ -1,7 +1,7 @@
 import { Link } from '@inertiajs/react';
 import { differenceInDays, parseISO } from 'date-fns';
 
-export type BorrowingStatus = 'Upcoming' | 'Active' | 'Pending' | 'Returned' | 'Overdue';
+export type BorrowingStatus = 'Upcoming' | 'Active' | 'Pending' | 'Returned' | 'Overdue' | 'Cancelled';
 
 export type Borrowing = {
     id: number;
@@ -12,6 +12,7 @@ export type Borrowing = {
         toolId: string;
         category: string;
     };
+    borrowDateValue: string;
     borrowDate: string;
     dueDate: string;
     returnDate?: string;
@@ -21,6 +22,7 @@ export type Borrowing = {
 type BorrowingCardProps = {
     borrowing: Borrowing;
     onReturn: (borrowing: Borrowing) => void;
+    onCancel: (borrowing: Borrowing) => void;
     /** True when the user requested a return and it's awaiting admin verification. */
     returnRequested?: boolean;
 };
@@ -42,10 +44,14 @@ function statusClasses(status: BorrowingStatus): string {
         return 'bg-sky-50 text-sky-700';
     }
 
+    if (status === 'Cancelled') {
+        return 'bg-gray-100 text-gray-700';
+    }
+
     return 'bg-rose-50 text-rose-700';
 }
 
-export function BorrowingCard({ borrowing, onReturn, returnRequested = false }: BorrowingCardProps) {
+export function BorrowingCard({ borrowing, onReturn, onCancel, returnRequested = false }: BorrowingCardProps) {
     const isActive = borrowing.status === 'Active';
     const isOverdue = borrowing.status === 'Overdue';
     const isUpcoming = borrowing.status === 'Upcoming';
@@ -93,6 +99,15 @@ export function BorrowingCard({ borrowing, onReturn, returnRequested = false }: 
                     <span className="rounded-full bg-amber-50 px-3 py-1.5 text-[11px] font-semibold text-amber-700">
                         Pending
                     </span>
+                ) : isUpcoming ? (
+                    <button
+                        type="button"
+                        onClick={() => onCancel(borrowing)}
+                        className="rounded-full bg-rose-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-rose-700"
+                        title="Cancel scheduled pickup"
+                    >
+                        Cancel reservation
+                    </button>
                 ) : (isActive || isOverdue) ? (
                     <button
                         type="button"
@@ -111,7 +126,13 @@ export function BorrowingCard({ borrowing, onReturn, returnRequested = false }: 
                     <p className="font-medium text-gray-900">{borrowing.borrowDate}</p>
                 </div>
                 <div>
-                    <p className="text-gray-500">{borrowing.status === 'Returned' ? 'Returned' : 'Due'}</p>
+                    <p className="text-gray-500">
+                        {borrowing.status === 'Returned'
+                            ? 'Returned'
+                            : borrowing.status === 'Cancelled'
+                              ? 'Cancelled'
+                              : 'Due'}
+                    </p>
                     <p className="font-medium text-gray-900">{borrowing.returnDate ?? dueDisplay}</p>
                 </div>
                 {daysRemaining !== null && (
