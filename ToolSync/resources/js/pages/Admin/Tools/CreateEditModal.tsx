@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Tool, ToolStatus } from '@/Components/Admin/ToolTable';
+import { ImageGallery, type ImageGalleryEntry } from '@/Components/ImageGallery/ImageGallery';
 import Modal from '@/Components/Modal';
 
 const DEFAULT_CATEGORIES = ['IT Equipment', 'Office Equipment', 'Multimedia'];
@@ -22,6 +23,7 @@ export type ToolFormData = {
     description: string;
     specifications: Record<string, string>;
     displayImage?: File | null;
+    removeDisplayImage?: boolean;
 };
 
 /** Single row in the dynamic specifications list (id for React keys). */
@@ -55,13 +57,47 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
     const [specRows, setSpecRows] = useState<SpecRow[]>([]);
     const [displayImageFile, setDisplayImageFile] = useState<File | null>(null);
     const [displayImagePreview, setDisplayImagePreview] = useState<string | null>(null);
+    const [removeExistingDisplayImage, setRemoveExistingDisplayImage] = useState(false);
+    const displayImagePreviewRef = useRef<string | null>(null);
 
     const [errors, setErrors] = useState<Partial<Record<keyof ToolFormData, string>>>({});
 
-    // Sync form when modal opens or when editing a different tool. Only depend on tool so we
-    // don't overwrite user input when they change Tool ID or Condition (avoid show in deps).
     useEffect(() => {
-        if (!show) return;
+        displayImagePreviewRef.current = displayImagePreview;
+    }, [displayImagePreview]);
+
+    useEffect(() => {
+        return () => {
+            const preview = displayImagePreviewRef.current;
+            if (preview && preview.startsWith('blob:')) {
+                URL.revokeObjectURL(preview);
+            }
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!show) {
+            setDisplayImagePreview((prev) => {
+                if (prev && prev.startsWith('blob:')) {
+                    URL.revokeObjectURL(prev);
+                }
+                return null;
+            });
+            setDisplayImageFile(null);
+            setRemoveExistingDisplayImage(false);
+            setErrors({});
+            return;
+        }
+
+        setDisplayImagePreview((prev) => {
+            if (prev && prev.startsWith('blob:')) {
+                URL.revokeObjectURL(prev);
+            }
+            return null;
+        });
+        setDisplayImageFile(null);
+        setRemoveExistingDisplayImage(false);
+        setErrors({});
 
         if (tool) {
             const quantity = Number(tool.quantity);
@@ -81,8 +117,6 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
                     ? Object.entries(specs).map(([label, value]) => ({ id: nextSpecId(), label, value }))
                     : [],
             );
-            // When editing an existing tool, show its current image (if any)
-            // so admins understand what is already configured.
             if (existingImagePath && existingImagePath.trim().length > 0) {
                 const normalized = existingImagePath.startsWith('http')
                     ? existingImagePath
@@ -102,15 +136,6 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
             });
             setSpecRows([]);
         }
-        setErrors({});
-        setDisplayImageFile(null);
-        setDisplayImagePreview((prev) => {
-            // Only revoke object URLs we created for local uploads.
-            if (prev && prev.startsWith('blob:')) {
-                URL.revokeObjectURL(prev);
-            }
-            return null;
-        });
     }, [show, tool, existingImagePath]);
 
     const validate = (): boolean => {
@@ -146,6 +171,7 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
                 description: formData.description.trim(),
                 specifications,
                 displayImage: displayImageFile,
+                removeDisplayImage: removeExistingDisplayImage,
             });
         }
     };
@@ -162,12 +188,43 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
 
     const handleDisplayImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0] ?? null;
+        if (!file) return;
+
         setDisplayImageFile(file);
+        setRemoveExistingDisplayImage(false);
         setDisplayImagePreview((prev) => {
-            if (prev) URL.revokeObjectURL(prev);
-            return file ? URL.createObjectURL(file) : null;
+            if (prev && prev.startsWith('blob:')) {
+                URL.revokeObjectURL(prev);
+            }
+            return URL.createObjectURL(file);
         });
     };
+
+    const handleRemoveDisplayImage = () => {
+        setDisplayImageFile(null);
+        setDisplayImagePreview((prev) => {
+            if (prev && prev.startsWith('blob:')) {
+                URL.revokeObjectURL(prev);
+            }
+            return null;
+        });
+        setRemoveExistingDisplayImage(Boolean(existingImagePath));
+    };
+
+    const displayImageItems: ImageGalleryEntry[] = displayImagePreview
+        ? [
+              {
+                  id: 'display-preview',
+                  src: displayImagePreview,
+                  alt: 'Tool display image preview',
+                  href: displayImagePreview,
+                  actionLabel: 'Remove image',
+                  actionAriaLabel: 'Remove current tool display image',
+                  actionTitle: 'Remove image',
+                  onAction: handleRemoveDisplayImage,
+              },
+          ]
+        : [];
 
     return (
         <Modal show={show} maxWidth="xl" onClose={onClose}>
@@ -340,11 +397,13 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
                                 Display Image
                             </label>
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                                <div className="flex h-20 w-20 items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50">
-                                    {displayImagePreview ? (
-                                        <img src={displayImagePreview} alt="Tool preview" className="h-full w-full rounded-xl object-cover" />
+                                <div className="min-h-20 min-w-20 rounded-xl border border-dashed border-gray-200 bg-gray-50 p-2">
+                                    {displayImageItems.length > 0 ? (
+                                        <ImageGallery items={displayImageItems} sizeClassName="h-20 w-20" />
                                     ) : (
-                                        <span className="text-[10px] text-gray-400">No image</span>
+                                        <div className="flex h-20 w-20 items-center justify-center">
+                                            <span className="text-[10px] text-gray-400">No image</span>
+                                        </div>
                                     )}
                                 </div>
                                 <div className="flex-1">
@@ -355,7 +414,20 @@ export function CreateEditModal({ show, tool, categories = DEFAULT_CATEGORIES, o
                                         onChange={handleDisplayImageChange}
                                         className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-full file:border-0 file:bg-blue-50 file:px-4 file:py-1.5 file:text-[11px] file:font-semibold file:text-blue-700 hover:file:bg-blue-100"
                                     />
-                                    <p className="mt-1 text-[11px] text-gray-500">PNG or JPG recommended. Max 2MB.</p>
+                                    <div className="mt-2 flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={handleRemoveDisplayImage}
+                                            disabled={!displayImagePreview}
+                                            className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-[11px] font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                                        >
+                                            Remove image
+                                        </button>
+                                        <span className="text-[11px] text-gray-500">PNG or JPG recommended. Max 2MB.</span>
+                                    </div>
+                                    {removeExistingDisplayImage && (
+                                        <p className="mt-1 text-[11px] text-amber-700">Current image will be removed when you save.</p>
+                                    )}
                                 </div>
                             </div>
                         </div>

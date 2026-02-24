@@ -31,7 +31,9 @@ class UpdateToolAllocationRequest extends FormRequest
             'return_proof_images.*' => ['file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
             'admin_proof_images' => ['sometimes', 'array', 'max:5'],
             'admin_proof_images.*' => ['file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
-            'status' => ['sometimes', 'string', 'in:SCHEDULED,BORROWED,PENDING_RETURN,RETURNED'],
+            'remove_admin_image_urls' => ['sometimes', 'array', 'max:20'],
+            'remove_admin_image_urls.*' => ['string', 'max:2048'],
+            'status' => ['sometimes', 'string', 'in:SCHEDULED,BORROWED,PENDING_RETURN,RETURNED,CANCELLED'],
         ];
     }
 }

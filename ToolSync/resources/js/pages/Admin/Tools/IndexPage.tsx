@@ -123,6 +123,9 @@ export default function IndexPage() {
         if (data.displayImage) {
             payload.append('image', data.displayImage);
         }
+        if (data.removeDisplayImage) {
+            payload.append('remove_image', '1');
+        }
         setSaving(true);
         try {
             if (editingTool) {

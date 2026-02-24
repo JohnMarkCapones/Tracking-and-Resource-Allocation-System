@@ -35,6 +35,7 @@ use Illuminate\Support\Facades\Storage;
 class ToolAllocationController extends Controller
 {
     private const TOOL_CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor', 'Damaged', 'Functional'];
+    private const RESERVATION_CANCELLATION_MIN_DAYS = 3;
 
     /**
      * List all tool allocations
@@ -507,11 +508,17 @@ class ToolAllocationController extends Controller
 
             $uploadedAdminImages = $this->collectUploadedImages($request, 'admin_proof_images');
             $existingAdminImages = $this->normalizeImagePaths($existingHistory?->admin_images);
-            $adminImagePaths = $existingAdminImages;
-            if ($uploadedAdminImages !== []) {
-                $adminImagePaths = $this->storeConditionImages($uploadedAdminImages, $toolAllocation, 'admin');
-                $this->deleteStoredImages($existingAdminImages);
+            $requestedAdminImageRemovals = $this->normalizePublicStoragePathList($validated['remove_admin_image_urls'] ?? []);
+            $imagesToRemove = array_values(array_intersect($existingAdminImages, $requestedAdminImageRemovals));
+            if ($imagesToRemove !== []) {
+                $this->deleteStoredImages($imagesToRemove);
             }
+            $retainedAdminImages = array_values(array_diff($existingAdminImages, $imagesToRemove));
+            $newAdminImagePaths = $uploadedAdminImages !== []
+                ? $this->storeConditionImages($uploadedAdminImages, $toolAllocation, 'admin')
+                : [];
+            $adminImagePaths = array_values(array_merge($retainedAdminImages, $newAdminImagePaths));
+            unset($validated['remove_admin_image_urls']);
 
             if ($this->adminConditionRequiresProof($validated['admin_condition']) && $adminImagePaths === []) {
                 return response()->json([
@@ -535,6 +542,13 @@ class ToolAllocationController extends Controller
                 'message' => 'This tool has already been marked as returned.',
                 'data' => $toolAllocation->load(['tool', 'user']),
             ]);
+        }
+
+        if ($toolAllocation->status === 'CANCELLED') {
+            return response()->json([
+                'message' => 'This reservation has already been cancelled.',
+                'data' => $toolAllocation->load(['tool', 'user']),
+            ], 422);
         }
 
         $oldAllocationStatus = $toolAllocation->status;
@@ -821,6 +835,63 @@ class ToolAllocationController extends Controller
         return $paths;
     }
 
+    /**
+     * @return array<int, string>
+     */
+    private function normalizePublicStoragePathList(mixed $value): array
+    {
+        if (! is_array($value)) {
+            return [];
+        }
+
+        $paths = [];
+        foreach ($value as $item) {
+            if (! is_string($item)) {
+                continue;
+            }
+
+            $path = $this->normalizePublicStoragePath($item);
+            if ($path !== null) {
+                $paths[] = $path;
+            }
+        }
+
+        return array_values(array_unique($paths));
+    }
+
+    private function normalizePublicStoragePath(?string $value): ?string
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $trimmed = trim($value);
+        if ($trimmed === '') {
+            return null;
+        }
+
+        if (str_starts_with($trimmed, 'http://') || str_starts_with($trimmed, 'https://')) {
+            $path = parse_url($trimmed, PHP_URL_PATH);
+            if (! is_string($path) || $path === '') {
+                return null;
+            }
+
+            $trimmed = $path;
+        }
+
+        $trimmed = urldecode($trimmed);
+
+        if (str_starts_with($trimmed, '/storage/')) {
+            return ltrim(substr($trimmed, strlen('/storage/')), '/');
+        }
+
+        if (str_starts_with($trimmed, 'storage/')) {
+            return ltrim(substr($trimmed, strlen('storage/')), '/');
+        }
+
+        return ltrim($trimmed, '/');
+    }
+
     private function extractConditionFromNote(?string $note): ?string
     {
         if (! is_string($note) || trim($note) === '') {
@@ -931,6 +1002,115 @@ class ToolAllocationController extends Controller
         return response()->json([
             'message' => 'Borrowing marked as claimed.',
             'data' => $claimedAllocation,
+        ]);
+    }
+
+    /**
+     * Cancel an upcoming scheduled pickup reservation.
+     */
+    public function cancel(Request $request, ToolAllocation $toolAllocation): JsonResponse
+    {
+        $actor = $request->user();
+        if (! $actor) {
+            return response()->json([
+                'message' => 'Unauthorized.',
+            ], 401);
+        }
+
+        if (! $actor->isAdmin() && $toolAllocation->user_id !== $actor->id) {
+            return response()->json([
+                'message' => 'You can only cancel your own scheduled reservations.',
+            ], 403);
+        }
+
+        if ($toolAllocation->status !== 'SCHEDULED') {
+            return response()->json([
+                'message' => 'Only scheduled reservations can be cancelled.',
+                'data' => $toolAllocation->load(['tool', 'user']),
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'cancellation_reason' => ['sometimes', 'nullable', 'string', 'max:1000'],
+        ]);
+
+        $pickupDate = Carbon::parse(substr((string) $toolAllocation->getRawOriginal('borrow_date'), 0, 10))->startOfDay();
+        $daysUntilPickup = now()->startOfDay()->diffInDays($pickupDate, false);
+        if ($daysUntilPickup < self::RESERVATION_CANCELLATION_MIN_DAYS) {
+            return response()->json([
+                'message' => "Cancellations must be made at least ".self::RESERVATION_CANCELLATION_MIN_DAYS." days before pickup. Pickup is on {$pickupDate->toFormattedDateString()}.",
+            ], 422);
+        }
+
+        $cancellationReason = array_key_exists('cancellation_reason', $validated)
+            ? trim((string) $validated['cancellation_reason'])
+            : null;
+        if ($cancellationReason === '') {
+            $cancellationReason = null;
+        }
+
+        $cancelledAllocation = DB::transaction(function () use ($toolAllocation, $cancellationReason): ToolAllocation {
+            /** @var ToolAllocation $lockedAllocation */
+            $lockedAllocation = ToolAllocation::query()->lockForUpdate()->findOrFail($toolAllocation->id);
+            if ($lockedAllocation->status !== 'SCHEDULED') {
+                abort(response()->json([
+                    'message' => 'Reservation is no longer in scheduled state.',
+                ], 409));
+            }
+
+            $lockedAllocation->update([
+                'status' => 'CANCELLED',
+                'cancelled_at' => now(),
+                'cancellation_reason' => $cancellationReason,
+            ]);
+
+            return $lockedAllocation->fresh(['tool', 'user']);
+        });
+
+        ActivityLogger::log(
+            'tool_allocation.cancelled',
+            'ToolAllocation',
+            $cancelledAllocation->id,
+            "Reservation #{$cancelledAllocation->id} was cancelled.",
+            [
+                'tool_id' => $cancelledAllocation->tool_id,
+                'user_id' => $cancelledAllocation->user_id,
+                'reason' => $cancellationReason,
+                'old_status' => 'SCHEDULED',
+                'new_status' => 'CANCELLED',
+            ],
+            $actor->id
+        );
+
+        $toolName = $cancelledAllocation->tool?->name ?? "Tool #{$cancelledAllocation->tool_id}";
+        $pickupDateLabel = Carbon::parse(substr((string) $cancelledAllocation->getRawOriginal('borrow_date'), 0, 10))
+            ->toFormattedDateString();
+
+        $userNotificationMessage = $actor->id === $cancelledAllocation->user_id
+            ? "Your pickup reservation for {$toolName} on {$pickupDateLabel} was cancelled."
+            : "An admin cancelled your pickup reservation for {$toolName} on {$pickupDateLabel}.";
+        $cancelledAllocation->user?->notify(new InAppSystemNotification(
+            'info',
+            'Pickup reservation cancelled',
+            $userNotificationMessage,
+            '/borrowings'
+        ));
+
+        if (! $actor->isAdmin()) {
+            $adminRecipients = User::query()->where('role', 'ADMIN')->get();
+            if ($adminRecipients->isNotEmpty()) {
+                Notification::send($adminRecipients, new InAppSystemNotification(
+                    'info',
+                    'Scheduled pickup cancelled',
+                    "{$cancelledAllocation->user?->name} cancelled a scheduled pickup for {$toolName}.",
+                    '/admin/allocation-history'
+                ));
+            }
+        }
+
+        return response()->json([
+            'message' => 'Reservation cancelled successfully.',
+            'data' => $cancelledAllocation,
         ]);
     }
 

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from 'react';
+import { ImageGallery, type ImageGalleryEntry } from '@/Components/ImageGallery/ImageGallery';
 import Modal from '@/Components/Modal';
 
 type ReturnModalProps = {
@@ -9,68 +10,142 @@ type ReturnModalProps = {
     onSubmit: (data: { condition: string; notes: string; imageFiles: File[] }) => void;
 };
 
+type SelectedImage = {
+    id: string;
+    file: File;
+    previewUrl: string;
+};
+
 const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor', 'Damaged', 'Functional'];
+const MAX_IMAGES = 5;
+
+function createSelectedImage(file: File): SelectedImage {
+    return {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${file.name}`,
+        file,
+        previewUrl: URL.createObjectURL(file),
+    };
+}
 
 export function ReturnModal({ show, toolName, toolId, onClose, onSubmit }: ReturnModalProps) {
     const [condition, setCondition] = useState('Good');
     const [notes, setNotes] = useState('');
-    const [imageFiles, setImageFiles] = useState<File[]>([]);
-    const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([]);
+    const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
     const [submitError, setSubmitError] = useState<string | null>(null);
+    const [isDragActive, setIsDragActive] = useState(false);
     const prevShowRef = useRef(false);
+    const selectedImagesRef = useRef<SelectedImage[]>([]);
 
     const isProofRequired = condition === 'Fair' || condition === 'Poor' || condition === 'Damaged';
 
+    useEffect(() => {
+        selectedImagesRef.current = selectedImages;
+    }, [selectedImages]);
+
+    useEffect(() => {
+        return () => {
+            selectedImagesRef.current.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+        };
+    }, []);
+
     const clearImageState = () => {
-        setImageFiles([]);
-        setImagePreviewUrls((prev) => {
-            prev.forEach((url) => URL.revokeObjectURL(url));
+        setSelectedImages((prev) => {
+            prev.forEach((image) => URL.revokeObjectURL(image.previewUrl));
             return [];
         });
     };
 
-    useEffect(() => {
-        if (show && !prevShowRef.current) {
-            setCondition('Good');
-            setNotes('');
-            clearImageState();
-            setSubmitError(null);
-        }
-        prevShowRef.current = show;
-    }, [show]);
-
-    useEffect(() => {
-        return () => {
-            imagePreviewUrls.forEach((url) => URL.revokeObjectURL(url));
-        };
-    }, [imagePreviewUrls]);
-
-    const handleImagesChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(event.target.files ?? []).slice(0, 5);
-        setImageFiles(files);
-        setSubmitError(null);
-        setImagePreviewUrls((prev) => {
-            prev.forEach((url) => URL.revokeObjectURL(url));
-            return files.map((file) => URL.createObjectURL(file));
-        });
-    };
-
-    const handleSubmit = (event: React.FormEvent) => {
-        event.preventDefault();
-        if (isProofRequired && imageFiles.length === 0) {
-            setSubmitError('Please upload at least one photo proof for Fair, Poor, or Damaged returns.');
-            return;
-        }
-        onSubmit({ condition, notes, imageFiles });
-    };
-
-    const handleClose = () => {
+    const resetState = () => {
         setCondition('Good');
         setNotes('');
         clearImageState();
         setSubmitError(null);
+        setIsDragActive(false);
+    };
+
+    useEffect(() => {
+        if (show && !prevShowRef.current) {
+            resetState();
+        }
+        prevShowRef.current = show;
+    }, [show]);
+
+    const appendImageFiles = (files: File[]) => {
+        const imageFiles = files.filter((file) => file.type.startsWith('image/'));
+        const slotsLeft = Math.max(0, MAX_IMAGES - selectedImages.length);
+        const accepted = imageFiles.slice(0, slotsLeft).map(createSelectedImage);
+
+        if (accepted.length > 0) {
+            setSelectedImages((prev) => [...prev, ...accepted]);
+        }
+
+        if (imageFiles.length > slotsLeft) {
+            setSubmitError(`You can upload up to ${MAX_IMAGES} photos.`);
+        } else {
+            setSubmitError(null);
+        }
+    };
+
+    const handleImagesChange = (event: ChangeEvent<HTMLInputElement>) => {
+        appendImageFiles(Array.from(event.target.files ?? []));
+        event.target.value = '';
+    };
+
+    const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        setIsDragActive(true);
+    };
+
+    const handleDragLeave = (event: DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        setIsDragActive(false);
+    };
+
+    const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        setIsDragActive(false);
+        appendImageFiles(Array.from(event.dataTransfer.files ?? []));
+    };
+
+    const removeImage = (imageId: string) => {
+        setSelectedImages((prev) => {
+            const target = prev.find((image) => image.id === imageId);
+            if (target) {
+                URL.revokeObjectURL(target.previewUrl);
+            }
+            return prev.filter((image) => image.id !== imageId);
+        });
+        setSubmitError(null);
+    };
+
+    const handleSubmit = (event: FormEvent) => {
+        event.preventDefault();
+        if (isProofRequired && selectedImages.length === 0) {
+            setSubmitError('Please upload at least one photo proof for Fair, Poor, or Damaged returns.');
+            return;
+        }
+
+        onSubmit({
+            condition,
+            notes,
+            imageFiles: selectedImages.map((image) => image.file),
+        });
+    };
+
+    const handleClose = () => {
+        resetState();
         onClose();
     };
+
+    const previewItems: ImageGalleryEntry[] = selectedImages.map((image, index) => ({
+        id: image.id,
+        src: image.previewUrl,
+        alt: `Return preview ${index + 1}`,
+        actionLabel: 'Remove image',
+        actionAriaLabel: `Remove return image ${index + 1}`,
+        actionTitle: 'Remove image',
+        onAction: () => removeImage(image.id),
+    }));
 
     return (
         <Modal show={show} maxWidth="md" onClose={handleClose}>
@@ -120,28 +195,46 @@ export function ReturnModal({ show, toolName, toolId, onClose, onSubmit }: Retur
                         </div>
 
                         <div>
-                            <label htmlFor="return-proof-images" className="mb-1 block text-[11px] font-semibold tracking-wide text-gray-500 uppercase">
+                            <label className="mb-1 block text-[11px] font-semibold tracking-wide text-gray-500 uppercase">
                                 Condition Photos {isProofRequired ? '(Required)' : '(Optional)'}
                             </label>
-                            <input
-                                id="return-proof-images"
-                                type="file"
-                                accept="image/*"
-                                capture="environment"
-                                multiple
-                                onChange={handleImagesChange}
-                                className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-full file:border-0 file:bg-blue-50 file:px-4 file:py-1.5 file:text-[11px] file:font-semibold file:text-blue-700 hover:file:bg-blue-100"
-                            />
+                            <div
+                                onDragOver={handleDragOver}
+                                onDragLeave={handleDragLeave}
+                                onDrop={handleDrop}
+                                className={`rounded-xl border border-dashed px-4 py-4 text-center transition-colors ${
+                                    isDragActive
+                                        ? 'border-blue-400 bg-blue-50'
+                                        : 'border-gray-300 bg-gray-50'
+                                }`}
+                            >
+                                <p className="text-xs text-gray-700">Drag and drop up to {MAX_IMAGES} images here</p>
+                                <p className="mt-1 text-[11px] text-gray-500">or choose files manually</p>
+                                <label
+                                    htmlFor="return-proof-images"
+                                    className="mt-3 inline-flex cursor-pointer items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-semibold text-blue-700 hover:bg-blue-100"
+                                >
+                                    Select photos
+                                </label>
+                                <input
+                                    id="return-proof-images"
+                                    type="file"
+                                    accept="image/*"
+                                    capture="environment"
+                                    multiple
+                                    onChange={handleImagesChange}
+                                    className="sr-only"
+                                />
+                            </div>
                             <p className="mt-1 text-[11px] text-gray-500">Upload up to 5 photos. JPG/PNG/WEBP, max 5MB each.</p>
-                            {imagePreviewUrls.length > 0 && (
-                                <div className="mt-2 flex flex-wrap gap-2">
-                                    {imagePreviewUrls.map((url, index) => (
-                                        <div key={`preview-${index}`} className="h-16 w-16 overflow-hidden rounded-lg border border-gray-200">
-                                            <img src={url} alt={`Return preview ${index + 1}`} className="h-full w-full object-cover" />
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
+
+                            <div className="mt-2">
+                                <ImageGallery
+                                    items={previewItems}
+                                    emptyText="No photos selected yet."
+                                    sizeClassName="h-16 w-16"
+                                />
+                            </div>
                         </div>
 
                         {condition === 'Damaged' && (
