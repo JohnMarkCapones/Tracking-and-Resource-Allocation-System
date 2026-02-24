@@ -112,10 +112,10 @@ export default function IndexPage() {
         () =>
             [
                 { key: 'all' as const, label: 'All', count: summary.total },
-                { key: 'Active' as const, label: 'Active', count: summary.active, hideZero: true },
+                { key: 'Active' as const, label: 'Active', count: summary.active },
                 { key: 'Overdue' as const, label: 'Overdue', count: summary.overdue },
                 { key: 'Returned' as const, label: 'Returned', count: summary.returned },
-            ] satisfies Array<{ key: FilterStatus; label: string; count: number; hideZero?: boolean }>,
+            ] satisfies Array<{ key: FilterStatus; label: string; count: number }>,
         [summary],
     );
 
@@ -234,17 +234,15 @@ export default function IndexPage() {
                                             }`}
                                         >
                                             <span className="capitalize">{tab.label}</span>
-                                            {(!tab.hideZero || tab.count > 0) && (
-                                                <span
-                                                    className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
-                                                        filterStatus === tab.key
-                                                            ? 'bg-white/20 text-white'
-                                                            : 'bg-gray-200 text-gray-700'
-                                                    }`}
-                                                >
-                                                    {tab.count}
-                                                </span>
-                                            )}
+                                            <span
+                                                className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                                                    filterStatus === tab.key
+                                                        ? 'bg-white/20 text-white'
+                                                        : 'bg-gray-200 text-gray-700'
+                                                }`}
+                                            >
+                                                {tab.count}
+                                            </span>
                                         </button>
                                     ))}
                                 </div>
