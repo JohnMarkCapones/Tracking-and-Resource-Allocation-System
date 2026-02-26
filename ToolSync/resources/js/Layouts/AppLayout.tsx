@@ -398,9 +398,9 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
             <div className="pointer-events-none fixed inset-0 z-0 opacity-30">
                 <LaserFlow color="#6366f1" fogIntensity={0.3} wispIntensity={2} mouseTiltStrength={0.008} />
             </div>
-            <div className="relative z-10 flex min-h-screen overflow-hidden bg-[#f6f4f0] dark:bg-gray-900">
+            <div className="relative z-10 flex min-h-screen overflow-x-hidden bg-[#f6f4f0] dark:bg-gray-900">
                 {/* Sidebar */}
-                <aside className="hidden w-64 flex-shrink-0 border-r bg-white px-4 pt-6 pb-6 shadow-sm lg:flex lg:flex-col dark:border-gray-700 dark:bg-gray-800">
+                <aside className="hidden w-64 flex-shrink-0 border-r bg-white px-4 pt-6 pb-6 shadow-sm lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:self-start lg:overflow-y-auto dark:border-gray-700 dark:bg-gray-800">
                     <div className="flex items-center gap-2 px-2">
                         <Link href={logoHref}>
                             <img src={equipitLogo} alt="EquipIT" className="h-8 w-auto" />
