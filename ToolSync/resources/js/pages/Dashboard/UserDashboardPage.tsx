@@ -32,15 +32,19 @@ function mapRecentToHistoryItem(
     a: DashboardApiResponse['data']['recent_activity'][number],
 ): BorrowingHistoryItem {
     const status =
-        a.status === 'SCHEDULED'
-            ? ('Booked' as const)
-            : a.status === 'RETURNED'
-            ? ('Returned' as const)
-            : a.status === 'PENDING_RETURN'
-              ? ('Pending' as const)
-              : a.is_overdue
+        a.status_display === 'UNCLAIMED'
+            ? ('Unclaimed' as const)
+            : a.status_display === 'CANCELLED'
+              ? ('Cancelled' as const)
+              : a.status_display === 'OVERDUE'
                 ? ('Overdue' as const)
-                : ('Borrowed' as const);
+                : a.status === 'SCHEDULED'
+                  ? ('Booked' as const)
+                  : a.status === 'RETURNED'
+                    ? ('Returned' as const)
+                    : a.status === 'PENDING_RETURN'
+                      ? ('Pending' as const)
+                      : ('Borrowed' as const);
     return {
         equipment: a.tool_name ?? `Tool #${a.tool_id}`,
         toolId: 'TL-' + a.tool_id,
@@ -289,27 +293,42 @@ export default function UserDashboardPage() {
                                         </li>
                                     ) : (
                                         recentActivityRaw.slice(0, 5).map((activity) => {
+                                            const isUnclaimed = activity.status_display === 'UNCLAIMED';
+                                            const isCancelled = activity.status_display === 'CANCELLED';
+                                            const isOverdue = activity.status_display === 'OVERDUE';
                                             const dotClass =
                                                 activity.status === 'RETURNED'
                                                     ? 'bg-emerald-500'
-                                                    : activity.status === 'SCHEDULED'
+                                                    : activity.status === 'SCHEDULED' && !isUnclaimed
                                                       ? 'bg-sky-500'
-                                                    : activity.is_overdue
+                                                    : isUnclaimed
+                                                      ? 'bg-orange-500'
+                                                      : isCancelled
+                                                        ? 'bg-rose-500'
+                                                        : isOverdue
                                                       ? 'bg-amber-500'
                                                       : 'bg-sky-500';
                                             const title =
                                                 activity.status === 'RETURNED'
                                                     ? `${activity.tool_name ?? 'Tool'} returned`
-                                                    : activity.status === 'SCHEDULED'
+                                                    : activity.status === 'SCHEDULED' && !isUnclaimed
                                                       ? `${activity.tool_name ?? 'Tool'} pickup booked`
-                                                    : activity.is_overdue
+                                                      : isUnclaimed
+                                                        ? `${activity.tool_name ?? 'Tool'} pickup unclaimed`
+                                                        : isCancelled
+                                                          ? `${activity.tool_name ?? 'Tool'} booking cancelled`
+                                                          : isOverdue
                                                       ? `${activity.tool_name ?? 'Tool'} overdue`
                                                       : `${activity.tool_name ?? 'Tool'} borrowed`;
                                             const details =
                                                 activity.status === 'RETURNED'
                                                     ? `${activity.user_name ?? 'A user'} returned this tool.`
-                                                    : activity.status === 'SCHEDULED'
+                                                    : activity.status === 'SCHEDULED' && !isUnclaimed
                                                       ? `${activity.user_name ?? 'A user'} has an approved pickup booking.`
+                                                      : isUnclaimed
+                                                        ? `${activity.user_name ?? 'A user'} did not claim the pickup on time.`
+                                                        : isCancelled
+                                                          ? `${activity.user_name ?? 'A user'} has a cancelled booking.`
                                                     : `${activity.user_name ?? 'A user'} borrowed this tool.`;
 
                                             return (

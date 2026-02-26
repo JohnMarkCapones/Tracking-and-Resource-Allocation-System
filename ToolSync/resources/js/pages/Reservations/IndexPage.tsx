@@ -13,34 +13,49 @@ type Reservation = {
     toolId: string;
     startDate: string;
     endDate: string;
-    status: 'pending_approval' | 'booked' | 'unclaimed' | 'completed' | 'cancelled';
+    status: 'pending_approval' | 'booked' | 'unclaimed' | 'cancelled';
+    allocationId?: number;
+    canCancel: boolean;
+    canClaim: boolean;
     recurring?: boolean;
     recurrencePattern?: string;
 };
 
 type ReservationsApiResponse = { data: ReservationApiItem[] };
 
-function mapApiToReservation(r: ReservationApiItem): Reservation {
+function mapApiToReservation(r: ReservationApiItem): Reservation | null {
     const raw = r.status.toLowerCase();
+    const flow = (r.flow_status ?? '').toLowerCase();
     const startYmd = r.startDate.slice(0, 10);
     const startDate = new Date(`${startYmd}T00:00:00`);
     const today = new Date();
     const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
-    // Canonical reservation statuses (single source of truth per item):
-    // - pending      => pending_approval
-    // - completed    => booked when start date is in the future, else completed
-    // - cancelled    => unclaimed when start date is in the past, else cancelled
-    const status: Reservation['status'] =
-        raw === 'completed'
-            ? startDate > todayStart
-                ? 'booked'
-                : 'completed'
-            : raw === 'cancelled'
-              ? startDate < todayStart
-                  ? 'unclaimed'
-                  : 'cancelled'
-              : 'pending_approval';
+    const status: Reservation['status'] | 'claimed' | 'completed' =
+        flow === 'booked' || flow === 'pending_approval' || flow === 'unclaimed' || flow === 'cancelled' || flow === 'claimed' || flow === 'completed'
+            ? flow
+            : raw === 'completed'
+              ? startDate > todayStart
+                  ? 'booked'
+                  : 'claimed'
+              : raw === 'cancelled'
+                ? startDate < todayStart
+                    ? 'unclaimed'
+                    : 'cancelled'
+                : 'pending_approval';
+
+    // Claimed/finished rows belong to My Borrowings, not My Reservations.
+    if (status === 'claimed' || status === 'completed') {
+        return null;
+    }
+
+    const canCancel =
+        typeof r.can_cancel === 'boolean' ? r.can_cancel : status === 'pending_approval' || status === 'booked';
+    const canClaim =
+        typeof r.can_claim === 'boolean'
+            ? r.can_claim
+            : status === 'booked' && (r.allocation_id ?? null) !== null && startDate <= todayStart;
+
     return {
         id: r.id,
         toolName: r.toolName,
@@ -48,6 +63,9 @@ function mapApiToReservation(r: ReservationApiItem): Reservation {
         startDate: r.startDate,
         endDate: r.endDate,
         status,
+        allocationId: r.allocation_id ?? undefined,
+        canCancel,
+        canClaim,
         recurring: r.recurring,
         recurrencePattern: r.recurrencePattern ?? undefined,
     };
@@ -57,7 +75,6 @@ const STATUS_STYLES: Record<string, string> = {
     pending_approval: 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
     booked: 'bg-sky-50 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400',
     unclaimed: 'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
-    completed: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',
     cancelled: 'bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
 };
 
@@ -67,7 +84,6 @@ function statusLabel(status: Reservation['status']): string {
     if (status === 'pending_approval') return 'Pending Approval';
     if (status === 'booked') return 'Booked';
     if (status === 'unclaimed') return 'Unclaimed';
-    if (status === 'completed') return 'Approved';
     return status;
 }
 
@@ -101,6 +117,7 @@ export default function IndexPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [reservationToCancel, setReservationToCancel] = useState<Reservation | null>(null);
+    const [claimingReservationId, setClaimingReservationId] = useState<number | null>(null);
     const [currentMonth, setCurrentMonth] = useState(new Date());
 
     useEffect(() => {
@@ -112,7 +129,11 @@ export default function IndexPage() {
             try {
                 const res = await apiRequest<ReservationsApiResponse>('/api/reservations');
                 if (cancelled) return;
-                setReservations((res.data ?? []).map(mapApiToReservation));
+                setReservations(
+                    (res.data ?? [])
+                        .map(mapApiToReservation)
+                        .filter((item): item is Reservation => item !== null),
+                );
             } catch (err) {
                 if (!cancelled) {
                     setError(err instanceof Error ? err.message : 'Failed to load reservations');
@@ -137,7 +158,6 @@ export default function IndexPage() {
         const pendingApproval = reservations.filter((r) => r.status === 'pending_approval').length;
         const booked = reservations.filter((r) => r.status === 'booked').length;
         const unclaimed = reservations.filter((r) => r.status === 'unclaimed').length;
-        const completed = reservations.filter((r) => r.status === 'completed').length;
         const cancelled = reservations.filter((r) => r.status === 'cancelled').length;
 
         return {
@@ -145,7 +165,6 @@ export default function IndexPage() {
             booked,
             pendingApproval,
             unclaimed,
-            completed,
             cancelled,
         };
     }, [reservations]);
@@ -157,7 +176,6 @@ export default function IndexPage() {
                 { key: 'booked' as const, label: 'Booked', count: summary.booked },
                 { key: 'pending_approval' as const, label: 'Pending Approval', count: summary.pendingApproval },
                 { key: 'unclaimed' as const, label: 'Unclaimed', count: summary.unclaimed },
-                { key: 'completed' as const, label: 'Approved', count: summary.completed },
                 { key: 'cancelled' as const, label: 'Cancelled', count: summary.cancelled },
             ] satisfies Array<{ key: FilterStatus; label: string; count: number }>,
         [summary],
@@ -184,13 +202,34 @@ export default function IndexPage() {
                 body: { status: 'CANCELLED' },
             });
             setReservations((prev) =>
-                prev.map((r) => (r.id === reservationToCancel.id ? { ...r, status: 'cancelled' } : r)),
+                prev.map((r) =>
+                    r.id === reservationToCancel.id
+                        ? { ...r, status: 'cancelled', canCancel: false, canClaim: false }
+                        : r,
+                ),
             );
             toast.success(`Borrow request for ${reservationToCancel.toolName} has been cancelled.`);
         } catch {
             toast.error('Could not cancel borrow request');
         }
         setReservationToCancel(null);
+    };
+
+    const handleClaim = async (reservation: Reservation) => {
+        if (!reservation.allocationId || claimingReservationId === reservation.id) return;
+
+        setClaimingReservationId(reservation.id);
+        try {
+            await apiRequest(`/api/tool-allocations/${reservation.allocationId}/claim`, {
+                method: 'POST',
+            });
+            setReservations((prev) => prev.filter((r) => r.id !== reservation.id));
+            toast.success(`${reservation.toolName} has been claimed and moved to My Borrowings.`);
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to claim booking.');
+        } finally {
+            setClaimingReservationId(null);
+        }
     };
 
     return (
@@ -377,7 +416,18 @@ export default function IndexPage() {
                                         >
                                             {statusLabel(reservation.status)}
                                         </span>
-                                        {(reservation.status === 'pending_approval' || reservation.status === 'booked') && (
+                                        {reservation.status === 'booked' && reservation.allocationId && (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleClaim(reservation)}
+                                                disabled={!reservation.canClaim || claimingReservationId === reservation.id}
+                                                className="text-xs font-medium text-emerald-600 hover:text-emerald-700 disabled:cursor-not-allowed disabled:text-gray-400 dark:text-emerald-400"
+                                                title={!reservation.canClaim ? 'You can claim this booking on or after pickup date.' : undefined}
+                                            >
+                                                {claimingReservationId === reservation.id ? 'Claiming...' : 'Claim'}
+                                            </button>
+                                        )}
+                                        {reservation.canCancel && (
                                             <button
                                                 type="button"
                                                 onClick={() => setReservationToCancel(reservation)}

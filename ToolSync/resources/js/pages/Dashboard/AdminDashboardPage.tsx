@@ -66,15 +66,19 @@ function formatTimeAgo(date: Date): string {
 
 function mapDashboardRecentToBorrowingItem(a: DashboardRecentActivityItem): BorrowingHistoryItem {
     const status =
-        a.status === 'SCHEDULED'
-            ? ('Booked' as const)
-            : a.status === 'RETURNED'
-            ? ('Returned' as const)
-            : a.status === 'PENDING_RETURN'
-              ? ('Pending' as const)
-              : a.is_overdue
+        a.status_display === 'UNCLAIMED'
+            ? ('Unclaimed' as const)
+            : a.status_display === 'CANCELLED'
+              ? ('Cancelled' as const)
+              : a.status_display === 'OVERDUE'
                 ? ('Overdue' as const)
-                : ('Borrowed' as const);
+                : a.status === 'SCHEDULED'
+                  ? ('Booked' as const)
+                  : a.status === 'RETURNED'
+                    ? ('Returned' as const)
+                    : a.status === 'PENDING_RETURN'
+                      ? ('Pending' as const)
+                      : ('Borrowed' as const);
     return {
         equipment: a.tool_name ?? `Tool #${a.tool_id}`,
         toolId: 'TL-' + a.tool_id,
@@ -90,13 +94,18 @@ function mapDashboardRecentToBorrowingItem(a: DashboardRecentActivityItem): Borr
 
 function mapRecentActivityToItem(a: DashboardRecentActivityItem): RecentActivityItem {
     const date = new Date(a.borrow_date ?? a.expected_return_date ?? 0);
-    const tone: ActivityTone = a.is_overdue ? 'maintenance' : a.status === 'RETURNED' ? 'borrowing' : 'borrowing';
+    const tone: ActivityTone =
+        a.status_display === 'OVERDUE' || a.status_display === 'UNCLAIMED' ? 'maintenance' : 'borrowing';
     const title =
-        a.status === 'SCHEDULED'
+        a.status_display === 'UNCLAIMED'
+            ? `${a.tool_name ?? 'Tool'} pickup unclaimed`
+            : a.status_display === 'CANCELLED'
+              ? `${a.tool_name ?? 'Tool'} booking cancelled`
+            : a.status === 'SCHEDULED'
             ? `${a.tool_name ?? 'Tool'} pickup booked`
             : a.status === 'RETURNED'
             ? `${a.tool_name ?? 'Tool'} returned`
-            : a.is_overdue
+            : a.status_display === 'OVERDUE'
               ? `${a.tool_name ?? 'Tool'} overdue`
               : `${a.tool_name ?? 'Tool'} borrowed`;
     const description =

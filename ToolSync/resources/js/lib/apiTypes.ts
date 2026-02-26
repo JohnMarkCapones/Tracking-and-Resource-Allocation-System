@@ -236,6 +236,10 @@ export type DashboardRecentActivityItem = {
     user_name: string | null;
     borrow_date?: string;
     expected_return_date: string;
+    cancelled_at?: string | null;
+    cancellation_reason?: string | null;
+    unclaimed_at?: string | null;
+    missed_pickup_at?: string | null;
     status: string;
     status_display: string;
     is_overdue: boolean;
@@ -300,6 +304,10 @@ export type ReservationApiItem = {
     startDate: string;
     endDate: string;
     status: string;
+    flow_status?: string;
+    allocation_id?: number | null;
+    can_cancel?: boolean;
+    can_claim?: boolean;
     recurring: boolean;
     recurrencePattern: string | null;
 };

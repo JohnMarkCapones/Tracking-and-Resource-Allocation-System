@@ -25,6 +25,83 @@ class ReservationController extends Controller
 {
     private const MAX_BORROWINGS_DEFAULT = 3;
 
+    private function reservationAllocationKey(int $toolId, string $startDate, string $endDate): string
+    {
+        return $toolId.'|'.$startDate.'|'.$endDate;
+    }
+
+    private function allocationIsUnclaimed(ToolAllocation $allocation, Carbon $today): bool
+    {
+        if ($allocation->status === 'SCHEDULED') {
+            $pickupDate = Carbon::parse(substr((string) $allocation->getRawOriginal('borrow_date'), 0, 10))->startOfDay();
+
+            return $pickupDate->lt($today);
+        }
+
+        if ($allocation->status === 'UNCLAIMED') {
+            return true;
+        }
+
+        if ($allocation->status !== 'CANCELLED') {
+            return false;
+        }
+
+        $reason = strtolower((string) ($allocation->cancellation_reason ?? ''));
+
+        return $allocation->unclaimed_at !== null
+            || $allocation->missed_pickup_at !== null
+            || str_contains($reason, 'unclaimed pickup')
+            || str_contains($reason, 'missed pickup');
+    }
+
+    private function resolveFlowStatus(Reservation $reservation, ?ToolAllocation $allocation, Carbon $today): string
+    {
+        $reservationStatus = strtoupper((string) $reservation->status);
+        $startDate = Carbon::parse((string) $reservation->start_date)->startOfDay();
+
+        if ($reservationStatus === 'PENDING') {
+            return 'pending_approval';
+        }
+
+        if ($reservationStatus === 'CANCELLED') {
+            if ($allocation && $this->allocationIsUnclaimed($allocation, $today)) {
+                return 'unclaimed';
+            }
+
+            return $startDate->lt($today) ? 'unclaimed' : 'cancelled';
+        }
+
+        if ($reservationStatus !== 'COMPLETED') {
+            return 'pending_approval';
+        }
+
+        if (! $allocation) {
+            return $startDate->gte($today) ? 'booked' : 'claimed';
+        }
+
+        if ($this->allocationIsUnclaimed($allocation, $today)) {
+            return 'unclaimed';
+        }
+
+        if ($allocation->status === 'SCHEDULED') {
+            return 'booked';
+        }
+
+        if (in_array($allocation->status, ['BORROWED', 'PENDING_RETURN'], true)) {
+            return 'claimed';
+        }
+
+        if ($allocation->status === 'RETURNED') {
+            return 'completed';
+        }
+
+        if ($allocation->status === 'CANCELLED') {
+            return 'cancelled';
+        }
+
+        return 'claimed';
+    }
+
     private function buildUnclaimedPickupPenaltyMessage(Carbon $penaltyUntil): string
     {
         return "You have an unclaimed pickup for this tool. You can request this tool again after {$penaltyUntil->toFormattedDateString()}.";
@@ -64,22 +141,64 @@ class ReservationController extends Controller
     {
         $user = $request->user();
 
+        if (! $user) {
+            return response()->json([
+                'data' => [],
+            ]);
+        }
+
+        $today = Carbon::today();
+
         $reservations = Reservation::query()
             ->with('tool')
-            ->where('user_id', $user?->id)
+            ->where('user_id', $user->id)
             ->orderByDesc('start_date')
+            ->get();
+
+        $allocationsByReservationKey = [];
+        ToolAllocation::query()
+            ->where('user_id', $user->id)
+            ->orderByDesc('id')
             ->get()
-            ->map(function (Reservation $reservation): array {
-                /** @var Tool $tool */
+            ->each(function (ToolAllocation $allocation) use (&$allocationsByReservationKey): void {
+                $borrowDate = substr((string) $allocation->getRawOriginal('borrow_date'), 0, 10);
+                $expectedReturnDate = substr((string) $allocation->getRawOriginal('expected_return_date'), 0, 10);
+                $key = $this->reservationAllocationKey($allocation->tool_id, $borrowDate, $expectedReturnDate);
+
+                if (! array_key_exists($key, $allocationsByReservationKey)) {
+                    $allocationsByReservationKey[$key] = $allocation;
+                }
+            });
+
+        $reservations = $reservations
+            ->map(function (Reservation $reservation) use ($allocationsByReservationKey, $today): array {
+                /** @var Tool|null $tool */
                 $tool = $reservation->tool;
+
+                $startDate = $reservation->start_date->toDateString();
+                $endDate = $reservation->end_date->toDateString();
+                $allocationKey = $this->reservationAllocationKey($reservation->tool_id, $startDate, $endDate);
+                /** @var ToolAllocation|null $linkedAllocation */
+                $linkedAllocation = $allocationsByReservationKey[$allocationKey] ?? null;
+                $flowStatus = $this->resolveFlowStatus($reservation, $linkedAllocation, $today);
+                $canCancel = in_array($flowStatus, ['pending_approval', 'booked'], true);
+
+                $pickupDate = Carbon::parse($startDate)->startOfDay();
+                $canClaim = $flowStatus === 'booked'
+                    && $linkedAllocation !== null
+                    && $pickupDate->lte($today);
 
                 return [
                     'id' => $reservation->id,
-                    'toolName' => $tool->name,
-                    'toolId' => 'TL-'.$tool->id,
-                    'startDate' => $reservation->start_date->toDateString(),
-                    'endDate' => $reservation->end_date->toDateString(),
+                    'toolName' => $tool?->name ?? "Tool #{$reservation->tool_id}",
+                    'toolId' => 'TL-'.($tool?->id ?? $reservation->tool_id),
+                    'startDate' => $startDate,
+                    'endDate' => $endDate,
                     'status' => strtolower($reservation->status),
+                    'flow_status' => $flowStatus,
+                    'allocation_id' => $linkedAllocation?->id,
+                    'can_cancel' => $canCancel,
+                    'can_claim' => $canClaim,
                     'recurring' => (bool) $reservation->recurring,
                     'recurrencePattern' => $reservation->recurrence_pattern,
                 ];
@@ -563,7 +682,7 @@ class ReservationController extends Controller
             'success',
             'Borrowing approved',
             "Your request to borrow {$toolName} has been approved. It is booked for pickup on {$borrowDate->toFormattedDateString()}.",
-            '/borrowings'
+            '/reservations'
         ));
 
         $adminRecipients = User::query()->where('role', 'ADMIN')->get();

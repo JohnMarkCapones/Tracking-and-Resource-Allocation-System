@@ -175,11 +175,29 @@ class DashboardController extends Controller
                 // Read raw DB value for expected_return_date (e.g. "2026-02-11 00:00:00")
                 // and compare against end-of-day so a tool due on Feb 11 is only overdue on Feb 12.
                 $rawExpected = $a->getRawOriginal('expected_return_date');
+                $rawBorrow = $a->getRawOriginal('borrow_date');
+                $borrowDate = substr((string) $rawBorrow, 0, 10);
+                $expectedReturnDate = substr((string) $rawExpected, 0, 10);
                 $isOverdue = $a->status === 'BORROWED'
                     && ! empty($rawExpected)
-                    && Carbon::parse(substr((string) $rawExpected, 0, 10))->endOfDay()->isPast();
+                    && Carbon::parse($expectedReturnDate)->endOfDay()->isPast();
 
-                $statusDisplay = $isOverdue ? 'OVERDUE' : $a->status;
+                $isPastUnclaimedPickup = $a->status === 'SCHEDULED'
+                    && $borrowDate !== ''
+                    && Carbon::parse($borrowDate)->startOfDay()->lt(Carbon::today());
+
+                $cancellationReason = strtolower((string) ($a->cancellation_reason ?? ''));
+                $isCancelledUnclaimed = $a->status === 'CANCELLED'
+                    && (
+                        $a->unclaimed_at !== null
+                        || $a->missed_pickup_at !== null
+                        || str_contains($cancellationReason, 'unclaimed pickup')
+                        || str_contains($cancellationReason, 'missed pickup')
+                    );
+
+                $statusDisplay = $isOverdue
+                    ? 'OVERDUE'
+                    : (($isPastUnclaimedPickup || $isCancelledUnclaimed) ? 'UNCLAIMED' : $a->status);
 
                 return [
                     'id' => $a->id,
@@ -187,8 +205,12 @@ class DashboardController extends Controller
                     'tool_name' => $a->tool?->name,
                     'user_id' => $a->user_id,
                     'user_name' => $a->user?->name,
-                    'borrow_date' => substr((string) $a->getRawOriginal('borrow_date'), 0, 10),
-                    'expected_return_date' => substr((string) $rawExpected, 0, 10),
+                    'borrow_date' => $borrowDate,
+                    'expected_return_date' => $expectedReturnDate,
+                    'cancelled_at' => $a->cancelled_at?->toIso8601String(),
+                    'cancellation_reason' => $a->cancellation_reason,
+                    'unclaimed_at' => $a->unclaimed_at?->toIso8601String(),
+                    'missed_pickup_at' => $a->missed_pickup_at?->toIso8601String(),
                     'status' => $a->status,
                     'status_display' => $statusDisplay,
                     'is_overdue' => $isOverdue,
