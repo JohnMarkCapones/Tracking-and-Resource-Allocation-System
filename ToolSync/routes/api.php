@@ -58,6 +58,7 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::get('tool-allocations/history/summary', [ToolAllocationHistoryController::class, 'summary']);
     Route::get('tool-allocations/export', [ToolAllocationHistoryController::class, 'export']);
     Route::post('tool-allocations/{tool_allocation}/cancel', [ToolAllocationController::class, 'cancel']);
+    Route::post('tool-allocations/{tool_allocation}/claim', [ToolAllocationController::class, 'claim']);
     Route::get('analytics/overview', [AnalyticsController::class, 'overview']);
     Route::get('analytics/export', [AnalyticsController::class, 'export']);
 
@@ -82,7 +83,6 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
         Route::get('admin/approvals/count', [DashboardController::class, 'approvalsCount']);
         Route::post('reservations/{reservation}/approve', [ReservationController::class, 'approve']);
         Route::post('reservations/{reservation}/decline', [ReservationController::class, 'decline']);
-        Route::post('tool-allocations/{tool_allocation}/claim', [ToolAllocationController::class, 'claim']);
     });
 
     Route::get('admin/users', [AdminUserController::class, 'index']);

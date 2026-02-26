@@ -1,7 +1,14 @@
 import { Link } from '@inertiajs/react';
 import { useState, type ReactElement } from 'react';
 
-export type BorrowingHistoryStatus = 'Returned' | 'Borrowed' | 'Overdue' | 'Pending' | 'Booked';
+export type BorrowingHistoryStatus =
+    | 'Returned'
+    | 'Borrowed'
+    | 'Overdue'
+    | 'Pending'
+    | 'Booked'
+    | 'Unclaimed'
+    | 'Cancelled';
 
 export type BorrowingHistoryItem = {
     equipment: string;
@@ -29,6 +36,8 @@ function statusClasses(status: BorrowingHistoryStatus): string {
     if (status === 'Borrowed') return 'bg-amber-50 text-amber-700';
     if (status === 'Pending') return 'bg-amber-50 text-amber-700';
     if (status === 'Booked') return 'bg-sky-50 text-sky-700';
+    if (status === 'Unclaimed') return 'bg-orange-50 text-orange-700';
+    if (status === 'Cancelled') return 'bg-rose-50 text-rose-700';
     return 'bg-rose-50 text-rose-700';
 }
 
@@ -46,7 +55,7 @@ function statusIcon(status: BorrowingHistoryStatus): ReactElement {
         );
     }
 
-    if (status === 'Borrowed' || status === 'Pending' || status === 'Booked') {
+    if (status === 'Borrowed' || status === 'Pending' || status === 'Booked' || status === 'Unclaimed') {
         return (
             <svg className="mr-1.5 h-3 w-3" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M8 3.5V8L11 9.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
@@ -205,7 +214,7 @@ export function BorrowingHistoryTable({
                                                 View
                                             </button>
                                         )}
-                                        {item.status !== 'Returned' && item.status !== 'Pending' && item.status !== 'Booked' && onReturn && (
+                                        {(item.status === 'Borrowed' || item.status === 'Overdue') && onReturn && (
                                             <button
                                                 type="button"
                                                 onClick={() => onReturn(item)}

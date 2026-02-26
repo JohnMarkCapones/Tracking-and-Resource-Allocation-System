@@ -890,9 +890,16 @@ class ToolAllocationController extends Controller
     public function claim(Request $request, ToolAllocation $toolAllocation): JsonResponse
     {
         $actor = $request->user();
-        if (! $actor || ! $actor->isAdmin()) {
+        if (! $actor) {
             return response()->json([
-                'message' => 'Only admins can mark a borrowing as claimed.',
+                'message' => 'Unauthorized.',
+            ], 401);
+        }
+
+        $isAdmin = $actor->isAdmin();
+        if (! $isAdmin && $toolAllocation->user_id !== $actor->id) {
+            return response()->json([
+                'message' => 'You can only claim your own booked pickup.',
             ], 403);
         }
 
@@ -906,7 +913,7 @@ class ToolAllocationController extends Controller
         $borrowDate = Carbon::parse(substr((string) $toolAllocation->getRawOriginal('borrow_date'), 0, 10))->startOfDay();
         if (now()->lt($borrowDate)) {
             return response()->json([
-                'message' => 'Borrowing cannot be claimed before its start date.',
+                'message' => 'Booking cannot be claimed before its pickup date.',
             ], 422);
         }
 
@@ -946,15 +953,29 @@ class ToolAllocationController extends Controller
         );
 
         $toolName = $claimedAllocation->tool?->name ?? "Tool #{$claimedAllocation->tool_id}";
-        $claimedAllocation->user?->notify(new InAppSystemNotification(
-            'success',
-            'Tool pickup confirmed',
-            "Your pickup for {$toolName} has been confirmed. The borrowing is now active.",
-            '/borrowings'
-        ));
+        if ($isAdmin) {
+            $claimedAllocation->user?->notify(new InAppSystemNotification(
+                'success',
+                'Tool pickup confirmed',
+                "Your pickup for {$toolName} has been confirmed. The borrowing is now active.",
+                '/borrowings'
+            ));
+        } else {
+            $adminRecipients = User::query()->where('role', 'ADMIN')->get();
+            if ($adminRecipients->isNotEmpty()) {
+                Notification::send($adminRecipients, new InAppSystemNotification(
+                    'info',
+                    'Booked pickup claimed',
+                    "{$claimedAllocation->user?->name} claimed a booked pickup for {$toolName}.",
+                    '/admin/allocation-history'
+                ));
+            }
+        }
 
         return response()->json([
-            'message' => 'Borrowing marked as claimed.',
+            'message' => $isAdmin
+                ? 'Borrowing marked as claimed.'
+                : 'Pickup claimed successfully. Borrowing is now active.',
             'data' => $claimedAllocation,
         ]);
     }
