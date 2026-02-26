@@ -32,12 +32,13 @@ export type UpcomingReturnItem = {
 function mapRecentToHistoryItem(
     a: DashboardApiResponse['data']['recent_activity'][number],
 ): BorrowingHistoryItem {
+    const rawStatus = (a.status_display ?? a.status ?? '').toUpperCase();
     const status =
-        a.status_display === 'UNCLAIMED'
+        rawStatus === 'UNCLAIMED'
             ? ('Unclaimed' as const)
-            : a.status_display === 'CANCELLED'
+            : rawStatus === 'CANCELLED'
               ? ('Cancelled' as const)
-              : a.status_display === 'OVERDUE'
+              : rawStatus === 'OVERDUE'
                 ? ('Overdue' as const)
                 : a.status === 'SCHEDULED'
                   ? ('Booked' as const)
@@ -265,7 +266,13 @@ export default function UserDashboardPage() {
                         <div className="space-y-6">
                             <BorrowingHistoryTable
                                 items={borrowingHistory}
-                                getViewHref={(item) => (item.allocationId ? `/borrowings?allocation=${item.allocationId}` : '/borrowings')}
+                                getViewHref={(item) =>
+                                    item.status === 'Booked'
+                                        ? '/reservations'
+                                        : item.allocationId
+                                          ? `/borrowings?allocation=${item.allocationId}`
+                                          : '/borrowings'
+                                }
                                 onReturn={(item) => item.allocationId && setReturnModalItem(item)}
                             />
 

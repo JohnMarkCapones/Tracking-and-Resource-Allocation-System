@@ -1,4 +1,4 @@
-import { Head, usePage } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import { useState, useMemo } from 'react';
 
 import type { ReactNode } from 'react';
@@ -91,7 +91,6 @@ export default function IndexPage() {
     const [notifications, setNotifications] = useState<Notification[]>(initialNotifications);
     const [filterType, setFilterType] = useState<FilterType>('all');
     const [pendingActionId, setPendingActionId] = useState<number | null>(null);
-    const [pendingReturnActionId, setPendingReturnActionId] = useState<number | null>(null);
 
     const filteredNotifications = useMemo(() => {
         if (filterType === 'all') return notifications;
@@ -189,40 +188,6 @@ export default function IndexPage() {
             toast.error(message);
         } finally {
             setPendingActionId(null);
-        }
-    };
-
-    const handleApproveReturnRequest = async (allocationId: number) => {
-        setPendingReturnActionId(allocationId);
-        try {
-            await apiRequest(`/api/tool-allocations/${allocationId}`, {
-                method: 'PUT',
-                body: { status: 'RETURNED' },
-            });
-            toast.success('Return approved.');
-            await refetchNotifications();
-        } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to approve return';
-            toast.error(message);
-        } finally {
-            setPendingReturnActionId(null);
-        }
-    };
-
-    const handleDeclineReturnRequest = async (allocationId: number) => {
-        setPendingReturnActionId(allocationId);
-        try {
-            await apiRequest(`/api/tool-allocations/${allocationId}`, {
-                method: 'PUT',
-                body: { status: 'BORROWED' },
-            });
-            toast.success('Return declined. Tool stays borrowed.');
-            await refetchNotifications();
-        } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to decline return';
-            toast.error(message);
-        } finally {
-            setPendingReturnActionId(null);
         }
     };
 
@@ -355,23 +320,13 @@ export default function IndexPage() {
                                                 </div>
                                             )}
                                             {isAdmin && notification.allocationId != null && (
-                                                <div className="mt-2 flex flex-wrap gap-2">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleApproveReturnRequest(notification.allocationId!)}
-                                                        disabled={pendingReturnActionId === notification.allocationId}
-                                                        className="rounded-full bg-emerald-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                                                <div className="mt-2">
+                                                    <Link
+                                                        href="/admin/approvals"
+                                                        className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-black"
                                                     >
-                                                        {pendingReturnActionId === notification.allocationId ? '…' : 'Approve'}
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleDeclineReturnRequest(notification.allocationId!)}
-                                                        disabled={pendingReturnActionId === notification.allocationId}
-                                                        className="rounded-full border border-gray-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-60"
-                                                    >
-                                                        Decline
-                                                    </button>
+                                                        Review in Approvals
+                                                    </Link>
                                                 </div>
                                             )}
                                         </div>

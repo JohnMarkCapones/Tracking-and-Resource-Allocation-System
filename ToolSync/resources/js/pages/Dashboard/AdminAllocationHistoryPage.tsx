@@ -607,6 +607,8 @@ export default function AdminAllocationHistoryPage() {
                                         const isEven = index % 2 === 0;
                                         const isReturned = row.status === 'Returned';
                                         const isBooked = row.status === 'Booked';
+                                        const isPending = row.status === 'Pending';
+                                        const isActive = row.status === 'Active';
 
                                         return (
                                             <tr
@@ -654,7 +656,7 @@ export default function AdminAllocationHistoryPage() {
                                                         >
                                                             {claimingId === row.id ? 'Claiming…' : 'Mark Claimed'}
                                                         </button>
-                                                    ) : isReturned ? (
+                                                    ) : isReturned || isPending || isActive ? (
                                                         <button
                                                             type="button"
                                                             onClick={() => setSelectedAllocation(row)}
