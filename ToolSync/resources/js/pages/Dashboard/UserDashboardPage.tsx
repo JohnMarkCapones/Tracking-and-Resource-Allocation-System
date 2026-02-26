@@ -8,7 +8,8 @@ import { SummaryDonutChart } from '@/Components/Dashboard/SummaryDonutChart';
 import { WelcomeBanner } from '@/Components/Dashboard/WelcomeBanner';
 import { toast } from '@/Components/Toast';
 import AppLayout from '@/Layouts/AppLayout';
-import type { DashboardApiResponse } from '@/lib/apiTypes';
+import type { AllocationDto, DashboardApiResponse, ReservationApiItem } from '@/lib/apiTypes';
+import { mapAllocationStatusToUi } from '@/lib/apiTypes';
 import { apiRequest } from '@/lib/http';
 
 type SharedProps = { auth?: { user?: { name?: string } } };
@@ -85,6 +86,10 @@ export default function UserDashboardPage() {
         returned: 0,
         active: 0,
         overdue: 0,
+        pendingApproval: 0,
+        booked: 0,
+        unclaimed: 0,
+        cancelled: 0,
     });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -96,8 +101,13 @@ export default function UserDashboardPage() {
             setError(null);
         }
         try {
-            const res = await apiRequest<DashboardApiResponse>('/api/dashboard');
-            const d = res.data;
+            const [dashboardRes, allocationsRes, reservationsRes] = await Promise.all([
+                apiRequest<DashboardApiResponse>('/api/dashboard'),
+                apiRequest<{ data: AllocationDto[] }>('/api/tool-allocations'),
+                apiRequest<{ data: ReservationApiItem[] }>('/api/reservations'),
+            ]);
+
+            const d = dashboardRes.data;
             const counts = d.counts;
             setAvailableTools(counts.tools_available_quantity);
             setToolsUnderMaintenance(counts.tools_maintenance_quantity);
@@ -113,13 +123,39 @@ export default function UserDashboardPage() {
             const recent = d.recent_activity ?? [];
             setBorrowingHistory(recent.map(mapRecentToHistoryItem));
             setRecentActivityRaw(recent);
-            const returned = Number(d.summary.returned_count) || 0;
-            const notReturned = Number(d.summary.not_returned_count) || 0;
-            const overdueInPeriod = Number(d.summary.overdue_in_period_count) || 0;
+
+            let returned = 0;
+            let active = 0;
+            let overdue = 0;
+
+            for (const allocation of allocationsRes.data ?? []) {
+                const status = mapAllocationStatusToUi(allocation);
+                if (status === 'Returned') returned += 1;
+                else if (status === 'Active') active += 1;
+                else if (status === 'Overdue') overdue += 1;
+            }
+
+            let pendingApproval = 0;
+            let booked = 0;
+            let unclaimed = 0;
+            let cancelled = 0;
+
+            for (const reservation of reservationsRes.data ?? []) {
+                const flowStatus = (reservation.flow_status ?? '').toLowerCase();
+                if (flowStatus === 'pending_approval') pendingApproval += 1;
+                else if (flowStatus === 'booked') booked += 1;
+                else if (flowStatus === 'unclaimed') unclaimed += 1;
+                else if (flowStatus === 'cancelled') cancelled += 1;
+            }
+
             setAllocationSummary({
                 returned,
-                active: Math.max(0, notReturned - overdueInPeriod),
-                overdue: overdueInPeriod,
+                active,
+                overdue,
+                pendingApproval,
+                booked,
+                unclaimed,
+                cancelled,
             });
         } catch (err) {
             if (!silent) {

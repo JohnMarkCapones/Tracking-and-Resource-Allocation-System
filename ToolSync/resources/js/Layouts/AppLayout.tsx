@@ -690,7 +690,7 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                 )}
 
                 {/* Main content */}
-                <div className="flex min-h-[600px] flex-1 flex-col">
+                <div className="flex h-screen flex-1 flex-col overflow-hidden">
                     <header className="border-b border-neutral-200 bg-[#f6f4f0] dark:border-gray-700 dark:bg-gray-900">
                         <div className="flex items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
                             <div className="flex items-center gap-3">
@@ -783,7 +783,7 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                         </div>
                     </header>
 
-                    <main className="flex w-full flex-1 flex-col px-8 py-6">{children}</main>
+                    <main className="flex w-full flex-1 flex-col overflow-y-auto px-8 py-6">{children}</main>
                 </div>
             </div>
             {isLogoutModalOpen && (
