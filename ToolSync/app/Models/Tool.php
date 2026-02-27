@@ -102,4 +102,19 @@ class Tool extends Model
     {
         return $this->hasMany(ToolConditionHistory::class);
     }
+
+    /**
+     * Get a human-friendly identifier for the tool.
+     *
+     * Prefer the explicit `code` when present, otherwise fall back to "TL-{id}" so
+     * all parts of the system can display a consistent identifier.
+     */
+    public function displayCode(): string
+    {
+        if (is_string($this->code) && trim($this->code) !== '') {
+            return trim($this->code);
+        }
+
+        return 'TL-'.$this->id;
+    }
 }

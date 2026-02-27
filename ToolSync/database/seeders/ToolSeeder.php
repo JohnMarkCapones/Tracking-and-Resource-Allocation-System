@@ -9,6 +9,13 @@ use Illuminate\Support\Facades\Schema;
 
 class ToolSeeder extends Seeder
 {
+    /**
+     * Seed a representative catalog of tools for local development.
+     *
+     * This implementation clears the `tools` table before inserting records so
+     * developers always start from a known-good dataset. Avoid running this in
+     * production, as it will delete existing tools.
+     */
     public function run(): void
     {
         if (! Schema::hasTable('tool_categories') || ! Schema::hasTable('tools')) {

@@ -14,6 +14,13 @@ use Illuminate\Support\Facades\Schema;
 
 class MaintenanceScheduleController extends Controller
 {
+    /**
+     * List maintenance schedules.
+     *
+     * This endpoint also performs a lightweight "sync" on each call:
+     * - Marks past-due "scheduled" items as "overdue"
+     * - Ensures associated tools are set to MAINTENANCE / AVAILABLE based on active schedules
+     */
     public function index(Request $request): JsonResponse
     {
         if (! Schema::hasTable('maintenance_schedules')) {
@@ -54,7 +61,7 @@ class MaintenanceScheduleController extends Controller
                 'id' => $m->id,
                 'tool_id' => $m->tool_id,
                 'toolName' => $tool->name,
-                'toolId' => 'TL-'.$tool->id,
+                'toolId' => $tool->displayCode(),
                 'type' => $m->type,
                 'scheduledDate' => $m->scheduled_date->toDateString(),
                 'completedDate' => $m->completed_date?->toDateString(),
