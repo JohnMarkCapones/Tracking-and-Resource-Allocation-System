@@ -37,7 +37,7 @@ class AuthenticatedSessionController extends Controller
         $user = $request->user();
 
         // Only this seeded admin account bypasses email verification.
-        if ($user && strtolower((string) $user->email) === 'admin@example.com' && ! $user->hasVerifiedEmail()) {
+        if ($user && strtolower((string) $user->email) === 'admin@astra.certicode.com' && ! $user->hasVerifiedEmail()) {
             $user->forceFill(['email_verified_at' => now()])->save();
             $user->refresh();
         }
