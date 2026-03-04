@@ -29,11 +29,11 @@ class DatabaseSeeder extends Seeder
         );
 
         $admin = User::updateOrCreate(
-            ['email' => 'admin@example.com'],
+            ['email' => 'admin@astra.certicode.com'],
             [
                 'name' => 'Admin',
                 'role' => 'ADMIN',
-                'password' => bcrypt('password'),
+                'password' => bcrypt('admin123'),
                 'department_id' => $firstDepartmentId,
             ]
         );
