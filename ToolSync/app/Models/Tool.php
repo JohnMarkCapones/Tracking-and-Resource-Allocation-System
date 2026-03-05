@@ -7,10 +7,15 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Storage;
 
 class Tool extends Model
 {
     use HasFactory;
+
+    protected $appends = [
+        'image_url',
+    ];
 
     protected $fillable = [
         'code',
@@ -116,5 +121,36 @@ class Tool extends Model
         }
 
         return 'TL-'.$this->id;
+    }
+
+    /**
+     * Resolve image URL for both seeded public assets and uploaded storage assets.
+     */
+    public function imageUrl(): ?string
+    {
+        if (! is_string($this->image_path) || trim($this->image_path) === '') {
+            return null;
+        }
+
+        $path = ltrim(trim($this->image_path), '/');
+
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $path;
+        }
+
+        if (Storage::disk('public')->exists($path)) {
+            return Storage::disk('public')->url($path);
+        }
+
+        if (is_file(public_path($path))) {
+            return asset($path);
+        }
+
+        return asset('storage/'.$path);
+    }
+
+    public function getImageUrlAttribute(): ?string
+    {
+        return $this->imageUrl();
     }
 }

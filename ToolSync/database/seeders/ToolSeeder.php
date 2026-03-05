@@ -124,6 +124,12 @@ class ToolSeeder extends Seeder
             ['name' => 'Blood Pressure Monitor', 'category' => 'Medical & First Aid', 'description' => 'Digital BP monitor', 'image_path' => null],
         ];
 
+        // Keep QA data clean: only seed tools that explicitly provide an image path.
+        $tools = array_values(array_filter(
+            $tools,
+            static fn (array $row): bool => ! empty($row['image_path']),
+        ));
+
         Schema::disableForeignKeyConstraints();
         Tool::query()->delete();
         Schema::enableForeignKeyConstraints();

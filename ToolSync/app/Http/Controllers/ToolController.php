@@ -144,7 +144,7 @@ class ToolController extends Controller
             'specifications' => $dbTool->specifications ?? [],
             'lastMaintenance' => $dbTool->updated_at?->format('M d, Y') ?? 'N/A',
             'totalBorrowings' => (int) ($dbTool->allocations_count ?? 0),
-            'imageUrl' => $dbTool->image_path ? asset('storage/'.$dbTool->image_path) : null,
+            'imageUrl' => $dbTool->imageUrl(),
         ];
 
         return Inertia::render('Tools/DetailPage', [

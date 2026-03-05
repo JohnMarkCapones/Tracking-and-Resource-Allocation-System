@@ -32,7 +32,7 @@ class FavoriteController extends Controller
                     'slug' => $tool->slug,
                     'toolId' => $tool->code && trim((string) $tool->code) !== '' ? trim((string) $tool->code) : 'TL-'.$tool->id,
                     'category' => $tool->category?->name ?? 'Other',
-                    'imageUrl' => $tool->image_path ? asset('storage/'.$tool->image_path) : null,
+                    'imageUrl' => $tool->imageUrl(),
                     'status' => $tool->status,
                     'condition' => $tool->condition ?? 'Good',
                     'quantity' => $tool->quantity,
