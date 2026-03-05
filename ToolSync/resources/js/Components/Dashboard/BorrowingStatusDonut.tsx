@@ -19,11 +19,11 @@ export function BorrowingStatusDonut({ segments }: BorrowingStatusDonutProps) {
 
     if (!segments.length) {
         return (
-            <section className="rounded-3xl bg-white p-6 shadow-sm">
+            <section className="rounded-3xl bg-white p-6 shadow-sm dark:bg-[#111827]">
                 <header className="mb-2">
                     <h3 className="text-sm font-semibold text-gray-900">Borrowing status</h3>
                 </header>
-                <div className="flex h-32 flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-gray-50 text-center">
+                <div className="flex h-32 flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-gray-50 text-center dark:border-gray-700 dark:bg-[#111827]">
                     <p className="text-xs font-medium text-gray-600">No status data available</p>
                     <p className="mt-1 text-[11px] text-gray-500">When tools are borrowed, their status distribution will appear here.</p>
                 </div>
@@ -32,7 +32,7 @@ export function BorrowingStatusDonut({ segments }: BorrowingStatusDonutProps) {
     }
 
     return (
-        <section className="rounded-3xl bg-white p-6 shadow-sm">
+        <section className="rounded-3xl bg-white p-6 shadow-sm dark:bg-[#111827]">
             <header className="mb-4 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-gray-900">Borrowing status</h3>
                 <span className="text-[11px] text-gray-500">Distribution per tool</span>
@@ -40,7 +40,7 @@ export function BorrowingStatusDonut({ segments }: BorrowingStatusDonutProps) {
 
             <div className="flex items-center gap-6">
                 <svg viewBox="0 0 100 100" className="h-32 w-32 -rotate-90" aria-hidden="true">
-                    <circle cx="50" cy="50" r={radius} className="fill-none stroke-slate-100" strokeWidth="16" />
+                    <circle cx="50" cy="50" r={radius} className="fill-none stroke-slate-100 dark:stroke-slate-700" strokeWidth="16" />
                     {segments.map((segment, index) => {
                         const segmentLength = (segment.value / total) * circumference;
                         const dashArray = `${segmentLength} ${circumference}`;
@@ -64,16 +64,16 @@ export function BorrowingStatusDonut({ segments }: BorrowingStatusDonutProps) {
                         );
                     })}
 
-                    <circle cx="50" cy="50" r={24} className="fill-white" />
-                    <text x="50" y="48" textAnchor="middle" className="rotate-90 fill-slate-500 text-[10px] font-medium">
+                    <circle cx="50" cy="50" r={24} className="fill-white dark:fill-[#111827]" />
+                    <text x="50" y="48" textAnchor="middle" className="rotate-90 fill-slate-500 text-[10px] font-medium dark:fill-slate-400">
                         Total
                     </text>
-                    <text x="50" y="60" textAnchor="middle" className="rotate-90 fill-slate-900 text-[15px] font-semibold">
+                    <text x="50" y="60" textAnchor="middle" className="rotate-90 fill-slate-900 text-[15px] font-semibold dark:fill-white">
                         {total}
                     </text>
                 </svg>
 
-                <div className="space-y-3 text-xs text-gray-700">
+                <div className="space-y-3 text-xs text-gray-700 dark:text-gray-200">
                     {segments.map((segment) => (
                         <div key={segment.label} className="flex items-center gap-2">
                             <span className="h-3 w-3 rounded-full bg-slate-400" />

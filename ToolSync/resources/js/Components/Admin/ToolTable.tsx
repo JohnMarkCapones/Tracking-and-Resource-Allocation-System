@@ -120,9 +120,9 @@ export function ToolTable({ tools, onEdit, onDelete, selectedIds, onSelectionCha
     };
 
     return (
-        <div className="rounded-3xl bg-white p-6 shadow-sm">
+        <div className="rounded-3xl bg-white p-6 shadow-sm dark:bg-transparent dark:text-gray-100">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center rounded-full bg-gray-50 px-3 py-1.5 text-xs text-gray-500 shadow-sm">
+                <div className="flex items-center rounded-full bg-gray-50 px-3 py-1.5 text-xs text-gray-500 shadow-sm dark:bg-gray-800 dark:text-gray-300">
                     <svg className="mr-2 h-4 w-4 text-gray-400" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <circle cx="9" cy="9" r="4.5" stroke="currentColor" strokeWidth="1.6" />
                         <path d="M12.5 12.5L16 16" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
@@ -135,29 +135,29 @@ export function ToolTable({ tools, onEdit, onDelete, selectedIds, onSelectionCha
                             setSearch(e.target.value);
                             setPage(1);
                         }}
-                        className="w-48 border-none bg-transparent text-xs outline-none placeholder:text-gray-400"
+                        className="w-48 border-none bg-transparent text-xs outline-none placeholder:text-gray-400 dark:placeholder:text-gray-500"
                     />
                 </div>
-                <p className="text-[11px] text-gray-500">{filteredAndSorted.length} tools total</p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400">{filteredAndSorted.length} tools total</p>
             </div>
 
             <div className="max-h-[460px] overflow-x-auto overflow-y-auto">
                 <table className="min-w-full text-left text-sm">
-                    <thead className="sticky top-0 z-10 border-b bg-white/90 text-xs font-medium tracking-wide text-gray-500 uppercase backdrop-blur">
+                    <thead className="sticky top-0 z-10 border-b bg-white/90 text-xs font-medium tracking-wide text-gray-500 uppercase backdrop-blur dark:border-gray-700 dark:bg-gray-900/80 dark:text-gray-400">
                         <tr>
                             <th className="py-3 pr-2">
                                 <input
                                     type="checkbox"
                                     checked={allSelected}
                                     onChange={toggleAll}
-                                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900"
                                 />
                             </th>
                             <th className="py-3 pr-4">
                                 <button
                                     type="button"
                                     onClick={() => toggleSort('name')}
-                                    className="inline-flex items-center gap-1 text-[11px] font-semibold tracking-wide text-gray-500 uppercase hover:text-gray-700"
+                                    className="inline-flex items-center gap-1 text-[11px] font-semibold tracking-wide text-gray-500 uppercase hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                                 >
                                     Tool
                                     {sortBy === 'name' && <span>{sortDir === 'asc' ? '↑' : '↓'}</span>}
@@ -168,7 +168,7 @@ export function ToolTable({ tools, onEdit, onDelete, selectedIds, onSelectionCha
                                 <button
                                     type="button"
                                     onClick={() => toggleSort('category')}
-                                    className="inline-flex items-center gap-1 text-[11px] font-semibold tracking-wide text-gray-500 uppercase hover:text-gray-700"
+                                    className="inline-flex items-center gap-1 text-[11px] font-semibold tracking-wide text-gray-500 uppercase hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                                 >
                                     Category
                                     {sortBy === 'category' && <span>{sortDir === 'asc' ? '↑' : '↓'}</span>}
@@ -178,7 +178,7 @@ export function ToolTable({ tools, onEdit, onDelete, selectedIds, onSelectionCha
                                 <button
                                     type="button"
                                     onClick={() => toggleSort('status')}
-                                    className="inline-flex items-center gap-1 text-[11px] font-semibold tracking-wide text-gray-500 uppercase hover:text-gray-700"
+                                    className="inline-flex items-center gap-1 text-[11px] font-semibold tracking-wide text-gray-500 uppercase hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                                 >
                                     Status
                                     {sortBy === 'status' && <span>{sortDir === 'asc' ? '↑' : '↓'}</span>}
@@ -190,7 +190,7 @@ export function ToolTable({ tools, onEdit, onDelete, selectedIds, onSelectionCha
                                 <button
                                     type="button"
                                     onClick={() => toggleSort('totalBorrowings')}
-                                    className="inline-flex items-center gap-1 text-[11px] font-semibold tracking-wide text-gray-500 uppercase hover:text-gray-700"
+                                    className="inline-flex items-center gap-1 text-[11px] font-semibold tracking-wide text-gray-500 uppercase hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                                 >
                                     Borrowings
                                     {sortBy === 'totalBorrowings' && <span>{sortDir === 'asc' ? '↑' : '↓'}</span>}
@@ -199,27 +199,27 @@ export function ToolTable({ tools, onEdit, onDelete, selectedIds, onSelectionCha
                             <th className="py-3 text-right">Actions</th>
                         </tr>
                     </thead>
-                    <tbody className="align-middle text-xs text-gray-700">
+                    <tbody className="align-middle text-xs text-gray-700 dark:text-gray-200">
                         {paginated.map((tool, index) => {
                             const isSelected = selectedIds.includes(tool.id);
 
                             return (
                                 <tr
                                     key={tool.id}
-                                    className={`border-b last:border-0 ${
+                                    className={`border-b last:border-0 dark:border-gray-800 ${
                                         index % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                                    } ${isSelected ? 'bg-blue-50' : ''} hover:bg-gray-100/80`}
+                                    } dark:bg-gray-900 ${isSelected ? 'bg-blue-50 dark:bg-blue-900/30' : ''} hover:bg-gray-100/80 dark:hover:bg-gray-800`}
                                 >
                                     <td className="py-3 pr-2">
                                         <input
                                             type="checkbox"
                                             checked={isSelected}
                                             onChange={() => toggleOne(tool.id)}
-                                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-900"
                                         />
                                     </td>
-                                    <td className="py-3 pr-4 font-medium text-gray-900">{tool.name}</td>
-                                    <td className="py-3 pr-4 font-mono text-gray-500">{tool.toolId}</td>
+                                    <td className="py-3 pr-4 font-medium text-gray-900 dark:text-gray-100">{tool.name}</td>
+                                    <td className="py-3 pr-4 font-mono text-gray-500 dark:text-gray-400">{tool.toolId}</td>
                                     <td className="py-3 pr-4">{tool.category}</td>
                                     <td className="py-3 pr-4">
                                         <span
@@ -230,8 +230,8 @@ export function ToolTable({ tools, onEdit, onDelete, selectedIds, onSelectionCha
                                     </td>
                                     <td className="py-3 pr-4">
                                         <div className="flex flex-col items-center gap-0.5">
-                                            <span className="font-semibold text-gray-900">{tool.availableCount}/{tool.quantity}</span>
-                                            <span className="text-[10px] text-gray-400 whitespace-nowrap">
+                                            <span className="font-semibold text-gray-900 dark:text-gray-100">{tool.availableCount}/{tool.quantity}</span>
+                                            <span className="text-[10px] text-gray-400 whitespace-nowrap dark:text-gray-500">
                                                 {tool.borrowedCount > 0 && <span className="text-amber-600">{tool.borrowedCount}B</span>}
                                                 {tool.borrowedCount > 0 && tool.reservedCount > 0 && ' · '}
                                                 {tool.reservedCount > 0 && <span className="text-blue-600">{tool.reservedCount}R</span>}
@@ -246,14 +246,14 @@ export function ToolTable({ tools, onEdit, onDelete, selectedIds, onSelectionCha
                                             <button
                                                 type="button"
                                                 onClick={() => onEdit(tool)}
-                                                className="rounded-full border border-gray-200 px-3 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50"
+                                                className="rounded-full border border-gray-200 px-3 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
                                             >
                                                 Edit
                                             </button>
                                             <button
                                                 type="button"
                                                 onClick={() => onDelete(tool)}
-                                                className="rounded-full border border-rose-200 px-3 py-1 text-[11px] font-medium text-rose-600 hover:bg-rose-50"
+                                                className="rounded-full border border-rose-200 px-3 py-1 text-[11px] font-medium text-rose-600 hover:bg-rose-50 dark:border-rose-500/40 dark:text-rose-300 dark:hover:bg-rose-900/20"
                                             >
                                                 Delete
                                             </button>
@@ -267,7 +267,7 @@ export function ToolTable({ tools, onEdit, onDelete, selectedIds, onSelectionCha
             </div>
 
             {filteredAndSorted.length > 0 && (
-                <footer className="mt-4 flex items-center justify-between text-[11px] text-gray-500">
+                <footer className="mt-4 flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400">
                     <p>
                         Showing <span className="font-semibold">{startIndex + 1}</span> to{' '}
                         <span className="font-semibold">{Math.min(startIndex + pageSize, filteredAndSorted.length)}</span> of{' '}
@@ -278,7 +278,7 @@ export function ToolTable({ tools, onEdit, onDelete, selectedIds, onSelectionCha
                             type="button"
                             onClick={() => setPage((p) => Math.max(1, p - 1))}
                             disabled={currentPage === 1}
-                            className="rounded-full border border-gray-200 px-3 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                            className="rounded-full border border-gray-200 px-3 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
                         >
                             Prev
                         </button>
@@ -289,7 +289,7 @@ export function ToolTable({ tools, onEdit, onDelete, selectedIds, onSelectionCha
                             type="button"
                             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                             disabled={currentPage === totalPages}
-                            className="rounded-full border border-gray-200 px-3 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                            className="rounded-full border border-gray-200 px-3 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
                         >
                             Next
                         </button>

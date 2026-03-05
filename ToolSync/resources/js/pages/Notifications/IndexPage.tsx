@@ -67,12 +67,13 @@ function typeIcon(type: NotificationType): ReactNode {
 }
 
 function typeBgClass(type: NotificationType, read: boolean): string {
-    if (read) return 'bg-white';
+    const dark = 'dark:bg-[#111827]';
+    if (read) return `bg-white ${dark}`;
 
-    if (type === 'alert') return 'bg-rose-50';
-    if (type === 'success') return 'bg-emerald-50';
-    if (type === 'maintenance') return 'bg-amber-50';
-    return 'bg-blue-50';
+    if (type === 'alert') return `bg-rose-50 ${dark}`;
+    if (type === 'success') return `bg-emerald-50 ${dark}`;
+    if (type === 'maintenance') return `bg-amber-50 ${dark}`;
+    return `bg-blue-50 ${dark}`;
 }
 
 type FilterType = 'all' | 'unread' | NotificationType;
@@ -197,18 +198,18 @@ export default function IndexPage() {
             variant={isAdmin ? 'admin' : 'user'}
             header={
                 <>
-                    <p className="text-xs font-medium tracking-[0.18em] text-gray-500 uppercase">Notifications</p>
-                    <h1 className="text-2xl font-semibold text-gray-900">Stay updated on your borrowings</h1>
+                    <p className="text-xs font-medium tracking-[0.18em] text-gray-500 uppercase dark:text-gray-400">Notifications</p>
+                    <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Stay updated on your borrowings</h1>
                 </>
             }
         >
             <Head title="Notifications" />
 
             <div className="space-y-6">
-                <section className="flex flex-col justify-between gap-3 rounded-3xl bg-white px-5 py-4 shadow-sm sm:flex-row sm:items-center">
+                <section className="flex flex-col justify-between gap-3 rounded-3xl bg-white px-5 py-4 shadow-sm dark:bg-[#111827] sm:flex-row sm:items-center">
                     <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[11px] font-semibold tracking-wide text-gray-500 uppercase">Filter</span>
-                        <div className="inline-flex flex-wrap items-center gap-1 rounded-full bg-gray-50 px-1 py-1 text-[11px] text-gray-600 shadow-sm">
+                        <span className="text-[11px] font-semibold tracking-wide text-gray-500 uppercase dark:text-gray-400">Filter</span>
+                        <div className="inline-flex flex-wrap items-center gap-1 rounded-full bg-gray-50 px-1 py-1 text-[11px] text-gray-600 shadow-sm dark:bg-gray-800 dark:text-gray-300">
                             {(['all', 'unread', 'alert', 'info', 'success', 'maintenance'] as const).map((type) => (
                                 <button
                                     key={type}
@@ -217,7 +218,7 @@ export default function IndexPage() {
                                     aria-pressed={filterType === type}
                                     aria-label={type === 'all' ? 'Show all notifications' : type === 'unread' ? `Show unread (${unreadCount})` : `Filter by ${type}`}
                                     className={`rounded-full px-3 py-1 capitalize ${
-                                        filterType === type ? 'bg-slate-900 text-white' : 'text-gray-600 hover:bg-gray-100'
+                                        filterType === type ? 'bg-slate-900 text-white' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
                                     }`}
                                 >
                                     {type === 'all'
@@ -235,7 +236,7 @@ export default function IndexPage() {
                             <button
                                 type="button"
                                 onClick={handleMarkAllAsRead}
-                                className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-medium text-gray-700 hover:bg-gray-50"
+                                className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-[#111827] dark:text-gray-200 dark:hover:bg-gray-800"
                             >
                                 Mark all as read
                             </button>
@@ -244,7 +245,7 @@ export default function IndexPage() {
                             <button
                                 type="button"
                                 onClick={handleClearAll}
-                                className="rounded-full border border-rose-200 bg-white px-3 py-1.5 text-[11px] font-medium text-rose-600 hover:bg-rose-50"
+                                className="rounded-full border border-rose-200 bg-white px-3 py-1.5 text-[11px] font-medium text-rose-600 hover:bg-rose-50 dark:border-rose-500/40 dark:bg-[#111827] dark:text-rose-300 dark:hover:bg-rose-900/20"
                             >
                                 Clear all
                             </button>
@@ -288,17 +289,17 @@ export default function IndexPage() {
                             return (
                             <div
                                 key={notification.id}
-                                className={`flex items-start gap-3 rounded-2xl px-4 py-3 shadow-sm ${typeBgClass(notifType, notification.read)}`}
+                                className={`flex items-start gap-3 rounded-2xl px-4 py-3 shadow-sm dark:border dark:border-gray-700 ${typeBgClass(notifType, notification.read)}`}
                             >
                                 <div className="mt-0.5">{typeIcon(notifType)}</div>
                                         <div className="flex-1">
                                     <div className="flex items-start justify-between gap-2">
                                         <div>
-                                            <p className={`text-sm ${notification.read ? 'text-gray-700' : 'font-semibold text-gray-900'}`}>
+                                            <p className={`text-sm ${notification.read ? 'text-gray-700 dark:text-gray-300' : 'font-semibold text-gray-900 dark:text-gray-100'}`}>
                                                 {notification.title}
                                             </p>
-                                            <p className="mt-0.5 text-xs text-gray-600">{notification.message}</p>
-                                            <p className="mt-1 text-[10px] text-gray-400">{notification.createdAt}</p>
+                                            <p className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">{notification.message}</p>
+                                            <p className="mt-1 text-[10px] text-gray-400 dark:text-gray-500">{notification.createdAt}</p>
                                             {isAdmin && notification.reservationId != null && (
                                                 <div className="mt-2 flex flex-wrap gap-2">
                                                     <button
@@ -313,7 +314,7 @@ export default function IndexPage() {
                                                         type="button"
                                                         onClick={() => handleDeclineBorrowRequest(notification.reservationId!)}
                                                         disabled={pendingActionId === notification.reservationId}
-                                                        className="rounded-full border border-gray-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-60"
+                                                        className="rounded-full border border-gray-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-60 dark:border-gray-600 dark:bg-[#111827] dark:text-gray-200 dark:hover:bg-gray-800"
                                                     >
                                                         Decline
                                                     </button>
@@ -335,7 +336,7 @@ export default function IndexPage() {
                                                 <button
                                                     type="button"
                                                     onClick={() => handleMarkAsRead(notification.id)}
-                                                    className="rounded-full p-1.5 text-gray-400 hover:bg-white hover:text-gray-600"
+                                                    className="rounded-full p-1.5 text-gray-400 hover:bg-white hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-200"
                                                     aria-label="Mark as read"
                                                 >
                                                     <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -352,7 +353,7 @@ export default function IndexPage() {
                                             <button
                                                 type="button"
                                                 onClick={() => handleDelete(notification.id)}
-                                                className="rounded-full p-1.5 text-gray-400 hover:bg-white hover:text-rose-600"
+                                                className="rounded-full p-1.5 text-gray-400 hover:bg-white hover:text-rose-600 dark:hover:bg-gray-800 dark:hover:text-rose-400"
                                                 aria-label="Delete notification"
                                             >
                                                 <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">

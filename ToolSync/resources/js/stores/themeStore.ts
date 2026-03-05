@@ -14,6 +14,16 @@ const getSystemTheme = (): 'light' | 'dark' => {
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 };
 
+const AUTH_PATHS = ['/', '/login', '/register', '/forgot-password'];
+const AUTH_PREFIXES = ['/register/', '/reset-password/'];
+
+function isAuthPage(): boolean {
+    if (typeof window === 'undefined') return false;
+    const path = window.location.pathname;
+    if (AUTH_PATHS.includes(path)) return true;
+    return AUTH_PREFIXES.some((prefix) => path.startsWith(prefix));
+}
+
 export const useThemeStore = create<ThemeState>()(
     persist(
         (set) => ({
@@ -24,7 +34,10 @@ export const useThemeStore = create<ThemeState>()(
                 const resolvedTheme = theme === 'system' ? getSystemTheme() : theme;
                 set({ theme, resolvedTheme });
 
-                // Apply theme to document
+                if (isAuthPage()) {
+                    document.documentElement.classList.remove('dark');
+                    return;
+                }
                 if (resolvedTheme === 'dark') {
                     document.documentElement.classList.add('dark');
                 } else {
@@ -35,13 +48,15 @@ export const useThemeStore = create<ThemeState>()(
         {
             name: 'toolsync-theme',
             onRehydrateStorage: () => (state) => {
-                if (state) {
+                if (state && !isAuthPage()) {
                     const resolvedTheme = state.theme === 'system' ? getSystemTheme() : state.theme;
                     if (resolvedTheme === 'dark') {
                         document.documentElement.classList.add('dark');
                     } else {
                         document.documentElement.classList.remove('dark');
                     }
+                } else if (isAuthPage()) {
+                    document.documentElement.classList.remove('dark');
                 }
             },
         },

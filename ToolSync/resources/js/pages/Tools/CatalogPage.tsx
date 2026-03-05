@@ -467,8 +467,8 @@ export default function CatalogPage() {
             activeRoute="tools-borrowing"
             header={
                 <>
-                    <p className="text-xs font-medium tracking-[0.18em] text-gray-500 uppercase">Tool catalog</p>
-                    <h1 className="text-2xl font-semibold text-gray-900">Browse and borrow equipment</h1>
+                    <p className="text-xs font-medium tracking-[0.18em] text-gray-500 uppercase dark:text-gray-400">Tool catalog</p>
+                    <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Browse and borrow equipment</h1>
                 </>
             }
         >
@@ -489,8 +489,8 @@ export default function CatalogPage() {
                         </div>
                     </div>
                 )}
-                <section className="flex flex-col gap-4 rounded-3xl bg-white/70 p-4 shadow-sm backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex items-center rounded-full bg-white px-4 py-2 shadow-sm">
+                <section className="flex flex-col gap-4 rounded-3xl bg-white/70 p-4 shadow-sm backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between dark:bg-gray-900/60">
+                    <div className="flex items-center rounded-full bg-white px-4 py-2 shadow-sm dark:bg-gray-800">
                         <svg className="mr-2 h-4 w-4 text-gray-400" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <circle cx="9" cy="9" r="4.5" stroke="currentColor" strokeWidth="1.6" />
                             <path d="M12.5 12.5L16 16" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
@@ -500,11 +500,11 @@ export default function CatalogPage() {
                             placeholder="Search tools by name or ID..."
                             value={search}
                             onChange={(e) => handleSearchChange(e.target.value)}
-                            className="w-64 border-none bg-transparent text-sm outline-none placeholder:text-gray-400"
+                            className="w-64 border-none bg-transparent text-sm outline-none placeholder:text-gray-400 dark:text-gray-200 dark:placeholder:text-gray-500"
                         />
                     </div>
-                    <div className="flex items-center gap-2 text-[11px] text-gray-500">
-                        <span className="font-semibold text-gray-900">{totalTools}</span>
+                    <div className="flex items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400">
+                        <span className="font-semibold text-gray-900 dark:text-gray-100">{totalTools}</span>
                         <span>tools found</span>
                         {tools.filter((t) => t.status === 'Available').length > 0 && (
                             <>
@@ -512,7 +512,7 @@ export default function CatalogPage() {
                                 <span className="text-emerald-600">{tools.filter((t) => t.status === 'Available').length} available on this page</span>
                             </>
                         )}
-                        <span className="mx-2 h-4 w-px bg-gray-200" />
+                        <span className="mx-2 h-4 w-px bg-gray-200 dark:bg-gray-700" />
                         <Link
                             href="/reservations"
                             className="inline-flex items-center gap-1 rounded-full bg-gray-900 px-3 py-1 text-[11px] font-semibold text-white shadow-sm hover:bg-gray-800"
@@ -534,7 +534,7 @@ export default function CatalogPage() {
 
                 {!loading && (
                 <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
-                    <div className="rounded-3xl bg-white p-5 shadow-sm lg:sticky lg:top-4 lg:self-start">
+                    <div className="rounded-3xl bg-white p-5 shadow-sm lg:sticky lg:top-4 lg:self-start dark:bg-gray-900">
                         <ToolFilters
                             categories={categories}
                             selectedCategories={selectedCategories}
@@ -545,7 +545,7 @@ export default function CatalogPage() {
                         />
                     </div>
 
-                    <section className="rounded-3xl bg-white p-5 shadow-sm">
+                    <section className="rounded-3xl bg-white p-5 shadow-sm dark:bg-gray-900">
                         {tools.length === 0 ? (
                             <EmptyState
                                 icon={
@@ -562,7 +562,7 @@ export default function CatalogPage() {
                                 }}
                             />
                         ) : (
-                            <div className="grid gap-4 border-t border-gray-100 pt-4 sm:grid-cols-2 xl:grid-cols-3">
+                            <div className="grid gap-4 border-t border-gray-100 pt-4 sm:grid-cols-2 xl:grid-cols-3 dark:border-gray-800">
                                 {tools.map((tool) => (
                                     <ToolCard
                                         key={tool.id}
