@@ -1,8 +1,7 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Breadcrumb } from '@/Components/Breadcrumb';
 import { EmptyState } from '@/Components/EmptyState';
-import { FavoriteButton } from '@/Components/FavoriteButton';
 import { ToolCard, type ToolCardData } from '@/Components/Tools/ToolCard';
 import AppLayout from '@/Layouts/AppLayout';
 import type { FavoriteApiItem } from '@/lib/apiTypes';
@@ -10,6 +9,45 @@ import { apiRequest } from '@/lib/http';
 import { useFavoritesStore } from '@/stores/favoritesStore';
 
 type FavoritesApiResponse = { data: FavoriteApiItem[] };
+
+type RecentlyViewedItem = {
+    id: number;
+    name: string;
+    slug?: string | null;
+    category: string;
+    imageUrl?: string | null;
+};
+
+function RecentlyViewedCard({ tool }: { tool: RecentlyViewedItem }) {
+    const [imageFailed, setImageFailed] = useState(false);
+
+    return (
+        <Link
+            href={`/tools/${tool.slug ?? tool.id}`}
+            className="w-44 flex-shrink-0 rounded-xl bg-white p-3 shadow-sm transition-shadow hover:shadow-md dark:bg-gray-800 sm:w-48"
+        >
+            <div className="mb-2 aspect-[4/3] w-full overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-700">
+                {!imageFailed && tool.imageUrl ? (
+                    <img
+                        src={tool.imageUrl}
+                        alt={tool.name}
+                        className="h-full w-full object-cover"
+                        onError={() => setImageFailed(true)}
+                    />
+                ) : (
+                    <div className="flex h-full w-full items-center justify-center text-gray-400">
+                        <svg className="h-8 w-8" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M14 8L8 14L12 18L18 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                            <path d="M22 10L30 18L26 22L18 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                        </svg>
+                    </div>
+                )}
+            </div>
+            <p className="truncate text-xs font-medium text-gray-900 dark:text-white">{tool.name}</p>
+            <p className="truncate text-[10px] text-gray-500 dark:text-gray-400">{tool.category}</p>
+        </Link>
+    );
+}
 
 export default function IndexPage() {
     const { favorites, recentlyViewed, clearRecentlyViewed, setFavorites } = useFavoritesStore();
@@ -143,27 +181,7 @@ export default function IndexPage() {
                     ) : (
                         <div className="flex gap-3 overflow-x-auto pb-2">
                             {recentlyViewed.map((tool) => (
-                                <Link
-                                    key={tool.id}
-                                    href={`/tools/${tool.slug ?? tool.id}`}
-                                    className="flex-shrink-0 rounded-xl bg-white p-3 shadow-sm transition-shadow hover:shadow-md dark:bg-gray-800"
-                                    style={{ minWidth: '160px' }}
-                                >
-                                    <div className="mb-2 aspect-square w-full overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-700">
-                                        {tool.imageUrl ? (
-                                            <img src={tool.imageUrl} alt={tool.name} className="h-full w-full object-cover" />
-                                        ) : (
-                                            <div className="flex h-full w-full items-center justify-center text-gray-400">
-                                                <svg className="h-8 w-8" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                    <path d="M14 8L8 14L12 18L18 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                                                    <path d="M22 10L30 18L26 22L18 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                                                </svg>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <p className="truncate text-xs font-medium text-gray-900 dark:text-white">{tool.name}</p>
-                                    <p className="truncate text-[10px] text-gray-500 dark:text-gray-400">{tool.category}</p>
-                                </Link>
+                                <RecentlyViewedCard key={tool.id} tool={tool} />
                             ))}
                         </div>
                     )}

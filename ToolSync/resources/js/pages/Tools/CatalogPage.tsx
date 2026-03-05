@@ -12,6 +12,7 @@ import AppLayout from '@/Layouts/AppLayout';
 import type { DashboardApiResponse, ReservationApiItem, ToolDto, ToolCategoryDto } from '@/lib/apiTypes';
 import { mapToolStatusToUi, mapAvailabilityStatusToUi } from '@/lib/apiTypes';
 import { apiRequest } from '@/lib/http';
+import { getToolImageUrl } from '@/lib/utils';
 
 const DEFAULT_MAX_BORROWINGS = 3;
 const PAGE_SIZE = 18;
@@ -70,7 +71,7 @@ function mapToolToCardData(dto: ToolDto): ToolCardData {
         reservedQuantity: calculatedReserved,
         hasConditionHistory: (dto.condition_histories_count ?? 0) > 0,
         latestAdminCondition: dto.latest_admin_condition ?? null,
-        imageUrl: dto.image_path ?? undefined,
+        imageUrl: dto.image_url ?? getToolImageUrl(dto.name, dto.image_path),
     };
 }
 
@@ -534,7 +535,7 @@ export default function CatalogPage() {
 
                 {!loading && (
                 <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
-                    <div className="rounded-3xl bg-white p-5 shadow-sm lg:sticky lg:top-4 lg:self-start dark:bg-gray-900">
+                    <div className="rounded-3xl bg-white p-5 shadow-sm lg:sticky lg:top-4 lg:h-[620px] lg:self-start lg:overflow-hidden dark:bg-gray-900">
                         <ToolFilters
                             categories={categories}
                             selectedCategories={selectedCategories}

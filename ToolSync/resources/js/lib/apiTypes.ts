@@ -19,6 +19,7 @@ export type ToolDto = {
     slug?: string | null;
     description: string | null;
     image_path: string | null;
+    image_url?: string | null;
     category_id: number;
     status: ToolStatusApi;
     condition?: string | null;
