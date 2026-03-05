@@ -4,11 +4,12 @@ import { Breadcrumb } from '@/Components/Breadcrumb';
 import { EmptyState } from '@/Components/EmptyState';
 import { ToolCard, type ToolCardData } from '@/Components/Tools/ToolCard';
 import AppLayout from '@/Layouts/AppLayout';
-import type { FavoriteApiItem } from '@/lib/apiTypes';
+import type { FavoriteApiItem, RecentToolViewApiItem } from '@/lib/apiTypes';
 import { apiRequest } from '@/lib/http';
 import { useFavoritesStore } from '@/stores/favoritesStore';
 
 type FavoritesApiResponse = { data: FavoriteApiItem[] };
+type RecentlyViewedApiResponse = { data: RecentToolViewApiItem[] };
 
 type RecentlyViewedItem = {
     id: number;
@@ -50,7 +51,7 @@ function RecentlyViewedCard({ tool }: { tool: RecentlyViewedItem }) {
 }
 
 export default function IndexPage() {
-    const { favorites, recentlyViewed, clearRecentlyViewed, setFavorites } = useFavoritesStore();
+    const { favorites, recentlyViewed, clearRecentlyViewed, setFavorites, setRecentlyViewed } = useFavoritesStore();
 
     const toolHref = (tool: ToolCardData) => `/tools/${tool.slug ?? tool.id}`;
 
@@ -78,10 +79,25 @@ export default function IndexPage() {
 
         async function load() {
             try {
-                const res = await apiRequest<FavoritesApiResponse>('/api/favorites');
+                const [favoritesRes, recentlyViewedRes] = await Promise.all([
+                    apiRequest<FavoritesApiResponse>('/api/favorites'),
+                    apiRequest<RecentlyViewedApiResponse>('/api/recently-viewed-tools'),
+                ]);
                 if (cancelled) return;
+
                 setFavorites(
-                    (res.data ?? []).map((t) => ({
+                    (favoritesRes.data ?? []).map((t) => ({
+                        id: t.id,
+                        name: t.name,
+                        slug: t.slug ?? undefined,
+                        toolId: t.toolId,
+                        category: t.category,
+                        imageUrl: t.imageUrl,
+                    })),
+                );
+
+                setRecentlyViewed(
+                    (recentlyViewedRes.data ?? []).map((t) => ({
                         id: t.id,
                         name: t.name,
                         slug: t.slug ?? undefined,
@@ -99,7 +115,16 @@ export default function IndexPage() {
         return () => {
             cancelled = true;
         };
-    }, [setFavorites]);
+    }, [setFavorites, setRecentlyViewed]);
+
+    const handleClearHistory = async () => {
+        try {
+            await apiRequest('/api/recently-viewed-tools', { method: 'DELETE' });
+        } catch {
+            // If API clear fails (network/auth), still clear local history
+        }
+        clearRecentlyViewed();
+    };
 
     return (
         <AppLayout
@@ -165,7 +190,7 @@ export default function IndexPage() {
                         {recentlyViewed.length > 0 && (
                             <button
                                 type="button"
-                                onClick={clearRecentlyViewed}
+                                onClick={handleClearHistory}
                                 className="text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
                             >
                                 Clear history

@@ -31,6 +31,7 @@ class RecentToolViewController extends Controller
                 return [
                     'id' => $tool->id,
                     'name' => $tool->name,
+                    'slug' => $tool->slug,
                     'toolId' => 'TL-'.$tool->id,
                     'category' => $tool->category?->name ?? 'Other',
                     'imageUrl' => $tool->imageUrl(),

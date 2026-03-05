@@ -146,6 +146,12 @@ export default function DetailPage() {
             category: tool.category,
             imageUrl: tool.imageUrl,
         });
+        void apiRequest('/api/recently-viewed-tools', {
+            method: 'POST',
+            body: { tool_id: tool.id },
+        }).catch(() => {
+            // Keep detail page usable even if recent-view sync fails.
+        });
     }, [tool.id, tool.name, tool.slug, tool.toolId, tool.category, tool.imageUrl, addToRecentlyViewed]);
 
     const toLocalYmd = (date: Date): string => format(date, 'yyyy-MM-dd');
