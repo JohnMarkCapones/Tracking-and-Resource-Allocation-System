@@ -137,7 +137,7 @@ export function BorrowingHistoryTable({
     };
 
     return (
-        <section className="rounded-3xl bg-white p-6 shadow-sm">
+        <section className="rounded-3xl bg-white p-6 shadow-sm dark:bg-transparent">
             <header className="mb-4 flex items-center justify-between gap-3">
                 <div>
                     <h3 className="text-sm font-semibold text-gray-900">Overview of Borrowing History</h3>
@@ -181,9 +181,12 @@ export function BorrowingHistoryTable({
                             <th className="py-3 text-right">Actions</th>
                         </tr>
                     </thead>
-                    <tbody className="align-middle text-xs text-gray-700">
+                    <tbody className="align-middle text-xs text-gray-700 dark:text-gray-200">
                         {paged.map((item) => (
-                            <tr key={item.toolId} className="border-b last:border-0 hover:bg-gray-50">
+                            <tr
+                                key={item.toolId}
+                                className="border-b last:border-0 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-[#111827]"
+                            >
                                 <td className="py-3 pr-4 font-medium">{item.equipment}</td>
                                 <td className="py-3 pr-4">{item.toolId}</td>
                                 <td className="py-3 pr-4">{item.expectedReturnDate}</td>

@@ -197,9 +197,8 @@ export default function IndexPage() {
         if (!reservationToCancel) return;
 
         try {
-            await apiRequest(`/api/reservations/${reservationToCancel.id}`, {
-                method: 'PUT',
-                body: { status: 'CANCELLED' },
+            await apiRequest(`/api/reservations/${reservationToCancel.id}/cancel`, {
+                method: 'POST',
             });
             setReservations((prev) =>
                 prev.map((r) =>
@@ -209,8 +208,8 @@ export default function IndexPage() {
                 ),
             );
             toast.success(`Borrow request for ${reservationToCancel.toolName} has been cancelled.`);
-        } catch {
-            toast.error('Could not cancel borrow request');
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Could not cancel borrow request');
         }
         setReservationToCancel(null);
     };

@@ -267,7 +267,7 @@ export default function UserDashboardPage() {
                             <BorrowingHistoryTable
                                 items={borrowingHistory}
                                 getViewHref={(item) =>
-                                    item.status === 'Booked'
+                                    item.status === 'Booked' || item.status === 'Cancelled'
                                         ? '/reservations'
                                         : item.allocationId
                                           ? `/borrowings?allocation=${item.allocationId}`

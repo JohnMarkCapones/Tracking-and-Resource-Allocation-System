@@ -158,6 +158,8 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
         isActive: boolean;
     };
 
+    const isNotificationsPage = activeRoute === 'notifications';
+
     const sidebarItems: SidebarItem[] = isAdminLayout
         ? [
               {
@@ -398,7 +400,11 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
             <div className="pointer-events-none fixed inset-0 z-0 opacity-30">
                 <LaserFlow color="#6366f1" fogIntensity={0.3} wispIntensity={2} mouseTiltStrength={0.008} />
             </div>
-            <div className="relative z-10 flex min-h-screen overflow-x-hidden bg-[#f6f4f0] dark:bg-gray-900">
+            <div
+                className={`relative z-10 flex min-h-screen overflow-x-hidden ${
+                    isNotificationsPage ? 'bg-[#111827]' : 'bg-[#f6f4f0] dark:bg-gray-900'
+                }`}
+            >
                 {/* Sidebar */}
                 <aside className="hidden w-64 flex-shrink-0 border-r bg-white px-4 pt-6 pb-6 shadow-sm lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:self-start lg:overflow-y-auto dark:border-gray-700 dark:bg-gray-800">
                     <div className="flex items-center gap-2 px-2">
@@ -691,7 +697,11 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
 
                 {/* Main content */}
                 <div className="flex h-screen flex-1 flex-col overflow-hidden">
-                    <header className="border-b border-neutral-200 bg-[#f6f4f0] dark:border-gray-700 dark:bg-gray-900">
+                    <header
+                        className={`border-b border-neutral-200 dark:border-gray-700 ${
+                            isNotificationsPage ? 'bg-[#111827]' : 'bg-[#f6f4f0] dark:bg-gray-900'
+                        }`}
+                    >
                         <div className="flex items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
                             <div className="flex items-center gap-3">
                                 <button
@@ -734,7 +744,7 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                                         {unreadCount > 0 && <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-red-500" />}
                                     </button>
                                     {isNotificationsOpen && (
-                                        <div className="absolute right-0 z-10 mt-2 w-72 rounded-2xl bg-white p-3 text-xs text-gray-800 shadow-xl dark:bg-gray-800 dark:text-gray-200">
+                                        <div className="absolute right-0 z-10 mt-2 w-72 rounded-2xl bg-white p-3 text-xs text-gray-800 shadow-xl dark:bg-[#111827] dark:text-gray-200">
                                             <div className="mb-2 flex items-center justify-between">
                                                 <p className="text-[11px] font-semibold tracking-wide text-gray-500 uppercase">Notifications</p>
                                                 <button
@@ -747,7 +757,7 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                                             </div>
                                             <ul className="space-y-2">
                                                 {notifications.length === 0 ? (
-                                                    <li className="rounded-xl bg-gray-50 px-3 py-3 text-center text-[11px] text-gray-500">
+                                                    <li className="rounded-xl bg-gray-50 px-3 py-3 text-center text-[11px] text-gray-500 dark:bg-[#111827] dark:text-gray-400">
                                                         No notifications yet.
                                                     </li>
                                                 ) : (
@@ -756,13 +766,13 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                                                             <button
                                                                 type="button"
                                                                 onClick={() => handleOpenNotification(notification)}
-                                                                className={`flex w-full items-start gap-2 rounded-xl px-2 py-2 text-left hover:bg-gray-100 ${notification.read ? 'bg-gray-50' : 'bg-blue-50'}`}
+                                                                className={`flex w-full items-start gap-2 rounded-xl px-2 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-800 ${notification.read ? 'bg-gray-50 dark:bg-[#111827]' : 'bg-blue-50 dark:bg-[#111827]'}`}
                                                             >
                                                                 <span className={`mt-1 h-2 w-2 rounded-full ${notificationAccent(notification.kind)}`} />
                                                                 <div className="flex-1">
-                                                                    <p className="text-[11px] font-semibold text-gray-900">{notification.title}</p>
-                                                                    <p className="mt-0.5 text-[11px] text-gray-600">{notification.description}</p>
-                                                                    <p className="mt-0.5 text-[10px] text-gray-400">{notification.time}</p>
+                                                                    <p className="text-[11px] font-semibold text-gray-900 dark:text-gray-100">{notification.title}</p>
+                                                                    <p className="mt-0.5 text-[11px] text-gray-600 dark:text-gray-400">{notification.description}</p>
+                                                                    <p className="mt-0.5 text-[10px] text-gray-400 dark:text-gray-500">{notification.time}</p>
                                                                 </div>
                                                             </button>
                                                         </li>

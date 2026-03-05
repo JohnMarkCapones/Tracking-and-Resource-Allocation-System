@@ -11,7 +11,7 @@ import type {
 import { mapAllocationStatusToUi } from '@/lib/apiTypes';
 import { apiRequest } from '@/lib/http';
 
-type AllocationStatus = 'Returned' | 'Booked' | 'Active' | 'Pending' | 'Overdue';
+type AllocationStatus = 'Returned' | 'Booked' | 'Active' | 'Pending' | 'Overdue' | 'Cancelled' | 'Unclaimed';
 
 type Allocation = {
     id: number;
@@ -609,6 +609,8 @@ export default function AdminAllocationHistoryPage() {
                                         const isBooked = row.status === 'Booked';
                                         const isPending = row.status === 'Pending';
                                         const isActive = row.status === 'Active';
+                                        const isCancelled = row.status === 'Cancelled';
+                                        const isUnclaimed = row.status === 'Unclaimed';
 
                                         return (
                                             <tr
@@ -656,7 +658,7 @@ export default function AdminAllocationHistoryPage() {
                                                         >
                                                             {claimingId === row.id ? 'Claiming…' : 'Mark Claimed'}
                                                         </button>
-                                                    ) : isReturned || isPending || isActive ? (
+                                                    ) : isReturned || isPending || isActive || isCancelled || isUnclaimed ? (
                                                         <button
                                                             type="button"
                                                             onClick={() => setSelectedAllocation(row)}

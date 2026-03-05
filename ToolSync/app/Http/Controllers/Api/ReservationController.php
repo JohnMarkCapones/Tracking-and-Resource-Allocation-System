@@ -455,6 +455,26 @@ class ReservationController extends Controller
      */
     public function update(Request $request, Reservation $reservation): JsonResponse
     {
+        $request->validate([
+            'status' => ['required', 'in:CANCELLED'],
+        ]);
+
+        return $this->performCancelReservation($request, $reservation);
+    }
+
+    /**
+     * Cancel a reservation via POST (no body required). Workaround for PUT/body issues.
+     */
+    public function cancel(Request $request, Reservation $reservation): JsonResponse
+    {
+        return $this->performCancelReservation($request, $reservation);
+    }
+
+    /**
+     * Shared cancellation logic for update() and cancel().
+     */
+    private function performCancelReservation(Request $request, Reservation $reservation): JsonResponse
+    {
         $user = $request->user();
 
         if ($reservation->user_id !== $user?->id) {
@@ -462,10 +482,6 @@ class ReservationController extends Controller
                 'message' => 'You are not allowed to modify this borrow request.',
             ], 403);
         }
-
-        $validated = $request->validate([
-            'status' => ['required', 'in:CANCELLED'],
-        ]);
 
         if (! in_array($reservation->status, ['PENDING', 'COMPLETED'], true)) {
             return response()->json([
@@ -498,32 +514,38 @@ class ReservationController extends Controller
                 ], 422);
             }
 
-            DB::transaction(function () use ($reservation, $matchingAllocation, $validated): void {
-                $reservation->update($validated);
+            try {
+                DB::transaction(function () use ($reservation, $matchingAllocation): void {
+                    $reservation->update(['status' => 'CANCELLED']);
 
-                $allocationPayload = [
-                    'status' => 'CANCELLED',
-                ];
-                if (Schema::hasColumn('tool_allocations', 'cancelled_at')) {
-                    $allocationPayload['cancelled_at'] = now();
-                }
-                if (Schema::hasColumn('tool_allocations', 'cancellation_reason')) {
-                    $allocationPayload['cancellation_reason'] = 'Cancelled by user from reservations page';
-                }
-                if (Schema::hasColumn('tool_allocations', 'unclaimed_at')) {
-                    $allocationPayload['unclaimed_at'] = null;
-                }
-                if (Schema::hasColumn('tool_allocations', 'missed_pickup_at')) {
-                    $allocationPayload['missed_pickup_at'] = null;
-                }
-                if (Schema::hasColumn('tool_allocations', 'penalty_until')) {
-                    $allocationPayload['penalty_until'] = null;
-                }
+                    $allocationPayload = [
+                        'status' => 'CANCELLED',
+                    ];
+                    if (Schema::hasColumn('tool_allocations', 'cancelled_at')) {
+                        $allocationPayload['cancelled_at'] = now();
+                    }
+                    if (Schema::hasColumn('tool_allocations', 'cancellation_reason')) {
+                        $allocationPayload['cancellation_reason'] = 'Cancelled by user from reservations page';
+                    }
+                    if (Schema::hasColumn('tool_allocations', 'unclaimed_at')) {
+                        $allocationPayload['unclaimed_at'] = null;
+                    }
+                    if (Schema::hasColumn('tool_allocations', 'missed_pickup_at')) {
+                        $allocationPayload['missed_pickup_at'] = null;
+                    }
+                    if (Schema::hasColumn('tool_allocations', 'penalty_until')) {
+                        $allocationPayload['penalty_until'] = null;
+                    }
 
-                $matchingAllocation->update($allocationPayload);
-            });
+                    $matchingAllocation->update($allocationPayload);
+                });
+            } catch (\Throwable $e) {
+                return response()->json([
+                    'message' => 'Could not cancel: '.$e->getMessage(),
+                ], 500);
+            }
         } else {
-            $reservation->update($validated);
+            $reservation->update(['status' => 'CANCELLED']);
         }
 
         $reservation->refresh();
