@@ -474,6 +474,15 @@ export type FavoriteApiItem = {
     imageUrl?: string | null;
 };
 
+export type RecentToolViewApiItem = {
+    id: number;
+    name: string;
+    slug?: string | null;
+    toolId: string;
+    category: string;
+    imageUrl?: string | null;
+};
+
 export type ReportType = 'borrowing_summary' | 'tool_utilization' | 'user_activity' | 'overdue_report' | 'maintenance_log' | 'custom';
 
 export type ReportRow = Record<string, string | number>;
