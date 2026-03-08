@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 
 import PasswordInput from '@/Components/PasswordInput';
 import astraLogo from '../assets/ASTRA_logo.png';
+import loginBackground from '../assets/login_background.png';
 import welcomeImg from '../assets/welcome_img.png';
 
 export default function Welcome() {
@@ -155,8 +156,8 @@ export default function Welcome() {
 
                 {/* Main container with grid layout */}
                 <div className="grid min-h-screen grid-cols-1 lg:grid-cols-3">
-                    {/* Left side - Dark blue background with heading and image */}
-                    <div className="relative hidden flex-col items-center justify-start bg-gradient-to-b from-[#2D4A7B] to-[#3D5A9B] px-8 pt-32 lg:flex">
+                    {/* Left side - Background image with heading and image */}
+                    <div className="relative hidden flex-col items-center justify-start px-8 pt-32 lg:flex" style={{ backgroundImage: `url(${loginBackground})`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
                         <div className="flex flex-col items-start justify-start text-left w-full">
                             <h1 className="font-['Poppins'] text-4xl leading-tight font-black tracking-[-0.02em] text-[#A7CFE8] xl:text-5xl">
                                 Borrow Smarter.
