@@ -61,7 +61,7 @@ export default function Login() {
                             <img
                                 src={astraLogo}
                                 alt="ASTRA"
-                                className="h-10 w-auto"
+                                className="h-16 w-auto"
                                 draggable={false}
                             />
                         </div>
@@ -69,10 +69,10 @@ export default function Login() {
                         {/* Main content */}
                         <div className="space-y-6">
                             <div>
-                                <h1 className="font-['Poppins'] text-5xl font-bold leading-tight mb-4">
+                                <h1 className="font-['Poppins'] text-4xl leading-tight font-black tracking-[-0.02em] text-[#A7CFE8] xl:text-5xl">
                                     Borrow Smarter.<br />Work Faster.
                                 </h1>
-                                <p className="font-['Inter'] text-lg text-white/90">
+                                <p className="mt-6 max-w-sm font-['Poppins'] text-base leading-7 font-medium tracking-[-0.02em] text-white">
                                     Easily request, track, and return equipment in<br />one simple system.
                                 </p>
                             </div>
@@ -100,7 +100,7 @@ export default function Login() {
                             <img
                                 src={astraLogo}
                                 alt="ASTRA"
-                                className="h-8 w-auto"
+                                className="h-16 w-auto"
                                 draggable={false}
                             />
                         </div>

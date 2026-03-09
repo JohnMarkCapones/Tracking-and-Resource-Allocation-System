@@ -7,7 +7,7 @@ import { toast } from '@/Components/Toast';
 import type { ApprovalsCountApiResponse, ReservationApiItem } from '@/lib/apiTypes';
 import { apiRequest } from '@/lib/http';
 import { type SharedData, type User } from '@/types';
-import equipitLogo from '../assets/figma/logo.png';
+import astraLogo from '../assets/ASTRA_logo.png';
 
 type AppLayoutProps = PropsWithChildren<{
     header?: ReactNode;
@@ -409,9 +409,9 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                 <aside className="hidden w-64 flex-shrink-0 border-r bg-white px-4 pt-6 pb-6 shadow-sm lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:self-start lg:overflow-y-auto dark:border-gray-700 dark:bg-gray-800">
                     <div className="flex items-center gap-2 px-2">
                         <Link href={logoHref}>
-                            <img src={equipitLogo} alt="EquipIT" className="h-8 w-auto" />
+                            <img src={astraLogo} alt="ASTRA" className="h-8 w-auto" />
                         </Link>
-                        <span className="text-lg font-semibold tracking-wide text-[#060644] dark:text-white">EquipIT</span>
+                        <span className="text-lg font-semibold tracking-wide text-[#060644] dark:text-white">AsTrA</span>
                     </div>
 
                     <nav className="mt-8 space-y-1">
@@ -635,9 +635,9 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                             <div className="flex items-center justify-between gap-2 px-2">
                                 <div className="flex items-center gap-2">
                                     <Link href={logoHref}>
-                                        <img src={equipitLogo} alt="EquipIT" className="h-8 w-auto" />
+                                        <img src={astraLogo} alt="ASTRA" className="h-8 w-auto" />
                                     </Link>
-                                    <span className="text-lg font-semibold tracking-wide text-[#060644] dark:text-white">EquipIT</span>
+                                    <span className="text-lg font-semibold tracking-wide text-[#060644] dark:text-white">AsTrA</span>
                                 </div>
                                 <button
                                     type="button"

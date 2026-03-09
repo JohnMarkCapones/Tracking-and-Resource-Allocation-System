@@ -1,6 +1,6 @@
 import { Head, Link } from '@inertiajs/react';
 
-import equipitLogo from './Auth/assets/brand/equipit-logo.png';
+import astraLogo from '../assets/ASTRA_logo.png';
 import deleteIcon from './Auth/assets/icons/delete.svg';
 import editIcon from './Auth/assets/icons/edit.svg';
 
@@ -37,9 +37,9 @@ export default function AllocationHistory() {
                     {/* Logo and brand */}
                     <div className="flex items-center gap-3 border-b border-white/5 px-6 pt-6 pb-5">
                         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/5">
-                            <img src={equipitLogo} alt="EquipIT" className="h-6 w-auto object-contain" draggable={false} />
+                            <img src={astraLogo} alt="ASTRA" className="h-6 w-auto object-contain" draggable={false} />
                         </div>
-                        <span className="font-['Poppins'] text-lg font-semibold tracking-[-0.04em]">EquipIT</span>
+                        <span className="font-['Poppins'] text-lg font-semibold tracking-[-0.04em]">AsTrA</span>
                     </div>
 
                     {/* Navigation */}
