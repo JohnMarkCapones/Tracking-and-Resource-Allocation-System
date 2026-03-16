@@ -10,7 +10,8 @@ use Inertia\Inertia;
 Route::get('/', function () {
     return Inertia::render('welcome', [
         'status' => session('status'),
-        'verification_email' => session('verification_email'),
+        'verification_email' => session('verification_email', session('pending_registration.email')),
+        'has_pending_registration' => session()->has('pending_registration'),
     ]);
 })->name('home');
 
