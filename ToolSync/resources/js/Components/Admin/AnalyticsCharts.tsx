@@ -15,7 +15,7 @@ export function ToolUtilizationChart({ data }: { data?: Array<{ tool_name: strin
     }, [data]);
 
     return (
-        <div className="rounded-2xl bg-white p-5 shadow-sm dark:bg-gray-800">
+        <div className="rounded-2xl bg-white p-5 shadow-sm dark:bg-transparent">
             <h3 className="mb-1 text-sm font-semibold text-gray-900 dark:text-white">Tool Utilization</h3>
             <p className="mb-4 text-[11px] text-gray-500 dark:text-gray-400">Days used in the last 60 days</p>
             {chartData.length === 0 ? (
@@ -75,7 +75,7 @@ export function TrendAnalysisChart({
     }, [timeseries]);
 
     return (
-        <div className="rounded-2xl bg-white p-5 shadow-sm dark:bg-gray-800">
+        <div className="rounded-2xl bg-white p-5 shadow-sm dark:bg-transparent">
             <h3 className="mb-1 text-sm font-semibold text-gray-900 dark:text-white">Trend Analysis</h3>
             <p className="mb-4 text-[11px] text-gray-500 dark:text-gray-400">Monthly comparison for selected period</p>
             {trendData.length === 0 ? (
@@ -104,7 +104,7 @@ export function CategoryDistributionChart({ data }: { data?: Array<{ name: strin
     const categoryData: CategoryPoint[] = useMemo(() => data?.length ? data : [], [data]);
 
     return (
-        <div className="rounded-2xl bg-white p-5 shadow-sm dark:bg-gray-800">
+        <div className="rounded-2xl bg-white p-5 shadow-sm dark:bg-transparent">
             <h3 className="mb-1 text-sm font-semibold text-gray-900 dark:text-white">Category Distribution</h3>
             <p className="mb-4 text-[11px] text-gray-500 dark:text-gray-400">Tools by category</p>
             {categoryData.length === 0 ? (
@@ -133,7 +133,7 @@ export function UserActivityMetrics({ data }: { data?: Array<{ user_name: string
     const maxBorrowings = sortedUsers[0]?.borrow_count ?? 1;
 
     return (
-        <div className="rounded-2xl bg-white p-5 shadow-sm dark:bg-gray-800">
+        <div className="rounded-2xl bg-white p-5 shadow-sm dark:bg-transparent">
             <h3 className="mb-1 text-sm font-semibold text-gray-900 dark:text-white">Top Users by Activity</h3>
             <p className="mb-4 text-[11px] text-gray-500 dark:text-gray-400">Most active borrowers this period</p>
             {sortedUsers.length === 0 ? (

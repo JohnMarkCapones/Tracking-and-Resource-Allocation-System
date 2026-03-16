@@ -687,7 +687,7 @@ class ToolAllocationController extends Controller
                 Notification::send($adminRecipients, new InAppSystemNotification(
                     'alert',
                     'Return approval needed',
-                    "{$toolAllocation->user?->name} requested to return {$toolName}. Approve or decline below.{$proofSuffix}",
+                    "{$toolAllocation->user?->name} requested to return {$toolName}. Review this request on the approvals page.{$proofSuffix}",
                     '/notifications',
                     ['allocation_id' => $toolAllocation->id]
                 ));

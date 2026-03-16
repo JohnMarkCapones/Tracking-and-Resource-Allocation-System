@@ -17,7 +17,7 @@ Route::get('/', function () {
 // Backward-compatible redirect for any old links.
 Route::redirect('/profile/login', '/login', 302);
 
-Route::middleware(['auth', 'verified', 'admin'])->group(function () {
+Route::middleware(['auth', 'verified', 'active', 'admin'])->group(function () {
     Route::redirect('/admin', '/admin/dashboard', 302);
     Route::get('/admin/dashboard', [AdminDashboardController::class, 'index'])
         ->name('admin.dashboard');
@@ -48,7 +48,7 @@ Route::get('/tools/{slug}', [ToolController::class, 'show'])
     ->name('tools.show')
     ->where('slug', '[a-z0-9]+(?:-[a-z0-9]+)*');
 
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['auth', 'verified', 'active'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])
         ->name('dashboard');
     Route::get('/borrowings', [DashboardController::class, 'borrowings'])

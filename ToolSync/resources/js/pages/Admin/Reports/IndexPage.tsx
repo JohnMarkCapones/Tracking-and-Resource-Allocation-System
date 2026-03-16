@@ -48,6 +48,7 @@ const PRESET_REPORTS: SavedReport[] = [
         id: -1,
         name: 'Monthly Borrowing Summary',
         type: 'borrowing_summary',
+        isPreset: true,
         schedule: 'Monthly',
         lastGenerated: 'Feb 1, 2026',
         columns: ['tool_name', 'borrower_name', 'borrow_date', 'return_date', 'borrow_status'],
@@ -56,6 +57,7 @@ const PRESET_REPORTS: SavedReport[] = [
         id: -2,
         name: 'Tool Utilization Report',
         type: 'tool_utilization',
+        isPreset: true,
         schedule: 'Weekly',
         lastGenerated: 'Feb 3, 2026',
         columns: ['tool_name', 'category', 'usage_count', 'utilization_rate', 'condition'],
@@ -64,6 +66,7 @@ const PRESET_REPORTS: SavedReport[] = [
         id: -3,
         name: 'Overdue Items Report',
         type: 'overdue_report',
+        isPreset: true,
         lastGenerated: 'Feb 6, 2026',
         columns: ['tool_name', 'borrower_name', 'borrower_email', 'borrow_date', 'overdue_days'],
     },
@@ -71,6 +74,7 @@ const PRESET_REPORTS: SavedReport[] = [
         id: -4,
         name: 'User Activity Report',
         type: 'user_activity',
+        isPreset: true,
         schedule: 'Monthly',
         lastGenerated: 'Feb 1, 2026',
         columns: ['borrower_name', 'department', 'tool_name', 'borrow_date', 'duration'],
@@ -166,7 +170,7 @@ export default function IndexPage() {
             prev.map((item) => (item.id === report.id ? { ...item, lastGenerated: display } : item)),
         );
 
-        if (report.isPreset) {
+        if (report.isPreset || report.id < 0) {
             return;
         }
 
@@ -179,7 +183,7 @@ export default function IndexPage() {
             });
         } catch (error) {
             console.error(error);
-            toast.error('Failed to update last generated timestamp for this template');
+            // Non-blocking metadata sync failure should not override a successful export UX.
         }
     };
 

@@ -19,6 +19,7 @@ export type ToolDto = {
     slug?: string | null;
     description: string | null;
     image_path: string | null;
+    image_url?: string | null;
     category_id: number;
     status: ToolStatusApi;
     condition?: string | null;
@@ -465,6 +466,15 @@ export type UsageHeatmapApiResponse = {
 };
 
 export type FavoriteApiItem = {
+    id: number;
+    name: string;
+    slug?: string | null;
+    toolId: string;
+    category: string;
+    imageUrl?: string | null;
+};
+
+export type RecentToolViewApiItem = {
     id: number;
     name: string;
     slug?: string | null;

@@ -7,6 +7,7 @@ type FavoriteButtonProps = {
     tool: {
         id: number;
         name: string;
+        slug?: string | null;
         toolId: string;
         category: string;
         imageUrl?: string | null;
@@ -28,7 +29,7 @@ const iconSizeClasses = {
 };
 
 export function FavoriteButton({ tool, size = 'md', className = '' }: FavoriteButtonProps) {
-    const { isFavorite, addFavorite, removeFavorite } = useFavoritesStore();
+    const { isFavorite, addFavorite, removeFavorite, addToRecentlyViewed } = useFavoritesStore();
     const [pending, setPending] = useState(false);
     const isFav = isFavorite(tool.id);
 
@@ -48,6 +49,13 @@ export function FavoriteButton({ tool, size = 'md', className = '' }: FavoriteBu
                     body: { tool_id: tool.id },
                 });
                 addFavorite(tool);
+                addToRecentlyViewed(tool);
+                void apiRequest('/api/recently-viewed-tools', {
+                    method: 'POST',
+                    body: { tool_id: tool.id },
+                }).catch(() => {
+                    // Keep favorite action successful even if recent-view tracking fails.
+                });
                 toast.success(`${tool.name} added to favorites`);
             }
         } catch {

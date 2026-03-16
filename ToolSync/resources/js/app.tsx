@@ -2,15 +2,29 @@ import '../css/app.css';
 
 import { createInertiaApp } from '@inertiajs/react';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
+import type { ComponentType } from 'react';
 import { createRoot, hydrateRoot } from 'react-dom/client';
+import { AuthThemeGuard } from '@/Components/AuthThemeGuard';
 import { QuickSwitcherProvider } from '@/Components/QuickSwitcher';
 import { ToastProvider } from '@/Components/Toast';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+type InertiaPageModule = { default: ComponentType<Record<string, unknown>> };
+const pages = import.meta.glob<InertiaPageModule>('./pages/**/*.tsx');
 
 createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),
-    resolve: (name) => resolvePageComponent(`./pages/${name}.tsx`, import.meta.glob('./pages/**/*.tsx')),
+    resolve: (name) =>
+        resolvePageComponent(`./pages/${name}.tsx`, pages).then((module) => {
+            const Page = module.default;
+            return {
+                default: (props: object) => (
+                    <AuthThemeGuard>
+                        <Page {...props} />
+                    </AuthThemeGuard>
+                ),
+            };
+        }),
     setup({ el, App, props }) {
         if (import.meta.env.SSR) {
             hydrateRoot(

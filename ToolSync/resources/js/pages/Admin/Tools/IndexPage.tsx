@@ -195,8 +195,8 @@ export default function IndexPage() {
             activeRoute="admin-tools"
             header={
                 <>
-                    <p className="text-xs font-medium tracking-[0.18em] text-gray-500 uppercase">Tool management</p>
-                    <h1 className="text-2xl font-semibold text-gray-900">Manage your equipment inventory</h1>
+                    <p className="text-xs font-medium tracking-[0.18em] text-gray-500 uppercase dark:text-gray-400">Tool management</p>
+                    <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Manage your equipment inventory</h1>
                 </>
             }
         >
@@ -215,10 +215,10 @@ export default function IndexPage() {
                 )}
                 {!loading && (
                 <>
-                <section className="flex flex-col gap-3 rounded-3xl bg-white/70 p-4 shadow-sm backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between">
+                <section className="flex flex-col gap-3 rounded-3xl bg-white/70 p-4 shadow-sm backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between dark:bg-gray-900/60">
                     <div>
-                        <p className="text-xs font-medium text-gray-500">Tools inventory</p>
-                        <p className="text-sm text-gray-700">
+                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Tools inventory</p>
+                        <p className="text-sm text-gray-700 dark:text-gray-200">
                             {tools.length} tools in the system. {tools.filter((t) => t.status === 'Available').length} available for borrowing.
                         </p>
                     </div>
@@ -240,29 +240,29 @@ export default function IndexPage() {
                 </section>
 
                 {selectedIds.length > 0 && (
-                    <section className="flex items-center justify-between rounded-2xl bg-blue-50 px-4 py-3 text-sm">
-                        <p className="text-blue-800">
+                    <section className="flex items-center justify-between rounded-2xl bg-blue-50 px-4 py-3 text-sm dark:bg-blue-900/20">
+                        <p className="text-blue-800 dark:text-blue-200">
                             <span className="font-semibold">{selectedIds.length}</span> {selectedIds.length === 1 ? 'tool' : 'tools'} selected
                         </p>
                         <div className="flex gap-2">
                             <button
                                 type="button"
                                 onClick={handleBulkMaintenance}
-                                className="rounded-full border border-amber-200 bg-white px-3 py-1 text-[11px] font-medium text-amber-700 hover:bg-amber-50"
+                                className="rounded-full border border-amber-200 bg-white px-3 py-1 text-[11px] font-medium text-amber-700 hover:bg-amber-50 dark:border-amber-500/40 dark:bg-gray-900 dark:text-amber-200 dark:hover:bg-amber-900/20"
                             >
                                 Mark for Maintenance
                             </button>
                             <button
                                 type="button"
                                 onClick={handleBulkDelete}
-                                className="rounded-full border border-rose-200 bg-white px-3 py-1 text-[11px] font-medium text-rose-600 hover:bg-rose-50"
+                                className="rounded-full border border-rose-200 bg-white px-3 py-1 text-[11px] font-medium text-rose-600 hover:bg-rose-50 dark:border-rose-500/40 dark:bg-gray-900 dark:text-rose-300 dark:hover:bg-rose-900/20"
                             >
                                 Delete Selected
                             </button>
                             <button
                                 type="button"
                                 onClick={() => setSelectedIds([])}
-                                className="rounded-full border border-gray-200 bg-white px-3 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-50"
+                                className="rounded-full border border-gray-200 bg-white px-3 py-1 text-[11px] font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
                             >
                                 Clear Selection
                             </button>
@@ -329,16 +329,20 @@ export default function IndexPage() {
 
             {deleteConfirm && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-                    <div role="dialog" aria-modal="true" className="w-full max-w-sm rounded-2xl bg-white p-6 text-sm text-gray-800 shadow-xl">
-                        <h2 className="text-base font-semibold text-gray-900">Delete {deleteConfirm.name}?</h2>
-                        <p className="mt-2 text-xs text-gray-600">
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        className="w-full max-w-sm rounded-2xl bg-white p-6 text-sm text-gray-800 shadow-xl dark:bg-gray-900 dark:text-gray-200"
+                    >
+                        <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Delete {deleteConfirm.name}?</h2>
+                        <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
                             This action cannot be undone. The tool will be permanently removed from the inventory.
                         </p>
                         <div className="mt-5 flex justify-end gap-2">
                             <button
                                 type="button"
                                 onClick={() => setDeleteConfirm(null)}
-                                className="rounded-full border border-gray-200 px-4 py-1.5 text-[11px] font-medium text-gray-700 hover:bg-gray-50"
+                                className="rounded-full border border-gray-200 px-4 py-1.5 text-[11px] font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
                             >
                                 Cancel
                             </button>

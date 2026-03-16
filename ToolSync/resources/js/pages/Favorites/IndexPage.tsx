@@ -1,18 +1,57 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Breadcrumb } from '@/Components/Breadcrumb';
 import { EmptyState } from '@/Components/EmptyState';
-import { FavoriteButton } from '@/Components/FavoriteButton';
 import { ToolCard, type ToolCardData } from '@/Components/Tools/ToolCard';
 import AppLayout from '@/Layouts/AppLayout';
-import type { FavoriteApiItem } from '@/lib/apiTypes';
+import type { FavoriteApiItem, RecentToolViewApiItem } from '@/lib/apiTypes';
 import { apiRequest } from '@/lib/http';
 import { useFavoritesStore } from '@/stores/favoritesStore';
 
 type FavoritesApiResponse = { data: FavoriteApiItem[] };
+type RecentlyViewedApiResponse = { data: RecentToolViewApiItem[] };
+
+type RecentlyViewedItem = {
+    id: number;
+    name: string;
+    slug?: string | null;
+    category: string;
+    imageUrl?: string | null;
+};
+
+function RecentlyViewedCard({ tool }: { tool: RecentlyViewedItem }) {
+    const [imageFailed, setImageFailed] = useState(false);
+
+    return (
+        <Link
+            href={`/tools/${tool.slug ?? tool.id}`}
+            className="w-44 flex-shrink-0 rounded-xl bg-white p-3 shadow-sm transition-shadow hover:shadow-md dark:bg-gray-800 sm:w-48"
+        >
+            <div className="mb-2 aspect-[4/3] w-full overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-700">
+                {!imageFailed && tool.imageUrl ? (
+                    <img
+                        src={tool.imageUrl}
+                        alt={tool.name}
+                        className="h-full w-full object-cover"
+                        onError={() => setImageFailed(true)}
+                    />
+                ) : (
+                    <div className="flex h-full w-full items-center justify-center text-gray-400">
+                        <svg className="h-8 w-8" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M14 8L8 14L12 18L18 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                            <path d="M22 10L30 18L26 22L18 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                        </svg>
+                    </div>
+                )}
+            </div>
+            <p className="truncate text-xs font-medium text-gray-900 dark:text-white">{tool.name}</p>
+            <p className="truncate text-[10px] text-gray-500 dark:text-gray-400">{tool.category}</p>
+        </Link>
+    );
+}
 
 export default function IndexPage() {
-    const { favorites, recentlyViewed, clearRecentlyViewed, setFavorites } = useFavoritesStore();
+    const { favorites, recentlyViewed, clearRecentlyViewed, setFavorites, setRecentlyViewed } = useFavoritesStore();
 
     const toolHref = (tool: ToolCardData) => `/tools/${tool.slug ?? tool.id}`;
 
@@ -40,10 +79,25 @@ export default function IndexPage() {
 
         async function load() {
             try {
-                const res = await apiRequest<FavoritesApiResponse>('/api/favorites');
+                const [favoritesRes, recentlyViewedRes] = await Promise.all([
+                    apiRequest<FavoritesApiResponse>('/api/favorites'),
+                    apiRequest<RecentlyViewedApiResponse>('/api/recently-viewed-tools'),
+                ]);
                 if (cancelled) return;
+
                 setFavorites(
-                    (res.data ?? []).map((t) => ({
+                    (favoritesRes.data ?? []).map((t) => ({
+                        id: t.id,
+                        name: t.name,
+                        slug: t.slug ?? undefined,
+                        toolId: t.toolId,
+                        category: t.category,
+                        imageUrl: t.imageUrl,
+                    })),
+                );
+
+                setRecentlyViewed(
+                    (recentlyViewedRes.data ?? []).map((t) => ({
                         id: t.id,
                         name: t.name,
                         slug: t.slug ?? undefined,
@@ -61,7 +115,16 @@ export default function IndexPage() {
         return () => {
             cancelled = true;
         };
-    }, [setFavorites]);
+    }, [setFavorites, setRecentlyViewed]);
+
+    const handleClearHistory = async () => {
+        try {
+            await apiRequest('/api/recently-viewed-tools', { method: 'DELETE' });
+        } catch {
+            // If API clear fails (network/auth), still clear local history
+        }
+        clearRecentlyViewed();
+    };
 
     return (
         <AppLayout
@@ -127,7 +190,7 @@ export default function IndexPage() {
                         {recentlyViewed.length > 0 && (
                             <button
                                 type="button"
-                                onClick={clearRecentlyViewed}
+                                onClick={handleClearHistory}
                                 className="text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
                             >
                                 Clear history
@@ -143,27 +206,7 @@ export default function IndexPage() {
                     ) : (
                         <div className="flex gap-3 overflow-x-auto pb-2">
                             {recentlyViewed.map((tool) => (
-                                <Link
-                                    key={tool.id}
-                                    href={`/tools/${tool.slug ?? tool.id}`}
-                                    className="flex-shrink-0 rounded-xl bg-white p-3 shadow-sm transition-shadow hover:shadow-md dark:bg-gray-800"
-                                    style={{ minWidth: '160px' }}
-                                >
-                                    <div className="mb-2 aspect-square w-full overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-700">
-                                        {tool.imageUrl ? (
-                                            <img src={tool.imageUrl} alt={tool.name} className="h-full w-full object-cover" />
-                                        ) : (
-                                            <div className="flex h-full w-full items-center justify-center text-gray-400">
-                                                <svg className="h-8 w-8" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                    <path d="M14 8L8 14L12 18L18 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                                                    <path d="M22 10L30 18L26 22L18 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                                                </svg>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <p className="truncate text-xs font-medium text-gray-900 dark:text-white">{tool.name}</p>
-                                    <p className="truncate text-[10px] text-gray-500 dark:text-gray-400">{tool.category}</p>
-                                </Link>
+                                <RecentlyViewedCard key={tool.id} tool={tool} />
                             ))}
                         </div>
                     )}

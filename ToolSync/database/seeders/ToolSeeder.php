@@ -9,6 +9,13 @@ use Illuminate\Support\Facades\Schema;
 
 class ToolSeeder extends Seeder
 {
+    /**
+     * Seed a representative catalog of tools for local development.
+     *
+     * This implementation clears the `tools` table before inserting records so
+     * developers always start from a known-good dataset. Avoid running this in
+     * production, as it will delete existing tools.
+     */
     public function run(): void
     {
         if (! Schema::hasTable('tool_categories') || ! Schema::hasTable('tools')) {
@@ -116,6 +123,12 @@ class ToolSeeder extends Seeder
             ['name' => 'Defibrillator', 'category' => 'Medical & First Aid', 'description' => 'AED defibrillator', 'image_path' => null],
             ['name' => 'Blood Pressure Monitor', 'category' => 'Medical & First Aid', 'description' => 'Digital BP monitor', 'image_path' => null],
         ];
+
+        // Keep QA data clean: only seed tools that explicitly provide an image path.
+        $tools = array_values(array_filter(
+            $tools,
+            static fn (array $row): bool => ! empty($row['image_path']),
+        ));
 
         Schema::disableForeignKeyConstraints();
         Tool::query()->delete();
