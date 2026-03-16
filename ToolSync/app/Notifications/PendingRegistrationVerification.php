@@ -11,8 +11,9 @@ class PendingRegistrationVerification extends Notification
     use Queueable;
 
     public function __construct(
-        private readonly string $verificationUrl,
+        private readonly string $verificationCode,
         private readonly string $email,
+        private readonly int $expiresInMinutes,
     ) {
     }
 
@@ -29,10 +30,17 @@ class PendingRegistrationVerification extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject('Verify your ToolSync account')
-            ->view('emails.verify-email', [
-                'url' => $this->verificationUrl,
+            ->subject('Your Astra verification code')
+            ->view('emails.pending-registration-otp', [
+                'verificationCode' => $this->verificationCode,
                 'email' => $this->email,
+                'expiresInMinutes' => $this->expiresInMinutes,
+                'registerUrl' => route('register'),
             ]);
+    }
+
+    public function verificationCode(): string
+    {
+        return $this->verificationCode;
     }
 }

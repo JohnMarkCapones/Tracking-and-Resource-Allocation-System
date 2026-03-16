@@ -27,6 +27,9 @@ Route::middleware('guest')->group(function () {
     Route::post('register/resend-verification', [RegisteredUserController::class, 'resendVerification'])
         ->middleware('throttle:6,1')
         ->name('register.resend-verification');
+    Route::post('register/verify-otp', [RegisteredUserController::class, 'verifyOtp'])
+        ->middleware('throttle:10,1')
+        ->name('register.verify-otp');
     Route::get('register/verify', [RegisteredUserController::class, 'verifyRegistration'])
         ->middleware(['signed', 'throttle:6,1'])
         ->name('registration.verify');

@@ -12,7 +12,7 @@ use Symfony\Component\HttpFoundation\RedirectResponse as SymfonyRedirectResponse
 class SocialAuthController extends Controller
 {
     /** @var list<string> */
-    private const PROVIDERS = ['google', 'github'];
+    private const PROVIDERS = ['google', 'github', 'facebook'];
 
     public function redirect(string $provider): SymfonyRedirectResponse
     {

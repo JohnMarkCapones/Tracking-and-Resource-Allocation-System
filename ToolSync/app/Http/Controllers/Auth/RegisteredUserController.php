@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Notifications\PendingRegistrationVerification;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -19,12 +21,20 @@ use Inertia\Response;
 
 class RegisteredUserController extends Controller
 {
+    private const PENDING_REGISTRATION_SESSION_KEY = 'pending_registration';
+
+    private const VERIFICATION_CODE_TTL_MINUTES = 10;
+
     /**
      * Display the registration view.
      */
-    public function create(): Response
+    public function create(Request $request): Response
     {
-        return Inertia::render('welcome');
+        return Inertia::render('welcome', [
+            'status' => $request->session()->get('status'),
+            'verification_email' => $request->session()->get('verification_email', $request->session()->get('pending_registration.email')),
+            'has_pending_registration' => $request->session()->has(self::PENDING_REGISTRATION_SESSION_KEY),
+        ]);
     }
 
     /**
@@ -65,23 +75,25 @@ class RegisteredUserController extends Controller
             'email' => $email,
             'password_hash' => Hash::make($validated['password']),
         ]));
-        $verificationUrl = URL::temporarySignedRoute(
-            'registration.verify',
-            now()->addMinutes(60),
-            ['payload' => $payload],
+        $verificationCode = $this->generateVerificationCode();
+        $this->storePendingRegistration(
+            $request,
+            payload: $payload,
+            email: $email,
+            verificationCode: $verificationCode,
         );
 
         try {
-            Log::info('Sending registration verification email', ['email' => $email]);
+            Log::info('Sending registration verification code', ['email' => $email]);
             Notification::route('mail', $email)
-                ->notify(new PendingRegistrationVerification($verificationUrl, $email));
-            Log::info('Registration verification email sent successfully', [
+                ->notify(new PendingRegistrationVerification($verificationCode, $email, self::VERIFICATION_CODE_TTL_MINUTES));
+            Log::info('Registration verification code sent successfully', [
                 'email' => $email,
                 'mail_driver' => config('mail.default'),
                 'note' => config('mail.default') === 'log' ? 'Email content is in storage/logs/laravel.log' : null,
             ]);
         } catch (\Throwable $e) {
-            Log::error('Failed to send registration verification email', [
+            Log::error('Failed to send registration verification code', [
                 'email' => $email,
                 'exception' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
@@ -89,45 +101,49 @@ class RegisteredUserController extends Controller
             throw $e;
         }
 
-        $request->session()->put('pending_registration', [
-            'payload' => $payload,
-            'email' => $email,
-        ]);
-
         return redirect()
             ->route('home')
-            ->with('status', 'verification-link-sent')
+            ->with('status', 'verification-code-sent')
             ->with('verification_email', $email);
     }
 
-    public function resendVerification(Request $request): RedirectResponse
+    public function resendVerification(Request $request): RedirectResponse|JsonResponse
     {
-        $pending = $request->session()->get('pending_registration');
+        $pending = $this->getPendingRegistration($request);
 
-        if (! is_array($pending) || ! isset($pending['payload'], $pending['email'])) {
-            return redirect()
-                ->route('home')
-                ->withErrors(['email' => 'Your verification session expired. Please register again.']);
+        if ($pending === null) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'state' => 'expired',
+                    'message' => 'Your verification session expired. Please register again.',
+                ], 410);
+            }
+
+            return redirect()->route('home')->withErrors([
+                'email' => 'Your verification session expired. Please register again.',
+            ]);
         }
 
-        $verificationUrl = URL::temporarySignedRoute(
-            'registration.verify',
-            now()->addMinutes(60),
-            ['payload' => $pending['payload']],
+        $verificationCode = $this->generateVerificationCode();
+        $this->storePendingRegistration(
+            $request,
+            payload: $pending['payload'],
+            email: $pending['email'],
+            verificationCode: $verificationCode,
         );
 
-        $resendEmail = (string) $pending['email'];
+        $resendEmail = $pending['email'];
         try {
-            Log::info('Resending registration verification email', ['email' => $resendEmail]);
+            Log::info('Resending registration verification code', ['email' => $resendEmail]);
             Notification::route('mail', $resendEmail)
-                ->notify(new PendingRegistrationVerification($verificationUrl, $resendEmail));
-            Log::info('Registration verification email resent successfully', [
+                ->notify(new PendingRegistrationVerification($verificationCode, $resendEmail, self::VERIFICATION_CODE_TTL_MINUTES));
+            Log::info('Registration verification code resent successfully', [
                 'email' => $resendEmail,
                 'mail_driver' => config('mail.default'),
                 'note' => config('mail.default') === 'log' ? 'Email content is in storage/logs/laravel.log' : null,
             ]);
         } catch (\Throwable $e) {
-            Log::error('Failed to resend registration verification email', [
+            Log::error('Failed to resend registration verification code', [
                 'email' => $resendEmail,
                 'exception' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
@@ -135,10 +151,72 @@ class RegisteredUserController extends Controller
             throw $e;
         }
 
+        if ($request->expectsJson()) {
+            return response()->json([
+                'state' => 'resent',
+                'message' => 'A new verification code has been sent to your email.',
+                'email' => $resendEmail,
+            ]);
+        }
+
         return redirect()
             ->route('home')
-            ->with('status', 'verification-link-sent')
+            ->with('status', 'verification-code-resent')
             ->with('verification_email', $resendEmail);
+    }
+
+    public function verifyOtp(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'code' => ['required', 'digits:6'],
+        ], [
+            'code.required' => 'Enter the 6-digit code from your email.',
+            'code.digits' => 'Verification codes must be exactly 6 digits.',
+        ]);
+
+        $pending = $this->getPendingRegistration($request);
+
+        if ($pending === null) {
+            return response()->json([
+                'state' => 'expired',
+                'message' => 'Your verification session expired. Please register again.',
+            ], 410);
+        }
+
+        if ($pending['expires_at']->isPast()) {
+            return response()->json([
+                'state' => 'expired',
+                'message' => 'This verification code has expired.',
+            ], 410);
+        }
+
+        if (! Hash::check($validated['code'], $pending['otp_hash'])) {
+            return response()->json([
+                'state' => 'incorrect',
+                'message' => 'The code you entered is incorrect. Please try again.',
+            ], 422);
+        }
+
+        $user = $this->completePendingRegistration($pending['payload']);
+
+        if (! $user instanceof User) {
+            return response()->json([
+                'state' => 'expired',
+                'message' => 'Your verification session expired. Please register again.',
+            ], 410);
+        }
+
+        Auth::login($user);
+        $request->session()->regenerate();
+        $request->session()->forget(self::PENDING_REGISTRATION_SESSION_KEY);
+
+        return response()->json([
+            'state' => 'verified',
+            'message' => 'Your email was successfully verified.',
+            'redirect' => route(
+                method_exists($user, 'isAdmin') && $user->isAdmin() ? 'admin.dashboard' : 'dashboard'
+            ),
+        ]);
     }
 
     public function verifyRegistration(Request $request): RedirectResponse
@@ -149,15 +227,34 @@ class RegisteredUserController extends Controller
             return redirect()->route('home');
         }
 
+        $user = $this->completePendingRegistration($payload);
+
+        if (! $user instanceof User) {
+            return redirect()->route('home');
+        }
+
+        Auth::login($user);
+        $request->session()->regenerate();
+        $request->session()->forget(self::PENDING_REGISTRATION_SESSION_KEY);
+
+        if (method_exists($user, 'isAdmin') && $user->isAdmin()) {
+            return redirect()->route('admin.dashboard');
+        }
+
+        return redirect()->route('dashboard');
+    }
+
+    private function completePendingRegistration(string $payload): ?User
+    {
         try {
             $decrypted = Crypt::decryptString($payload);
             $data = json_decode($decrypted, true, 512, JSON_THROW_ON_ERROR);
         } catch (\Throwable) {
-            return redirect()->route('home');
+            return null;
         }
 
         if (! is_array($data) || ! isset($data['name'], $data['email'], $data['password_hash'])) {
-            return redirect()->route('home');
+            return null;
         }
 
         $email = strtolower((string) $data['email']);
@@ -170,22 +267,58 @@ class RegisteredUserController extends Controller
                 'password' => (string) $data['password_hash'],
             ]);
             $user->forceFill(['email_verified_at' => now()])->save();
-        } else {
-            if (! $user->hasVerifiedEmail()) {
-                $user->forceFill(['email_verified_at' => now()])->save();
-            }
-            if (method_exists($user, 'hasPassword') && ! $user->hasPassword()) {
-                $user->forceFill(['password' => (string) $data['password_hash']])->save();
-            }
+
+            return $user;
         }
 
-        Auth::login($user);
-        $request->session()->forget('pending_registration');
-
-        if (method_exists($user, 'isAdmin') && $user->isAdmin()) {
-            return redirect()->route('admin.dashboard');
+        if (! $user->hasVerifiedEmail()) {
+            $user->forceFill(['email_verified_at' => now()])->save();
         }
 
-        return redirect()->route('dashboard');
+        if (method_exists($user, 'hasPassword') && ! $user->hasPassword()) {
+            $user->forceFill(['password' => (string) $data['password_hash']])->save();
+        }
+
+        return $user;
+    }
+
+    /**
+     * @return array{payload: string, email: string, otp_hash: string, expires_at: Carbon}|null
+     */
+    private function getPendingRegistration(Request $request): ?array
+    {
+        $pending = $request->session()->get(self::PENDING_REGISTRATION_SESSION_KEY);
+
+        if (! is_array($pending) || ! isset($pending['payload'], $pending['email'], $pending['otp_hash'], $pending['expires_at'])) {
+            return null;
+        }
+
+        try {
+            $expiresAt = Carbon::parse((string) $pending['expires_at']);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return [
+            'payload' => (string) $pending['payload'],
+            'email' => strtolower((string) $pending['email']),
+            'otp_hash' => (string) $pending['otp_hash'],
+            'expires_at' => $expiresAt,
+        ];
+    }
+
+    private function generateVerificationCode(): string
+    {
+        return str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+    }
+
+    private function storePendingRegistration(Request $request, string $payload, string $email, string $verificationCode): void
+    {
+        $request->session()->put(self::PENDING_REGISTRATION_SESSION_KEY, [
+            'payload' => $payload,
+            'email' => $email,
+            'otp_hash' => Hash::make($verificationCode),
+            'expires_at' => now()->addMinutes(self::VERIFICATION_CODE_TTL_MINUTES)->toIso8601String(),
+        ]);
     }
 }
