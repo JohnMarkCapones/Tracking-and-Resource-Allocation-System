@@ -3,8 +3,8 @@ import type { FormEventHandler } from 'react';
 import { useEffect, useState } from 'react';
 
 import PasswordInput from '@/Components/PasswordInput';
-import socialite from '@/routes/socialite';
-import astraLogo from '../../assets/ASTRA_logo.png';
+//import socialite from '@routes/socialite';  change back to this when the socialite routes are added back in
+import astraLogo from '../../assets/ASTRA_logo.png';  //remove when socialite routes are added back in
 import loginBackground from '../../assets/login_background.png';
 import welcomeImg from '../../assets/welcome_img.png';
 
@@ -238,7 +238,8 @@ export default function Login() {
 
                                     <div className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2">
                                         <a
-                                            href={socialite.redirect.url('facebook')}
+                                            //href={socialite.redierct.url('facebook')} change back to this when the socialite routes are added back in
+                                            href="/auth/facebook/redirect" //remove when socialite routes are added back in
                                             className="inline-flex h-[3.25rem] items-center justify-center gap-2.5 rounded-[0.9rem] border border-[#E7EBF3] bg-[#FAFBFD] px-3 font-['Inter'] text-[0.92rem] font-medium text-[#486C92] transition hover:border-[#C8D3E6] hover:bg-white"
                                         >
                                             <FacebookIcon />
@@ -246,7 +247,8 @@ export default function Login() {
                                         </a>
 
                                         <a
-                                            href={socialite.redirect.url('google')}
+                                            //href={socialite.redierct.url('google')}  change back to this when the socialite routes are added back in
+                                            href="/auth/google/redirect"  //remove when socialite routes are added back in
                                             className="inline-flex h-[3.25rem] items-center justify-center gap-2.5 rounded-[0.9rem] border border-[#E7EBF3] bg-[#FAFBFD] px-3 font-['Inter'] text-[0.92rem] font-medium text-[#486C92] transition hover:border-[#C8D3E6] hover:bg-white"
                                         >
                                             <GoogleIcon />
