@@ -11,7 +11,7 @@ import welcomeImg from '../assets/welcome_img.png';
 type VerificationModalState = 'closed' | 'entry' | 'incorrect' | 'expired' | 'success';
 
 type VerificationApiBody = {
-    state?: 'expired' | 'incorrect' | 'resent' | 'verified';
+    state?: 'expired' | 'incorrect' | 'resent' | 'verified' | 'send_failed';
     message?: string;
     redirect?: string;
     email?: string;
@@ -22,6 +22,7 @@ type WelcomePageProps = {
     has_pending_registration?: boolean;
     status?: string;
     verification_email?: string;
+    errors?: Record<string, string | string[]>;
 };
 
 const GoogleIcon = () => (
@@ -45,15 +46,6 @@ const GoogleIcon = () => (
     </svg>
 );
 
-const FacebookIcon = () => (
-    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path
-            d="M24 12a12 12 0 1 0-13.875 11.854v-8.385H7.078V12.23h3.047V9.75c0-3.007 1.792-4.668 4.533-4.668 1.313 0 2.687.234 2.687.234v2.953H15.83c-1.49 0-1.955.925-1.955 1.874v2.086h3.328l-.532 3.239h-2.796v8.385A12.003 12.003 0 0 0 24 12Z"
-            fill="#1877F2"
-        />
-        <path d="M16.671 15.469l.532-3.239h-3.328v-2.086c0-.949.465-1.874 1.955-1.874h1.515V5.316s-1.374-.234-2.687-.234c-2.741 0-4.533 1.661-4.533 4.668v2.48H7.078v3.239h3.047v8.385a12.08 12.08 0 0 0 3.75 0v-8.385h2.796Z" fill="#fff" />
-    </svg>
-);
 
 const ShieldAlertIcon = () => (
     <svg className="h-11 w-11" viewBox="0 0 48 48" fill="none" aria-hidden="true">
@@ -105,7 +97,8 @@ const StatusBadge = ({ toneClass, children }: { toneClass: string; children: Rea
 );
 
 export default function Welcome() {
-    const { has_pending_registration, status, verification_email } = usePage<WelcomePageProps>().props;
+    const { has_pending_registration, status, verification_email, errors: pageErrors } = usePage<WelcomePageProps>().props;
+
     const [verificationModalState, setVerificationModalState] = useState<VerificationModalState>('closed');
     const [verificationCode, setVerificationCode] = useState('');
     const [verificationCodeError, setVerificationCodeError] = useState<string | null>(null);
@@ -122,6 +115,47 @@ export default function Welcome() {
     });
 
     useEffect(() => {
+        if (!pageErrors || Object.keys(pageErrors).length === 0) return;
+
+        const pick = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+        const emailErr = pick(pageErrors.email);
+        const nameErr = pick(pageErrors.name);
+        const passwordErr = pick(pageErrors.password);
+        if (emailErr) setError('email', emailErr);
+        if (nameErr) setError('first_name', nameErr);
+        if (passwordErr) setError('password', passwordErr);
+
+        const saved = sessionStorage.getItem('register_form_draft');
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved) as { first_name?: string; last_name?: string; email?: string };
+                setData((prev) => ({
+                    ...prev,
+                    first_name: parsed.first_name ?? prev.first_name,
+                    last_name: parsed.last_name ?? prev.last_name,
+                    email: parsed.email ?? prev.email,
+                    password: '',
+                    password_confirmation: '',
+                }));
+            } catch {
+                // ignore malformed storage
+            }
+            sessionStorage.removeItem('register_form_draft');
+        }
+    }, [pageErrors]);
+
+    const [nameErrors, setNameErrors] = useState<{ first_name?: string; last_name?: string }>({});
+
+    const handleNameChange = (field: 'first_name' | 'last_name', value: string) => {
+        if (/\d/.test(value)) {
+            setNameErrors((prev) => ({ ...prev, [field]: 'Name must not contain numbers.' }));
+        } else {
+            setNameErrors((prev) => ({ ...prev, [field]: undefined }));
+        }
+        setData(field, value);
+    };
+
+    useEffect(() => {
         if (status === 'verification-code-sent' || status === 'verification-code-resent') {
             setVerificationModalState('entry');
             setVerificationCode('');
@@ -131,6 +165,11 @@ export default function Welcome() {
                     ? 'A fresh 6-digit verification code was sent to your email.'
                     : 'We sent a 6-digit verification code to your email.',
             );
+        } else if (status === 'verification-code-send-failed') {
+            setVerificationModalState('entry');
+            setVerificationCode('');
+            setVerificationCodeError(null);
+            setVerificationNotice("We couldn't send the verification email. Please use the \"Resend code\" button to try again.");
         }
     }, [status]);
 
@@ -171,8 +210,21 @@ export default function Welcome() {
         e.preventDefault();
 
         clearErrors('password');
+        clearErrors('password_confirmation');
+
+        if (/\d/.test(data.first_name) || /\d/.test(data.last_name)) {
+            if (/\d/.test(data.first_name)) setNameErrors((prev) => ({ ...prev, first_name: 'Name must not contain numbers.' }));
+            if (/\d/.test(data.last_name)) setNameErrors((prev) => ({ ...prev, last_name: 'Name must not contain numbers.' }));
+            return;
+        }
+
         if (!isAcceptablePassword) {
             setError('password', 'Weak password will not be accepted. Please improve your password.');
+            return;
+        }
+
+        if (data.password !== data.password_confirmation) {
+            setError('password_confirmation', 'Passwords do not match. Please make sure both fields are identical.');
             return;
         }
 
@@ -186,8 +238,23 @@ export default function Welcome() {
             password_confirmation: current.password_confirmation,
         }));
 
+        sessionStorage.setItem(
+            'register_form_draft',
+            JSON.stringify({ first_name: data.first_name, last_name: data.last_name, email: data.email }),
+        );
+
         post('/register', {
             replace: true,
+            preserveState: 'errors',
+            onSuccess: () => {
+                sessionStorage.removeItem('register_form_draft');
+                setVerificationModalState('entry');
+                setVerificationCode('');
+                setVerificationCodeError(null);
+            },
+            onError: () => {
+                setData((prev) => ({ ...prev, password: '', password_confirmation: '' }));
+            },
         });
     };
 
@@ -226,6 +293,11 @@ export default function Welcome() {
 
             if (body?.state === 'expired') {
                 setVerificationModalState('expired');
+                return;
+            }
+
+            if (body?.state === 'send_failed') {
+                setVerificationCodeError(body.message ?? 'We could not send the verification email. Please try again shortly.');
                 return;
             }
 
@@ -285,6 +357,17 @@ export default function Welcome() {
         setVerificationCode('');
         setVerificationCodeError(null);
         setVerificationNotice(null);
+
+        const csrfToken = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
+        fetch('/register/cancel', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+        }).catch(() => {});
     };
 
     const retryVerification = () => {
@@ -383,8 +466,9 @@ export default function Welcome() {
                                                 type="text"
                                                 autoComplete="given-name"
                                                 value={data.first_name}
-                                                onChange={(e) => setData('first_name', e.target.value)}
-                                                className={inputShellClass(nameError)}
+                                                onChange={(e) => handleNameChange('first_name', e.target.value)}
+                                                className={inputShellClass(nameError ?? nameErrors.first_name)}
+                                                required
                                             />
                                         </div>
 
@@ -401,12 +485,17 @@ export default function Welcome() {
                                                 type="text"
                                                 autoComplete="family-name"
                                                 value={data.last_name}
-                                                onChange={(e) => setData('last_name', e.target.value)}
-                                                className={inputShellClass(nameError)}
+                                                onChange={(e) => handleNameChange('last_name', e.target.value)}
+                                                className={inputShellClass(nameError ?? nameErrors.last_name)}
+                                                required
                                             />
                                         </div>
                                     </div>
-                                    {nameError && <p className="text-sm font-medium text-rose-600">{nameError}</p>}
+                                    {(nameError ?? nameErrors.first_name ?? nameErrors.last_name) && (
+                                        <p className="text-sm font-medium text-rose-600">
+                                            {nameError ?? nameErrors.first_name ?? nameErrors.last_name}
+                                        </p>
+                                    )}
 
                                     <div className="relative">
                                         <label
@@ -421,7 +510,10 @@ export default function Welcome() {
                                             type="email"
                                             autoComplete="email"
                                             value={data.email}
-                                            onChange={(e) => setData('email', e.target.value)}
+                                            onChange={(e) => {
+                                                setData('email', e.target.value);
+                                                clearErrors('email');
+                                            }}
                                             className={inputShellClass(errors.email)}
                                             required
                                         />
@@ -462,7 +554,11 @@ export default function Welcome() {
                                             name="password_confirmation"
                                             autoComplete="new-password"
                                             value={data.password_confirmation}
-                                            onChange={(e) => setData('password_confirmation', e.target.value)}
+                                            onChange={(e) => {
+                                                setData('password_confirmation', e.target.value);
+                                                clearErrors('password_confirmation');
+                                                clearErrors('password');
+                                            }}
                                             className={inputShellClass(errors.password_confirmation)}
                                             required
                                         />
@@ -476,9 +572,11 @@ export default function Welcome() {
                                             Password must use at least 8 characters and any 3 of these 4 types:
                                             uppercase, lowercase, number, and special character.
                                         </p>
-                                        <p className={`font-['Inter'] text-[0.78rem] font-semibold ${strengthTextClass}`}>
-                                            Password strength: {strengthLevel}
-                                        </p>
+                                        {data.password.length > 0 && (
+                                            <p className={`font-['Inter'] text-[0.78rem] font-semibold ${strengthTextClass}`}>
+                                                Password strength: {strengthLevel}
+                                            </p>
+                                        )}
                                     </div>
 
                                     <div className="mt-6 flex justify-center">
@@ -504,6 +602,7 @@ export default function Welcome() {
                                         <div className="h-px flex-1 bg-[#B8C4DB]" />
                                     </div>
 
+<<<<<<< HEAD
                                     <div className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2">
                                         <a
                                             //href={socialite.redierct.url('facebook')} change back to this when the socialite routes are added back in
@@ -518,6 +617,12 @@ export default function Welcome() {
                                             //href={socialite.redierct.url('google')}  change back to this when the socialite routes are added back in
                                             href="/auth/google/redirect"  //remove when socialite routes are added back in
                                             className="inline-flex h-[3.25rem] items-center justify-center gap-3 rounded-[0.9rem] border border-[#E7EBF3] bg-[#FAFBFD] px-4 font-['Inter'] text-[1rem] font-medium text-[#486C92] transition hover:border-[#C8D3E6] hover:bg-white"
+=======
+                                    <div className="flex justify-center pt-1">
+                                        <a
+                                            href={socialite.redirect.url('google')}
+                                            className="inline-flex h-[3.25rem] w-full max-w-[23.5rem] items-center justify-center gap-3 rounded-[0.9rem] border border-[#E7EBF3] bg-[#FAFBFD] px-4 font-['Inter'] text-[1rem] font-medium text-[#486C92] transition hover:border-[#C8D3E6] hover:bg-white"
+>>>>>>> 30468704e08f9b8053615714f831e82720ba7a27
                                         >
                                             <GoogleIcon />
                                             <span>Sign up with Google</span>
