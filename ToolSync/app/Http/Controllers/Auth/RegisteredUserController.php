@@ -83,10 +83,12 @@ class RegisteredUserController extends Controller
             verificationCode: $verificationCode,
         );
 
+        $emailSent = false;
         try {
             Log::info('Sending registration verification code', ['email' => $email]);
             Notification::route('mail', $email)
                 ->notify(new PendingRegistrationVerification($verificationCode, $email, self::VERIFICATION_CODE_TTL_MINUTES));
+            $emailSent = true;
             Log::info('Registration verification code sent successfully', [
                 'email' => $email,
                 'mail_driver' => config('mail.default'),
@@ -98,13 +100,19 @@ class RegisteredUserController extends Controller
                 'exception' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            throw $e;
         }
 
         return redirect()
             ->route('home')
-            ->with('status', 'verification-code-sent')
+            ->with('status', $emailSent ? 'verification-code-sent' : 'verification-code-send-failed')
             ->with('verification_email', $email);
+    }
+
+    public function cancelPendingRegistration(Request $request): JsonResponse
+    {
+        $request->session()->forget(self::PENDING_REGISTRATION_SESSION_KEY);
+
+        return response()->json(['state' => 'cancelled']);
     }
 
     public function resendVerification(Request $request): RedirectResponse|JsonResponse
@@ -133,10 +141,12 @@ class RegisteredUserController extends Controller
         );
 
         $resendEmail = $pending['email'];
+        $emailSent = false;
         try {
             Log::info('Resending registration verification code', ['email' => $resendEmail]);
             Notification::route('mail', $resendEmail)
                 ->notify(new PendingRegistrationVerification($verificationCode, $resendEmail, self::VERIFICATION_CODE_TTL_MINUTES));
+            $emailSent = true;
             Log::info('Registration verification code resent successfully', [
                 'email' => $resendEmail,
                 'mail_driver' => config('mail.default'),
@@ -148,10 +158,17 @@ class RegisteredUserController extends Controller
                 'exception' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            throw $e;
         }
 
         if ($request->expectsJson()) {
+            if (! $emailSent) {
+                return response()->json([
+                    'state' => 'send_failed',
+                    'message' => 'We could not send the verification email. Please try again shortly.',
+                    'email' => $resendEmail,
+                ], 503);
+            }
+
             return response()->json([
                 'state' => 'resent',
                 'message' => 'A new verification code has been sent to your email.',
@@ -161,7 +178,7 @@ class RegisteredUserController extends Controller
 
         return redirect()
             ->route('home')
-            ->with('status', 'verification-code-resent')
+            ->with('status', $emailSent ? 'verification-code-resent' : 'verification-code-send-failed')
             ->with('verification_email', $resendEmail);
     }
 

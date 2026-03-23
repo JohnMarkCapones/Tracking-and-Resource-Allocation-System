@@ -24,6 +24,8 @@ Route::middleware('guest')->group(function () {
 
     Route::post('register', [RegisteredUserController::class, 'store'])
         ->middleware('throttle:5,1');
+    Route::post('register/cancel', [RegisteredUserController::class, 'cancelPendingRegistration'])
+        ->name('register.cancel');
     Route::post('register/resend-verification', [RegisteredUserController::class, 'resendVerification'])
         ->middleware('throttle:6,1')
         ->name('register.resend-verification');
