@@ -29,7 +29,7 @@ export function SummaryDonutChart({ data }: SummaryDonutChartProps) {
         { label: 'Active', value: a, colorClass: 'stroke-blue-500', legendClass: 'bg-blue-500' },
         { label: 'Overdue', value: o, colorClass: 'stroke-amber-500', legendClass: 'bg-amber-500' },
         { label: 'Pending Approval', value: p, colorClass: 'stroke-violet-500', legendClass: 'bg-violet-500' },
-        { label: 'Booked', value: b, colorClass: 'stroke-teal-500', legendClass: 'bg-teal-500' },
+        { label: 'Booked', value: b, colorClass: 'stroke-[#296760]', legendClass: 'bg-[#296760]' },
         { label: 'Unclaimed', value: u, colorClass: 'stroke-orange-500', legendClass: 'bg-orange-500' },
         { label: 'Cancelled', value: c, colorClass: 'stroke-rose-500', legendClass: 'bg-rose-500' },
     ];
