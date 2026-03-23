@@ -25,6 +25,8 @@ type ToolCardProps = {
     tool: ToolCardData;
     onRequestBorrow?: (tool: ToolCardData) => void;
     disableBorrowRequest?: boolean;
+    isHighlighted?: boolean;
+    highlightLabel?: string;
 };
 
 function statusClasses(status: ToolCardStatus): string {
@@ -60,7 +62,13 @@ function conditionClasses(condition: string): string {
     return 'bg-slate-100 text-slate-700';
 }
 
-export function ToolCard({ tool, onRequestBorrow, disableBorrowRequest = false }: ToolCardProps) {
+export function ToolCard({
+    tool,
+    onRequestBorrow,
+    disableBorrowRequest = false,
+    isHighlighted = false,
+    highlightLabel,
+}: ToolCardProps) {
     const toolHref = `/tools/${tool.slug ?? tool.id}`;
     const displayCondition = tool.latestAdminCondition?.trim() ? tool.latestAdminCondition : tool.condition;
 
@@ -86,7 +94,9 @@ export function ToolCard({ tool, onRequestBorrow, disableBorrowRequest = false }
 
     return (
         <div
-            className="group cursor-pointer rounded-2xl bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-gray-50 hover:shadow-md"
+            className={`group cursor-pointer rounded-2xl bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-gray-50 hover:shadow-md ${
+                isHighlighted ? 'ring-2 ring-amber-400 ring-offset-2' : ''
+            }`}
             role="button"
             tabIndex={0}
             onClick={() => router.visit(toolHref)}
@@ -145,6 +155,9 @@ export function ToolCard({ tool, onRequestBorrow, disableBorrowRequest = false }
                 </div>
 
                 <p className="mt-1 text-[11px] text-gray-500">ID: {tool.toolId} | {quantityLabel}</p>
+                {isHighlighted && highlightLabel && (
+                    <p className="mt-1 rounded-lg bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800">{highlightLabel}</p>
+                )}
             </div>
 
             {(tool.status === 'Available' || tool.status === 'Partially Available') && (

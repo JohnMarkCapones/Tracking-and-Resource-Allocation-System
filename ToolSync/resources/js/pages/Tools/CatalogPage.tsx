@@ -1,5 +1,5 @@
-import { Head, Link, router, usePage } from '@inertiajs/react';
-import { format } from 'date-fns';
+import { Head, Link, usePage } from '@inertiajs/react';
+import { addDays, format, parseISO } from 'date-fns';
 import { useEffect, useRef, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { EmptyState } from '@/Components/EmptyState';
@@ -9,7 +9,7 @@ import { RequestToolModal } from '@/Components/Tools/RequestToolModal';
 import { ToolCard, type ToolCardData } from '@/Components/Tools/ToolCard';
 import { ToolFilters } from '@/Components/Tools/ToolFilters';
 import AppLayout from '@/Layouts/AppLayout';
-import type { DashboardApiResponse, ReservationApiItem, ToolDto, ToolCategoryDto } from '@/lib/apiTypes';
+import type { DashboardApiResponse, ToolDto, ToolCategoryDto } from '@/lib/apiTypes';
 import { mapToolStatusToUi, mapAvailabilityStatusToUi } from '@/lib/apiTypes';
 import { apiRequest } from '@/lib/http';
 import { getToolImageUrl } from '@/lib/utils';
@@ -36,6 +36,12 @@ type ToolRangeAvailabilityResponse = {
         available_for_dates?: Record<string, number>;
         availability_status?: string;
         availability_message?: string;
+        allocations?: Array<{
+            expected_return_date?: string | null;
+        }>;
+        reservations?: Array<{
+            end_date?: string | null;
+        }>;
     };
 };
 
@@ -96,6 +102,31 @@ export default function CatalogPage() {
         return Number(availability.available_count ?? 0);
     };
 
+    const getFirstAvailableDate = async (toolId: number, startDate: string): Promise<string | null> => {
+        const from = parseISO(startDate);
+        const to = addDays(from, 90);
+
+        const availability = await apiRequest<ToolRangeAvailabilityResponse>(
+            `/api/tools/${toolId}/availability?from=${format(from, 'yyyy-MM-dd')}&to=${format(to, 'yyyy-MM-dd')}`,
+        );
+
+        const availabilityByDate = availability.data.available_for_dates ?? {};
+        const firstAvailable = Object.entries(availabilityByDate)
+            .filter(([, count]) => Number(count) > 0)
+            .sort(([a], [b]) => a.localeCompare(b))[0];
+
+        if (firstAvailable) {
+            return firstAvailable[0];
+        }
+
+        const fallbackDates = [
+            ...(availability.data.allocations ?? []).map((a) => a.expected_return_date).filter((d): d is string => Boolean(d)),
+            ...(availability.data.reservations ?? []).map((r) => r.end_date).filter((d): d is string => Boolean(d)),
+        ].sort((a, b) => a.localeCompare(b));
+
+        return fallbackDates[0] ?? null;
+    };
+
     const [tools, setTools] = useState<ToolCardData[]>([]);
     const [categories, setCategories] = useState<string[]>([]);
     const [categoryDtos, setCategoryDtos] = useState<ToolCategoryDto[]>([]);
@@ -106,7 +137,6 @@ export default function CatalogPage() {
     const [selectedToolIds, setSelectedToolIds] = useState<Set<number>>(new Set());
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [activeBorrowingsCount, setActiveBorrowingsCount] = useState(0);
-    const [pendingBorrowRequestsCount, setPendingBorrowRequestsCount] = useState(0);
     const [maxBorrowings, setMaxBorrowings] = useState(DEFAULT_MAX_BORROWINGS);
     const [search, setSearch] = useState('');
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -118,7 +148,19 @@ export default function CatalogPage() {
     const [hasMore, setHasMore] = useState(false);
     const [initialLoaded, setInitialLoaded] = useState(false);
     const [randomSeed, setRandomSeed] = useState<string | null>(null);
+    const [highlightedToolId, setHighlightedToolId] = useState<number | null>(null);
+    const [highlightedToolMessage, setHighlightedToolMessage] = useState<Record<number, string>>({});
     const loadMoreRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        if (highlightedToolId == null) return;
+
+        const timeout = window.setTimeout(() => {
+            setHighlightedToolId(null);
+        }, 12000);
+
+        return () => window.clearTimeout(timeout);
+    }, [highlightedToolId]);
 
     // Limit is based only on active borrowings (scheduled + borrowed + pending return).
     // Pending reservation requests (not yet approved) do not count toward the max.
@@ -220,11 +262,10 @@ export default function CatalogPage() {
                 const seed = Math.random().toString(36).slice(2);
                 setRandomSeed(seed);
 
-                const [toolsRes, categoriesRes, dashboardRes, reservationsRes] = await Promise.all([
+                const [toolsRes, categoriesRes, dashboardRes] = await Promise.all([
                     apiRequest<ToolsIndexResponse>(`/api/tools?paginated=1&page=1&per_page=${PAGE_SIZE}&random_seed=${seed}`),
                     apiRequest<{ data: ToolCategoryDto[] }>('/api/tool-categories'),
                     apiRequest<DashboardApiResponse>(dashboardUrl),
-                    apiRequest<{ data: ReservationApiItem[] }>('/api/reservations'),
                 ]);
                 if (cancelled) return;
 
@@ -253,7 +294,6 @@ export default function CatalogPage() {
                     (dashboardRes.data.counts.borrowed_active_count ?? 0) +
                     (dashboardRes.data.counts.scheduled_active_count ?? 0),
                 );
-                setPendingBorrowRequestsCount((reservationsRes.data ?? []).filter((r) => r.status === 'pending').length);
                 setInitialLoaded(true);
             } catch (err) {
                 if (cancelled) return;
@@ -274,6 +314,7 @@ export default function CatalogPage() {
         setSelectedStatuses([]);
         setSearch('');
         setPage(1);
+        setHighlightedToolId(null);
         const seed = Math.random().toString(36).slice(2);
         setRandomSeed(seed);
         void fetchTools({ page: 1, search: '', categories: [], statuses: [], append: false });
@@ -340,26 +381,7 @@ export default function CatalogPage() {
         setIsRequestModalOpen(true);
     };
 
-    const handleSelectChange = (tool: ToolCardData, selected: boolean) => {
-        setSelectedToolIds((prev) => {
-            const next = new Set(prev);
-            if (selected) next.add(tool.id);
-            else next.delete(tool.id);
-            return next;
-        });
-    };
-
     const selectedTools = tools.filter((t) => selectedToolIds.has(t.id));
-
-    const handleBatchRequestClick = () => {
-        if (selectedTools.length === 0) return;
-        if (borrowSlotsUsed + selectedTools.length > maxBorrowings) {
-            toast.error(`You can have at most ${maxBorrowings} active borrowings. You have ${borrowSlotsUsed}. Return a tool before requesting more.`);
-            return;
-        }
-        setSelectedTool(null);
-        setIsRequestModalOpen(true);
-    };
 
     const handleRequestSubmit = async (data: { dateRange: DateRange; purpose: string }) => {
         if (!data.dateRange.from || !data.dateRange.to) {
@@ -397,8 +419,37 @@ export default function CatalogPage() {
 
             const unavailable = rangeChecks.filter((check) => !check.available);
             if (unavailable.length > 0) {
-                if (unavailable.length === 1) {
+                const firstAvailableCandidates = await Promise.all(
+                    unavailable.map(async ({ tool }) => {
+                        const firstAvailable = await getFirstAvailableDate(tool.id, startDate);
+                        return { tool, firstAvailable };
+                    }),
+                );
+
+                const earliestAvailable = firstAvailableCandidates
+                    .filter((entry): entry is { tool: ToolCardData; firstAvailable: string } => Boolean(entry.firstAvailable))
+                    .sort((a, b) => a.firstAvailable.localeCompare(b.firstAvailable))[0];
+
+                if (earliestAvailable) {
+                    const earliestDateLabel = format(parseISO(earliestAvailable.firstAvailable), 'MMM d, yyyy');
+                    setHighlightedToolId(earliestAvailable.tool.id);
+                    setHighlightedToolMessage((prev) => ({
+                        ...prev,
+                        [earliestAvailable.tool.id]: `Earliest available: ${earliestDateLabel}`,
+                    }));
+
+                    if (unavailable.length === 1) {
+                        toast.error(
+                            `${earliestAvailable.tool.name} is fully reserved for the selected dates. Earliest available: ${earliestDateLabel}.`,
+                        );
+                    } else {
+                        toast.error(
+                            `Some selected tools are fully reserved. Earliest available option: ${earliestAvailable.tool.name} on ${earliestDateLabel}.`,
+                        );
+                    }
+                } else if (unavailable.length === 1) {
                     const single = unavailable[0];
+                    setHighlightedToolId(single.tool.id);
                     toast.error(single.message ?? `${single.tool.name} is fully reserved for the selected dates.`);
                 } else {
                     const names = unavailable.map((check) => check.tool.name).join(', ');
@@ -435,10 +486,9 @@ export default function CatalogPage() {
             setIsRequestModalOpen(false);
             setSelectedTool(null);
 
-            const [toolsRes, dashboardRes, reservationsRes] = await Promise.all([
+            const [toolsRes, dashboardRes] = await Promise.all([
                 apiRequest<ToolsIndexResponse>(`/api/tools?paginated=1&page=${page}&per_page=${PAGE_SIZE}${randomSeed ? `&random_seed=${randomSeed}` : ''}`),
                 apiRequest<DashboardApiResponse>(dashboardUrl),
-                apiRequest<{ data: ReservationApiItem[] }>('/api/reservations'),
             ]);
             const meta = toolsRes.meta;
             setTools((toolsRes.data ?? []).map(mapToolToCardData));
@@ -454,7 +504,6 @@ export default function CatalogPage() {
                 (dashboardRes.data.counts.borrowed_active_count ?? 0) +
                 (dashboardRes.data.counts.scheduled_active_count ?? 0),
             );
-            setPendingBorrowRequestsCount((reservationsRes.data ?? []).filter((r) => r.status === 'pending').length);
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to submit request.';
             toast.error(message);
@@ -570,6 +619,8 @@ export default function CatalogPage() {
                                         tool={tool}
                                         onRequestBorrow={handleRequestBorrow}
                                         disableBorrowRequest={borrowSlotsUsed >= maxBorrowings}
+                                        isHighlighted={tool.status === 'Fully Reserved' || tool.id === highlightedToolId}
+                                        highlightLabel={highlightedToolMessage[tool.id]}
                                     />
                                 ))}
                                 {isLoadingMore &&
