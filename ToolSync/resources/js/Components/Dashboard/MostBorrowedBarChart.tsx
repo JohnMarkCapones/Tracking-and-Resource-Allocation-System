@@ -42,8 +42,8 @@ export function MostBorrowedBarChart({ tools }: MostBorrowedBarChartProps) {
                 <span className="text-[11px] text-gray-500">Top {sortedTools.length} by borrow count</span>
             </header>
 
-            <div className="mt-4 h-52 rounded-2xl bg-slate-50 px-4 pt-4 pb-3 dark:bg-[#0c1322]">
-                <div className="relative flex h-full items-end border-b border-slate-200/80 pb-1.5 dark:border-slate-600/40">
+            <div className="mt-4 rounded-2xl bg-slate-50 px-4 pt-4 pb-3 dark:bg-[#0c1322]">
+                <div className="relative h-40 border-b border-slate-200/80 pb-1.5 dark:border-slate-600/40">
                     <div className="pointer-events-none absolute inset-x-0 top-0 bottom-0 flex flex-col justify-between text-[10px] text-slate-400">
                         {ticks.map((tick, index) => (
                             <div key={tick} className="flex items-center gap-1">
@@ -66,40 +66,45 @@ export function MostBorrowedBarChart({ tools }: MostBorrowedBarChartProps) {
                             return (
                                 <div
                                     key={tool.name}
-                                    className="flex h-full flex-1 flex-col items-center justify-end gap-2"
+                                    className="flex h-full flex-1 items-end justify-center"
                                     title={`${tool.name}: ${tool.count} borrowings`}
                                     onMouseEnter={() => setHoveredTool(tool.name)}
                                     onMouseLeave={() => setHoveredTool(null)}
                                 >
-                                    <div className="relative flex h-full w-full items-end justify-center">
-                                        {hoveredTool === tool.name && (
-                                            <div className="absolute -top-7 rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm">
-                                                {tool.count} borrowings
-                                            </div>
-                                        )}
+                                    {hoveredTool === tool.name && (
+                                        <div className="absolute -top-7 rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-semibold text-white shadow-sm">
+                                            {tool.count} borrowings
+                                        </div>
+                                    )}
 
-                                        <div className="flex h-full w-10 items-end">
-                                            <div
-                                                className="flex h-full w-full flex-col overflow-hidden rounded-t-md bg-gradient-to-t from-blue-600 to-sky-400 transition-transform duration-150 ease-out hover:-translate-y-1 hover:shadow-md"
-                                                style={{
-                                                    height: `${height}%`,
-                                                }}
-                                            >
-                                                <div className="flex-1" />
-                                                <div className="h-1.5 bg-sky-300/70" />
-                                            </div>
+                                    <div className="flex h-full w-10 items-end">
+                                        <div
+                                            className="flex h-full w-full flex-col overflow-hidden rounded-t-md bg-gradient-to-t from-blue-600 to-sky-400 transition-transform duration-150 ease-out hover:-translate-y-1 hover:shadow-md"
+                                            style={{
+                                                height: `${height}%`,
+                                            }}
+                                        >
+                                            <div className="flex-1" />
+                                            <div className="h-1.5 bg-sky-300/70" />
                                         </div>
                                     </div>
-                                    <p
-                                        className="mt-1 min-h-[2rem] w-full max-w-[110px] overflow-hidden text-center text-[11px] font-medium text-gray-700 [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical]"
-                                        title={tool.name}
-                                    >
-                                        {tool.name}
-                                    </p>
                                 </div>
                             );
                         })}
                     </div>
+                </div>
+
+                <div className="ml-8 mt-2 flex gap-8">
+                    {sortedTools.map((tool) => (
+                        <div key={`${tool.name}-label`} className="flex flex-1 justify-center">
+                            <p
+                                className="min-h-[2rem] w-full max-w-[110px] overflow-hidden text-center text-[11px] font-medium text-gray-700 [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical]"
+                                title={tool.name}
+                            >
+                                {tool.name}
+                            </p>
+                        </div>
+                    ))}
                 </div>
             </div>
         </section>
