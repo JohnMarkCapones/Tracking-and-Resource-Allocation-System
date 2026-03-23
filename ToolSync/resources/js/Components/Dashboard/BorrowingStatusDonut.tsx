@@ -8,12 +8,19 @@ type BorrowingStatusDonutProps = {
 };
 
 export function BorrowingStatusDonut({ segments }: BorrowingStatusDonutProps) {
-    const total = segments.reduce((accumulator, segment) => accumulator + segment.value, 0) || 1;
+    const total = segments.reduce((accumulator, segment) => accumulator + segment.value, 0);
+    const normalizedTotal = total || 1;
 
     const radius = 40;
     const circumference = 2 * Math.PI * radius;
 
-    const colors = ['stroke-blue-900', 'stroke-sky-500', 'stroke-slate-400', 'stroke-emerald-500', 'stroke-amber-500'];
+    const colors = [
+        { stroke: 'stroke-blue-900', bullet: 'bg-blue-900' },
+        { stroke: 'stroke-sky-500', bullet: 'bg-sky-500' },
+        { stroke: 'stroke-slate-400', bullet: 'bg-slate-400' },
+        { stroke: 'stroke-emerald-500', bullet: 'bg-emerald-500' },
+        { stroke: 'stroke-amber-500', bullet: 'bg-amber-500' },
+    ];
 
     let accumulated = 0;
 
@@ -42,12 +49,17 @@ export function BorrowingStatusDonut({ segments }: BorrowingStatusDonutProps) {
                 <svg viewBox="0 0 100 100" className="h-32 w-32 -rotate-90" aria-hidden="true">
                     <circle cx="50" cy="50" r={radius} className="fill-none stroke-slate-100 dark:stroke-slate-700" strokeWidth="16" />
                     {segments.map((segment, index) => {
-                        const segmentLength = (segment.value / total) * circumference;
-                        const dashArray = `${segmentLength} ${circumference}`;
-                        const dashOffset = circumference - accumulated;
+                        const segmentLength = (segment.value / normalizedTotal) * circumference;
+
+                        if (segmentLength <= 0) {
+                            return null;
+                        }
+
+                        const dashArray = `${segmentLength} ${circumference - segmentLength}`;
+                        const dashOffset = -accumulated;
                         accumulated += segmentLength;
 
-                        const colorClass = colors[index % colors.length] ?? 'stroke-slate-400';
+                        const colorClass = colors[index % colors.length]?.stroke ?? 'stroke-slate-400';
 
                         return (
                             <circle
@@ -74,12 +86,12 @@ export function BorrowingStatusDonut({ segments }: BorrowingStatusDonutProps) {
                 </svg>
 
                 <div className="space-y-3 text-xs text-gray-700 dark:text-gray-200">
-                    {segments.map((segment) => (
+                    {segments.map((segment, index) => (
                         <div key={segment.label} className="flex items-center gap-2">
-                            <span className="h-3 w-3 rounded-full bg-slate-400" />
+                            <span className={`h-3 w-3 rounded-full ${colors[index % colors.length]?.bullet ?? 'bg-slate-400'}`} />
                             <span className="flex-1">{segment.label}</span>
                             <span className="font-semibold">
-                                {segment.value} ({Math.round((segment.value / total) * 100)}
+                                {segment.value} ({Math.round((segment.value / normalizedTotal) * 100)}
                                 %)
                             </span>
                         </div>
