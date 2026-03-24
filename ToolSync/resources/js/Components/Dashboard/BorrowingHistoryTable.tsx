@@ -184,7 +184,7 @@ export function BorrowingHistoryTable({
                     <tbody className="align-middle text-xs text-gray-700 dark:text-gray-200">
                         {paged.map((item) => (
                             <tr
-                                key={item.toolId}
+                                key={item.allocationId ?? item.toolId}
                                 className="border-b last:border-0 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-[#111827]"
                             >
                                 <td className="py-3 pr-4 font-medium">{item.equipment}</td>

@@ -236,20 +236,11 @@ export default function Login() {
                                         <div className="h-px flex-1 bg-[#B8C4DB]" />
                                     </div>
 
-                                    <div className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2">
-                                        <a
-                                            //href={socialite.redierct.url('facebook')} change back to this when the socialite routes are added back in
-                                            href="/auth/facebook/redirect" //remove when socialite routes are added back in
-                                            className="inline-flex h-[3.25rem] items-center justify-center gap-2.5 rounded-[0.9rem] border border-[#E7EBF3] bg-[#FAFBFD] px-3 font-['Inter'] text-[0.92rem] font-medium text-[#486C92] transition hover:border-[#C8D3E6] hover:bg-white"
-                                        >
-                                            <FacebookIcon />
-                                            <span className="whitespace-nowrap">Continue with Facebook</span>
-                                        </a>
-
+                                    <div className="flex justify-center pt-1">
                                         <a
                                             //href={socialite.redierct.url('google')}  change back to this when the socialite routes are added back in
                                             href="/auth/google/redirect"  //remove when socialite routes are added back in
-                                            className="inline-flex h-[3.25rem] items-center justify-center gap-2.5 rounded-[0.9rem] border border-[#E7EBF3] bg-[#FAFBFD] px-3 font-['Inter'] text-[0.92rem] font-medium text-[#486C92] transition hover:border-[#C8D3E6] hover:bg-white"
+                                            className="inline-flex h-[3.25rem] w-full max-w-[23.5rem] items-center justify-center gap-2.5 rounded-[0.9rem] border border-[#E7EBF3] bg-[#FAFBFD] px-3 font-['Inter'] text-[0.92rem] font-medium text-[#486C92] transition hover:border-[#C8D3E6] hover:bg-white"
                                         >
                                             <GoogleIcon />
                                             <span className="whitespace-nowrap">Continue with Google</span>

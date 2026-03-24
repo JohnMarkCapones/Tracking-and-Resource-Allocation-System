@@ -6,7 +6,7 @@ type ReturnModalProps = {
     toolName: string;
     toolId: string;
     onClose: () => void;
-    onSubmit: (data: { condition: string; notes: string; imageFiles: File[] }) => void;
+    onSubmit: (data: { condition: string; notes: string; imageFiles: File[] }) => Promise<void> | void;
 };
 
 const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor', 'Damaged', 'Functional'];
@@ -17,6 +17,7 @@ export function ReturnModal({ show, toolName, toolId, onClose, onSubmit }: Retur
     const [imageFiles, setImageFiles] = useState<File[]>([]);
     const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([]);
     const [submitError, setSubmitError] = useState<string | null>(null);
+    const [submitting, setSubmitting] = useState(false);
     const prevShowRef = useRef(false);
 
     const isProofRequired = condition === 'Fair' || condition === 'Poor' || condition === 'Damaged';
@@ -35,6 +36,7 @@ export function ReturnModal({ show, toolName, toolId, onClose, onSubmit }: Retur
             setNotes('');
             clearImageState();
             setSubmitError(null);
+            setSubmitting(false);
         }
         prevShowRef.current = show;
     }, [show]);
@@ -55,16 +57,25 @@ export function ReturnModal({ show, toolName, toolId, onClose, onSubmit }: Retur
         });
     };
 
-    const handleSubmit = (event: React.FormEvent) => {
+    const handleSubmit = async (event: React.FormEvent) => {
         event.preventDefault();
         if (isProofRequired && imageFiles.length === 0) {
             setSubmitError('Please upload at least one photo proof for Fair, Poor, or Damaged returns.');
             return;
         }
-        onSubmit({ condition, notes, imageFiles });
+        setSubmitting(true);
+        setSubmitError(null);
+        try {
+            await onSubmit({ condition, notes, imageFiles });
+        } catch {
+            // parent handles error toasts; re-enable button so user can retry
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     const handleClose = () => {
+        if (submitting) return;
         setCondition('Good');
         setNotes('');
         clearImageState();
@@ -160,15 +171,23 @@ export function ReturnModal({ show, toolName, toolId, onClose, onSubmit }: Retur
                         <button
                             type="button"
                             onClick={handleClose}
-                            className="rounded-full border border-gray-200 px-4 py-1.5 text-[11px] font-medium text-gray-700 hover:bg-gray-100"
+                            disabled={submitting}
+                            className="rounded-full border border-gray-200 px-4 py-1.5 text-[11px] font-medium text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             Cancel
                         </button>
                         <button
                             type="submit"
-                            className="rounded-full bg-emerald-600 px-4 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-700"
+                            disabled={submitting}
+                            className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
                         >
-                            Confirm Return
+                            {submitting && (
+                                <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                                </svg>
+                            )}
+                            {submitting ? 'Submitting…' : 'Confirm Return'}
                         </button>
                     </div>
                 </form>

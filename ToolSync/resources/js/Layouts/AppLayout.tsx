@@ -402,7 +402,7 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
             </div>
             <div
                 className={`relative z-10 flex min-h-screen overflow-x-hidden ${
-                    isNotificationsPage ? 'bg-[#111827]' : 'bg-[#f6f4f0] dark:bg-gray-900'
+                    isNotificationsPage ? 'bg-gray-50 dark:bg-[#111827]' : 'bg-[#f6f4f0] dark:bg-gray-900'
                 }`}
             >
                 {/* Sidebar */}
@@ -697,7 +697,7 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                 <div className="flex h-screen flex-1 flex-col overflow-hidden">
                     <header
                         className={`border-b border-neutral-200 dark:border-gray-700 ${
-                            isNotificationsPage ? 'bg-[#111827]' : 'bg-[#f6f4f0] dark:bg-gray-900'
+                            isNotificationsPage ? 'bg-gray-50 dark:bg-[#111827]' : 'bg-[#f6f4f0] dark:bg-gray-900'
                         }`}
                     >
                         <div className="flex items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">

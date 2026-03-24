@@ -25,6 +25,19 @@ type WelcomePageProps = {
     errors?: Record<string, string | string[]>;
 };
 
+const FacebookIcon = () => (
+    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path
+            d="M24 12a12 12 0 1 0-13.875 11.854v-8.385H7.078V12.23h3.047V9.75c0-3.007 1.792-4.668 4.533-4.668 1.313 0 2.687.234 2.687.234v2.953H15.83c-1.49 0-1.955.925-1.955 1.874v2.086h3.328l-.532 3.239h-2.796v8.385A12.003 12.003 0 0 0 24 12Z"
+            fill="#1877F2"
+        />
+        <path
+            d="M16.671 15.469l.532-3.239h-3.328v-2.086c0-.949.465-1.874 1.955-1.874h1.515V5.316s-1.374-.234-2.687-.234c-2.741 0-4.533 1.661-4.533 4.668v2.48H7.078v3.239h3.047v8.385a12.08 12.08 0 0 0 3.75 0v-8.385h2.796Z"
+            fill="#fff"
+        />
+    </svg>
+);
+
 const GoogleIcon = () => (
     <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path
@@ -602,27 +615,11 @@ export default function Welcome() {
                                         <div className="h-px flex-1 bg-[#B8C4DB]" />
                                     </div>
 
-<<<<<<< HEAD
-                                    <div className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2">
-                                        <a
-                                            //href={socialite.redierct.url('facebook')} change back to this when the socialite routes are added back in
-                                            href="/auth/facebook/redirect" //remove when socialite routes are added back in
-                                            className="inline-flex h-[3.25rem] items-center justify-center gap-3 rounded-[0.9rem] border border-[#E7EBF3] bg-[#FAFBFD] px-4 font-['Inter'] text-[1rem] font-medium text-[#486C92] transition hover:border-[#C8D3E6] hover:bg-white"
-                                        >
-                                            <FacebookIcon />
-                                            <span>Sign up with Facebook</span>
-                                        </a>
-
+                                    <div className="flex justify-center pt-1">
                                         <a
                                             //href={socialite.redierct.url('google')}  change back to this when the socialite routes are added back in
                                             href="/auth/google/redirect"  //remove when socialite routes are added back in
-                                            className="inline-flex h-[3.25rem] items-center justify-center gap-3 rounded-[0.9rem] border border-[#E7EBF3] bg-[#FAFBFD] px-4 font-['Inter'] text-[1rem] font-medium text-[#486C92] transition hover:border-[#C8D3E6] hover:bg-white"
-=======
-                                    <div className="flex justify-center pt-1">
-                                        <a
-                                            href={socialite.redirect.url('google')}
                                             className="inline-flex h-[3.25rem] w-full max-w-[23.5rem] items-center justify-center gap-3 rounded-[0.9rem] border border-[#E7EBF3] bg-[#FAFBFD] px-4 font-['Inter'] text-[1rem] font-medium text-[#486C92] transition hover:border-[#C8D3E6] hover:bg-white"
->>>>>>> 30468704e08f9b8053615714f831e82720ba7a27
                                         >
                                             <GoogleIcon />
                                             <span>Sign up with Google</span>
