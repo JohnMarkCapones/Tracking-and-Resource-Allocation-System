@@ -420,7 +420,7 @@ export default function IndexPage() {
                                                 type="button"
                                                 onClick={() => handleClaim(reservation)}
                                                 disabled={!reservation.canClaim || claimingReservationId === reservation.id}
-                                                className="rounded-md px-2 py-1 text-xs font-medium text-emerald-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700 disabled:cursor-not-allowed disabled:text-gray-400 dark:text-emerald-400 dark:hover:bg-emerald-900/30"
+                                                className="cursor-pointer rounded-md px-2 py-1 text-xs font-medium text-emerald-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700 disabled:cursor-not-allowed disabled:text-gray-400 dark:text-emerald-400 dark:hover:bg-emerald-900/30"
                                                 title={!reservation.canClaim ? 'You can claim this booking on or after pickup date.' : undefined}
                                             >
                                                 {claimingReservationId === reservation.id ? 'Claiming...' : 'Claim'}
@@ -430,7 +430,7 @@ export default function IndexPage() {
                                             <button
                                                 type="button"
                                                 onClick={() => setReservationToCancel(reservation)}
-                                                className="rounded-md px-2 py-1 text-xs font-medium text-rose-600 transition-colors hover:bg-rose-50 hover:text-rose-700 dark:text-rose-400 dark:hover:bg-rose-900/30"
+                                                className="cursor-pointer rounded-md px-2 py-1 text-xs font-medium text-rose-600 transition-colors hover:bg-rose-50 hover:text-rose-700 dark:text-rose-400 dark:hover:bg-rose-900/30"
                                             >
                                                 Cancel
                                             </button>
