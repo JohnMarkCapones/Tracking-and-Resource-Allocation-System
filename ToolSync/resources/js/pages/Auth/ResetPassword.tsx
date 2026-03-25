@@ -1,5 +1,6 @@
 import { Head, useForm } from '@inertiajs/react';
 import type { FormEventHandler } from 'react';
+import { useState } from 'react';
 import InputError from '@/Components/InputError';
 import InputLabel from '@/Components/InputLabel';
 import PasswordInput from '@/Components/PasswordInput';
@@ -15,8 +16,17 @@ export default function ResetPassword({ token, email }: { token: string; email: 
         password_confirmation: '',
     });
 
+    const [confirmError, setConfirmError] = useState<string | null>(null);
+
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
+
+        setConfirmError(null);
+
+        if (data.password !== data.password_confirmation) {
+            setConfirmError('Passwords do not match. Please make sure both fields are identical.');
+            return;
+        }
 
         post('/reset-password', {
             onFinish: () => reset('password', 'password_confirmation'),
@@ -69,10 +79,13 @@ export default function ResetPassword({ token, email }: { token: string; email: 
                         value={data.password_confirmation}
                         className="mt-1 block w-full"
                         autoComplete="new-password"
-                        onChange={(e) => setData('password_confirmation', e.target.value)}
+                        onChange={(e) => {
+                            setData('password_confirmation', e.target.value);
+                            setConfirmError(null);
+                        }}
                     />
 
-                    <InputError message={errors.password_confirmation} className="mt-2" />
+                    <InputError message={confirmError ?? errors.password_confirmation} className="mt-2" />
                 </div>
 
                 <div className="mt-4 flex items-center justify-end">
