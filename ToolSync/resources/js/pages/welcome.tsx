@@ -179,10 +179,9 @@ export default function Welcome() {
                     : 'We sent a 6-digit verification code to your email.',
             );
         } else if (status === 'verification-code-send-failed') {
-            setVerificationModalState('entry');
-            setVerificationCode('');
-            setVerificationCodeError(null);
-            setVerificationNotice("We couldn't send the verification email. Please use the \"Resend code\" button to try again.");
+            // Don't open the modal — show an error on the form instead so the user
+            // knows the address couldn't be reached before ever seeing the OTP screen.
+            setError('email', "We couldn't deliver a verification email to this address. Please check it and try again.");
         }
     }, [status]);
 
