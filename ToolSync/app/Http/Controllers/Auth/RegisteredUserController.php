@@ -46,7 +46,32 @@ class RegisteredUserController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
+            'email' => [
+                'required',
+                'string',
+                'lowercase',
+                'email',
+                'max:255',
+                // Fix 1: MX record check — only domains that explicitly accept email are allowed
+                function ($attribute, $value, $fail) {
+                    $domain = substr(strrchr($value, '@'), 1);
+                    if ($domain && !checkdnsrr($domain, 'MX')) {
+                        $fail('This email address cannot receive emails. Please use a valid email address (e.g. Gmail, Yahoo, Outlook).');
+                    }
+                },
+                // Fix 2: Smart duplicate check — tell the user exactly why the email is taken
+                function ($attribute, $value, $fail) {
+                    $existing = User::where('email', strtolower($value))->first();
+                    if (!$existing) return;
+                    if ($existing->provider === 'google') {
+                        $fail('This email is linked to a Google account. Please sign in with Google instead.');
+                    } elseif ($existing->provider) {
+                        $fail('This email is already registered via ' . ucfirst($existing->provider) . '. Please use that login method.');
+                    } else {
+                        $fail('This email is already registered. Please log in or use a different email.');
+                    }
+                },
+            ],
             'password' => [
                 'required',
                 'confirmed',
