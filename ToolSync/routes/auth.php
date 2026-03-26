@@ -23,14 +23,14 @@ Route::middleware('guest')->group(function () {
         ->name('register');
 
     Route::post('register', [RegisteredUserController::class, 'store'])
-        ->middleware('throttle:5,1');
+        ->middleware('throttle:3,1');
     Route::post('register/cancel', [RegisteredUserController::class, 'cancelPendingRegistration'])
         ->name('register.cancel');
     Route::post('register/resend-verification', [RegisteredUserController::class, 'resendVerification'])
-        ->middleware('throttle:6,1')
+        ->middleware('throttle:3,10')
         ->name('register.resend-verification');
     Route::post('register/verify-otp', [RegisteredUserController::class, 'verifyOtp'])
-        ->middleware('throttle:10,1')
+        ->middleware('throttle:5,15')
         ->name('register.verify-otp');
     Route::get('register/verify', [RegisteredUserController::class, 'verifyRegistration'])
         ->middleware(['signed', 'throttle:6,1'])

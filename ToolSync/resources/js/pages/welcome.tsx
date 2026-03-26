@@ -264,8 +264,11 @@ export default function Welcome() {
                 setVerificationCode('');
                 setVerificationCodeError(null);
             },
-            onError: () => {
+            onError: (errs) => {
                 setData((prev) => ({ ...prev, password: '', password_confirmation: '' }));
+                if (Object.keys(errs).length === 0) {
+                    setError('email', 'Too many registration attempts. Please wait a minute before trying again.');
+                }
             },
         });
     };
@@ -296,6 +299,13 @@ export default function Welcome() {
 
         try {
             const { body, response } = await postRegistrationJson('/register/resend-verification', {});
+
+            if (response.status === 429) {
+                const wait = response.headers.get('Retry-After');
+                const mins = wait ? Math.ceil(parseInt(wait) / 60) : 10;
+                setVerificationCodeError(`Too many resend attempts. Please wait ${mins} minute${mins !== 1 ? 's' : ''} before requesting a new code.`);
+                return;
+            }
 
             if (response.ok && body?.state === 'resent') {
                 setVerificationModalState('entry');
@@ -336,6 +346,13 @@ export default function Welcome() {
             const { body, response } = await postRegistrationJson('/register/verify-otp', {
                 code: verificationCode,
             });
+
+            if (response.status === 429) {
+                const wait = response.headers.get('Retry-After');
+                const mins = wait ? Math.ceil(parseInt(wait) / 60) : 15;
+                setVerificationCodeError(`Too many failed attempts. Please wait ${mins} minute${mins !== 1 ? 's' : ''} before trying again.`);
+                return;
+            }
 
             if (response.ok && body?.state === 'verified') {
                 setVerificationRedirect(body.redirect ?? '/dashboard');
