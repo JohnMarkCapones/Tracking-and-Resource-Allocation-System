@@ -52,7 +52,48 @@ class RegisteredUserController extends Controller
                 'lowercase',
                 'email',
                 'max:255',
-                // Fix 1: MX record check — only domains that explicitly accept email are allowed
+                // Fix 1: Disposable/temporary email domain blocklist
+                function ($attribute, $value, $fail) {
+                    $domain = strtolower(substr(strrchr($value, '@'), 1));
+                    $blocked = [
+                        'mailinator.com','guerrillamail.com','guerrillamail.net','guerrillamail.org',
+                        'guerrillamail.biz','guerrillamail.de','guerrillamail.info','grr.la',
+                        'sharklasers.com','guerrillamailblock.com','spam4.me','trashmail.com',
+                        'trashmail.at','trashmail.io','trashmail.me','trashmail.net','trashmail.org',
+                        'tempmail.com','temp-mail.org','temp-mail.io','tempinbox.com','tempr.email',
+                        'dispostable.com','disposablemail.com','discard.email','discardmail.com',
+                        'mailnull.com','maildrop.cc','mailnesia.com','mailnull.com','mailscrap.com',
+                        'yopmail.com','yopmail.fr','cool.fr.nf','jetable.fr.nf','nospam.ze.tc',
+                        'nomail.xl.cx','mega.zik.dj','speed.1s.fr','courriel.fr.nf','moncourrier.fr.nf',
+                        'monemail.fr.nf','monmail.fr.nf','throwam.com','throwam.net','throwam.org',
+                        'throwam.info','throwam.biz','10minutemail.com','10minutemail.net',
+                        '10minutemail.org','10minutemail.co.uk','10minemail.com','minuteinbox.com',
+                        'getairmail.com','filzmail.com','spamgourmet.com','spamgourmet.net',
+                        'spamgourmet.org','mailexpire.com','spam.la','byom.de','safetymail.info',
+                        'deadaddress.com','garbagemail.org','getonemail.com','jetable.com',
+                        'jetable.net','jetable.org','jetable.fr','netzidiot.de','no-spam.ws',
+                        'nobulk.com','noclickemail.com','nomail.pw','nomail2me.com','nospamfor.us',
+                        'nowmymail.com','objectmail.com','odaymail.com','oneoffemail.com',
+                        'pookmail.com','qq.com.stopspam.org','rcpt.at','rklips.com','rmqkr.net',
+                        'safe-mail.net','snkmail.com','sofort-mail.de','spamfree24.org',
+                        'spamhole.com','spamify.com','spaminator.de','spamkill.info','spamoff.de',
+                        'spamspot.com','spamthis.co.uk','spamtroll.net','speed.1s.fr','supergreatmail.com',
+                        'suremail.info','tempalias.com','tempe-mail.com','tempinbox.net',
+                        'tempsky.com','tempomail.fr','temporarily.de','temporaryemail.net',
+                        'temporaryforwarding.com','temporaryinbox.com','tempymail.com','thanksnospam.info',
+                        'thisisnotmyrealemail.com','throam.com','trashmail.at','trashmail.io',
+                        'trashmailer.com','trashmail.me','trashmail.net','trashmail.org',
+                        'trashmail.xyz','uggsrock.com','wegwerfmail.de','wegwerfmail.net',
+                        'wegwerfmail.org','wh4f.org','whyspam.me','xagloo.com','xemaps.com',
+                        'xents.com','xmaily.com','xoxy.net','yepmail.net','yogamaven.com',
+                        'yuurok.com','z1p.biz','za.com','zehnminuten.de','zehnminutenmail.de',
+                        'zippymail.info','zoemail.net','zomg.info',
+                    ];
+                    if (in_array($domain, $blocked, true)) {
+                        $fail('Temporary or disposable email addresses are not allowed. Please use a permanent email address.');
+                    }
+                },
+                // Fix 2: MX record check — only domains that explicitly accept email are allowed
                 function ($attribute, $value, $fail) {
                     $domain = substr(strrchr($value, '@'), 1);
                     if ($domain && !checkdnsrr($domain, 'MX')) {
