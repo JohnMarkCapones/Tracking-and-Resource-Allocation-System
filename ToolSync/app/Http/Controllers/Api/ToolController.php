@@ -94,11 +94,29 @@ class ToolController extends Controller
         $statusFilter = $request->input('status');
         if ($statusFilter !== null) {
             $statuses = is_array($statusFilter) ? $statusFilter : [$statusFilter];
+            $today = now()->toDateString();
+            $hasReservationsTable = Schema::hasTable('reservations');
 
-            $query->where(function ($q) use ($statuses): void {
-                // Available tools: base status AVAILABLE (regardless of current allocations)
+            $query->where(function ($q) use ($statuses, $today, $hasReservationsTable): void {
+                // Available tools: base status AVAILABLE and at least one currently available unit.
                 if (in_array('AVAILABLE', $statuses, true)) {
-                    $q->orWhere('status', 'AVAILABLE');
+                    if ($hasReservationsTable) {
+                        $q->orWhere(function ($availableQ) use ($today): void {
+                            $availableQ->where('status', 'AVAILABLE')
+                                ->whereRaw(
+                                    '(tools.quantity - (select count(*) from tool_allocations where tool_allocations.tool_id = tools.id and tool_allocations.status in (?, ?, ?) and date(tool_allocations.borrow_date) <= ? and date(tool_allocations.expected_return_date) >= ?) - (select count(*) from reservations where reservations.tool_id = tools.id and reservations.status = ? and date(reservations.start_date) <= ? and date(reservations.end_date) >= ?)) > 0',
+                                    ['SCHEDULED', 'BORROWED', 'PENDING_RETURN', $today, $today, 'PENDING', $today, $today]
+                                );
+                        });
+                    } else {
+                        $q->orWhere(function ($availableQ) use ($today): void {
+                            $availableQ->where('status', 'AVAILABLE')
+                                ->whereRaw(
+                                    '(tools.quantity - (select count(*) from tool_allocations where tool_allocations.tool_id = tools.id and tool_allocations.status in (?, ?, ?) and date(tool_allocations.borrow_date) <= ? and date(tool_allocations.expected_return_date) >= ?)) > 0',
+                                    ['SCHEDULED', 'BORROWED', 'PENDING_RETURN', $today, $today]
+                                );
+                        });
+                    }
                 }
 
                 // Maintenance tools: base status MAINTENANCE
@@ -108,8 +126,6 @@ class ToolController extends Controller
 
                 // Borrowed tools: any tool that currently has an active allocation
                 if (in_array('BORROWED', $statuses, true)) {
-                    $today = now()->toDateString();
-
                     $q->orWhereExists(function ($sub) use ($today): void {
                         $sub->selectRaw('1')
                             ->from('tool_allocations')
@@ -132,24 +148,7 @@ class ToolController extends Controller
             $query->where('name', 'like', '%'.$request->input('search').'%');
         }
 
-        $randomSeed = $request->input('random_seed');
-        if ($randomSeed !== null && $randomSeed !== '') {
-            // Deterministic pseudo-random ordering so the catalog can appear
-            // shuffled without relying on unstable DB-wide RAND() behavior.
-            // Convert seed string to numeric hash for cross-database compatibility
-            $seedHash = abs(crc32($randomSeed));
-            $connection = $query->getConnection()->getDriverName();
-
-            if ($connection === 'sqlite') {
-                // SQLite doesn't have MD5, use modulo arithmetic with seed hash
-                $query->orderByRaw('(id * ?) % 2147483647', [$seedHash]);
-            } else {
-                // MySQL/MariaDB: use MD5 for deterministic ordering
-                $query->orderByRaw('MD5(CONCAT(id, ?))', [$randomSeed]);
-            }
-        } else {
-            $query->orderBy('name');
-        }
+        $query->orderBy('id');
 
         if ($request->boolean('paginated')) {
             $perPage = (int) $request->input('per_page', 18);
