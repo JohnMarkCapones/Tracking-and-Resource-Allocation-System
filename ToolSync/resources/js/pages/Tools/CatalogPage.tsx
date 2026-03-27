@@ -147,7 +147,6 @@ export default function CatalogPage() {
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [hasMore, setHasMore] = useState(false);
     const [initialLoaded, setInitialLoaded] = useState(false);
-    const [randomSeed, setRandomSeed] = useState<string | null>(null);
     const [highlightedToolId, setHighlightedToolId] = useState<number | null>(null);
     const [highlightedToolMessage, setHighlightedToolMessage] = useState<Record<number, string>>({});
     const loadMoreRef = useRef<HTMLDivElement | null>(null);
@@ -178,16 +177,11 @@ export default function CatalogPage() {
         const effectiveCategories = options?.categories ?? selectedCategories;
         const effectiveStatuses = options?.statuses ?? selectedStatuses;
         const append = options?.append ?? false;
-        const seed = randomSeed;
 
         const params = new URLSearchParams();
         params.set('paginated', '1');
         params.set('page', String(effectivePage));
         params.set('per_page', String(PAGE_SIZE));
-
-        if (seed) {
-            params.set('random_seed', seed);
-        }
 
         if (effectiveSearch.trim()) {
             params.set('search', effectiveSearch.trim());
@@ -225,7 +219,6 @@ export default function CatalogPage() {
         try {
             const res = await apiRequest<ToolsIndexResponse>(`/api/tools?${params.toString()}`);
             const meta = res.meta;
-
             setTools((prev) =>
                 append ? [...prev, ...(res.data ?? []).map(mapToolToCardData)] : (res.data ?? []).map(mapToolToCardData),
             );
@@ -259,11 +252,8 @@ export default function CatalogPage() {
             setLoading(true);
             setError(null);
             try {
-                const seed = Math.random().toString(36).slice(2);
-                setRandomSeed(seed);
-
                 const [toolsRes, categoriesRes, dashboardRes] = await Promise.all([
-                    apiRequest<ToolsIndexResponse>(`/api/tools?paginated=1&page=1&per_page=${PAGE_SIZE}&random_seed=${seed}`),
+                    apiRequest<ToolsIndexResponse>(`/api/tools?paginated=1&page=1&per_page=${PAGE_SIZE}`),
                     apiRequest<{ data: ToolCategoryDto[] }>('/api/tool-categories'),
                     apiRequest<DashboardApiResponse>(dashboardUrl),
                 ]);
@@ -315,32 +305,24 @@ export default function CatalogPage() {
         setSearch('');
         setPage(1);
         setHighlightedToolId(null);
-        const seed = Math.random().toString(36).slice(2);
-        setRandomSeed(seed);
         void fetchTools({ page: 1, search: '', categories: [], statuses: [], append: false });
     };
 
     const handleSearchChange = (value: string) => {
         setSearch(value);
         setPage(1);
-        const seed = Math.random().toString(36).slice(2);
-        setRandomSeed(seed);
         void fetchTools({ page: 1, search: value, append: false });
     };
 
     const handleCategoriesChange = (nextCategories: string[]) => {
         setSelectedCategories(nextCategories);
         setPage(1);
-        const seed = Math.random().toString(36).slice(2);
-        setRandomSeed(seed);
         void fetchTools({ page: 1, categories: nextCategories, append: false });
     };
 
     const handleStatusesChange = (nextStatuses: string[]) => {
         setSelectedStatuses(nextStatuses);
         setPage(1);
-        const seed = Math.random().toString(36).slice(2);
-        setRandomSeed(seed);
         void fetchTools({ page: 1, statuses: nextStatuses, append: false });
     };
 
@@ -487,7 +469,7 @@ export default function CatalogPage() {
             setSelectedTool(null);
 
             const [toolsRes, dashboardRes] = await Promise.all([
-                apiRequest<ToolsIndexResponse>(`/api/tools?paginated=1&page=${page}&per_page=${PAGE_SIZE}${randomSeed ? `&random_seed=${randomSeed}` : ''}`),
+                apiRequest<ToolsIndexResponse>(`/api/tools?paginated=1&page=${page}&per_page=${PAGE_SIZE}`),
                 apiRequest<DashboardApiResponse>(dashboardUrl),
             ]);
             const meta = toolsRes.meta;

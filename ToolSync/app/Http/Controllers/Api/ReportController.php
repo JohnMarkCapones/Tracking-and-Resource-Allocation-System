@@ -127,6 +127,9 @@ class ReportController extends Controller
             $duration = max(0, $borrowDate->diffInDays($endForDuration));
             $toolId = (int) $allocation->tool_id;
             $maintenance = $latestMaintenanceByTool[$toolId] ?? null;
+            $mappedReturnDate = $allocation->actual_return_date
+                ? Carbon::parse($allocation->actual_return_date)->toDateString()
+                : Carbon::parse(substr((string) $allocation->getRawOriginal('expected_return_date'), 0, 10))->toDateString();
 
             return [
                 'tool_name' => (string) ($tool?->name ?? ''),
@@ -138,7 +141,7 @@ class ReportController extends Controller
                 'borrower_email' => (string) ($user?->email ?? ''),
                 'department' => (string) ($user?->department?->name ?? ''),
                 'borrow_date' => $borrowDate->toDateString(),
-                'return_date' => $allocation->actual_return_date ? Carbon::parse($allocation->actual_return_date)->toDateString() : '',
+                'return_date' => $mappedReturnDate,
                 'duration' => $duration,
                 'borrow_status' => $borrowStatus,
                 'overdue_days' => $overdueDays,
