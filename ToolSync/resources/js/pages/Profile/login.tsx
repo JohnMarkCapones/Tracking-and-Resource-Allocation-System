@@ -6,7 +6,7 @@ import PasswordInput from '@/Components/PasswordInput';
 //import socialite from '@routes/socialite';  change back to this when the socialite routes are added back in
 import astraLogo from '../../assets/ASTRA_logo.png';  //remove when socialite routes are added back in
 import loginBackground from '../../assets/login_background.png';
-import welcomeImg from '../../assets/welcome_img.png';
+import welcomeImg from '../../assets/welcome_image.png';
 
 const GoogleIcon = () => (
     <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">

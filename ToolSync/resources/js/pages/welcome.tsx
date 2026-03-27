@@ -6,7 +6,7 @@ import PasswordInput from '@/Components/PasswordInput';
 //import socialite from '@routes/socialite';  change back to this when the socialite routes are added back in
 import astraLogo from '../assets/ASTRA_logo.png';  //remove when socialite routes are added back in
 import loginBackground from '../assets/login_background.png';
-import welcomeImg from '../assets/welcome_img.png';
+import welcomeImg from '../assets/welcome_image.png';
 
 type VerificationModalState = 'closed' | 'entry' | 'incorrect' | 'expired' | 'success';
 
