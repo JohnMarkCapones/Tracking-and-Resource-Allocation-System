@@ -422,14 +422,14 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                                     <span
                                         className={
                                             item.isActive
-                                                ? 'flex h-7 w-7 items-center justify-center rounded-lg bg-[#060644]/15 text-[11px] text-[#060644] dark:bg-white/20 dark:text-white'
+                                                                                                ? 'flex h-8 w-8 items-center justify-center rounded-lg bg-[#060644]/15 text-[11px] text-[#060644] dark:bg-white/20 dark:text-white'
                                                 : item.key === 'dashboard'
-                                                  ? 'flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-[11px] text-slate-700 dark:bg-[#060644] dark:text-white'
-                                                  : 'flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-[11px] text-slate-700 dark:bg-slate-600 dark:text-slate-200'
+                                                                                                    ? 'flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-[11px] text-slate-700 dark:bg-[#060644] dark:text-white'
+                                                                                                    : 'flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-[11px] text-slate-700 dark:bg-slate-600 dark:text-slate-200'
                                         }
                                     >
                                         {item.key === 'dashboard' && (
-                                            <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <svg className="h-6 w-6" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                                                 <path
                                                     d="M4 11H8V16H4V11Z"
                                                     stroke="currentColor"
@@ -454,7 +454,7 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                                             </svg>
                                         )}
                                         {item.key === 'tools' && (
-                                            <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <svg className="h-6 w-6" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                                                 <path
                                                     d="M7 4L4 7L6 9L9 6"
                                                     stroke="currentColor"
@@ -474,7 +474,7 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                                             </svg>
                                         )}
                                         {item.key === 'categories' && (
-                                            <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <svg className="h-6 w-6" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                                                 <path
                                                     d="M4 4H8L10 6H16V14H4V4Z"
                                                     stroke="currentColor"
@@ -487,7 +487,7 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                                             </svg>
                                         )}
                                         {item.key === 'history' && (
-                                            <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <svg className="h-6 w-6" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                                                 <circle cx="10" cy="10" r="4.5" stroke="currentColor" strokeWidth="1.4" />
                                                 <path
                                                     d="M10 7V10L12 11"
@@ -499,7 +499,7 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                                             </svg>
                                         )}
                                         {item.key === 'notifications' && (
-                                            <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <svg className="h-6 w-6" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                                                 <path
                                                     d="M10 3C7.8 3 6 4.8 6 7V8.1C6 8.7 5.8 9.2 5.4 9.6L4.4 10.8C3.7 11.4 4.2 12.5 5.1 12.5H14.9C15.8 12.5 16.3 11.4 15.6 10.8L14.6 9.6C14.2 9.2 14 8.7 14 8.1V7C14 4.8 12.2 3 10 3Z"
                                                     stroke="currentColor"
@@ -509,7 +509,7 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                                             </svg>
                                         )}
                                         {item.key === 'users' && (
-                                            <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <svg className="h-6 w-6" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                                                 <circle cx="10" cy="7" r="3" stroke="currentColor" strokeWidth="1.4" />
                                                 <path
                                                     d="M4 16C4 13.2386 6.68629 11 10 11C13.3137 11 16 13.2386 16 16"
@@ -520,7 +520,7 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                                             </svg>
                                         )}
                                         {item.key === 'approvals' && (
-                                            <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <svg className="h-6 w-6" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                                                 <path
                                                     d="M5 3H15V14L10 17L5 14V3Z"
                                                     stroke="currentColor"
@@ -532,7 +532,7 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                                             </svg>
                                         )}
                                         {item.key === 'favorites' && (
-                                            <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <svg className="h-6 w-6" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                                                 <path
                                                     d="M10 17L8.55 15.71C4.4 12.02 1.5 9.44 1.5 6.25C1.5 3.67 3.52 1.65 6.1 1.65C7.54 1.65 8.92 2.31 10 3.37C11.08 2.31 12.46 1.65 13.9 1.65C16.48 1.65 18.5 3.67 18.5 6.25C18.5 9.44 15.6 12.02 11.45 15.71L10 17Z"
                                                     stroke="currentColor"
@@ -543,7 +543,7 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                                             </svg>
                                         )}
                                         {item.key === 'reservations' && (
-                                            <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <svg className="h-6 w-6" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                                                 <rect x="3" y="4" width="14" height="13" rx="2" stroke="currentColor" strokeWidth="1.4" />
                                                 <path d="M3 8H17" stroke="currentColor" strokeWidth="1.4" />
                                                 <path d="M7 2V5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
@@ -551,7 +551,7 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                                             </svg>
                                         )}
                                         {item.key === 'analytics' && (
-                                            <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <svg className="h-6 w-6" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                                                 <path d="M4 14V10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
                                                 <path d="M8 14V6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
                                                 <path d="M12 14V8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
@@ -559,7 +559,7 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                                             </svg>
                                         )}
                                         {item.key === 'maintenance' && (
-                                            <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <svg className="h-6 w-6" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                                                 <path
                                                     d="M14.7 6.3C14.5 5.5 13.8 5 13 5H7C6.2 5 5.5 5.5 5.3 6.3L4 11V15C4 15.6 4.4 16 5 16H6C6.6 16 7 15.6 7 15V14H13V15C13 15.6 13.4 16 14 16H15C15.6 16 16 15.6 16 15V11L14.7 6.3Z"
                                                     stroke="currentColor"
@@ -572,7 +572,7 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                                             </svg>
                                         )}
                                         {item.key === 'reports' && (
-                                            <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <svg className="h-6 w-6" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                                                 <path
                                                     d="M5 3H15V17H5V3Z"
                                                     stroke="currentColor"
@@ -586,7 +586,7 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
                                             </svg>
                                         )}
                                         {item.key === 'settings' && (
-                                            <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <svg className="h-6 w-6" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                                                 <circle cx="10" cy="10" r="2" stroke="currentColor" strokeWidth="1.4" />
                                                 <path
                                                     d="M16.5 10C16.5 9.55 16.45 9.1 16.35 8.7L18 7.5L16.5 5L14.6 5.8C14 5.3 13.35 4.9 12.6 4.65L12.2 2.5H7.8L7.4 4.65C6.65 4.9 6 5.3 5.4 5.8L3.5 5L2 7.5L3.65 8.7C3.55 9.1 3.5 9.55 3.5 10C3.5 10.45 3.55 10.9 3.65 11.3L2 12.5L3.5 15L5.4 14.2C6 14.7 6.65 15.1 7.4 15.35L7.8 17.5H12.2L12.6 15.35C13.35 15.1 14 14.7 14.6 14.2L16.5 15L18 12.5L16.35 11.3C16.45 10.9 16.5 10.45 16.5 10Z"
@@ -826,3 +826,5 @@ export default function AppLayout({ header, activeRoute = 'dashboard', variant =
         </div>
     );
 }
+
+
